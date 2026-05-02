@@ -12,8 +12,8 @@ class StripeAccount extends Model
     use HasFactory;
 
     protected $fillable = [
-        'brand_id', 'account_name', 'publishable_key',
-        'secret_key', 'webhook_secret', 'is_active',
+        'brand_id', 'account_name', 'publishable_key', 'is_active',
+        // secret_key and webhook_secret are NOT mass-assignable — assign explicitly only
     ];
 
     protected function casts(): array
