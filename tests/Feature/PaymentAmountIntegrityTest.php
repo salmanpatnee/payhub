@@ -26,4 +26,5 @@ it('stores minimum valid amount without drift', function () {
     $fresh   = Payment::find($payment->id);
 
     expect($fresh->amount)->toBe(50);
+    expect($fresh->amount)->toBeInt();
 });
