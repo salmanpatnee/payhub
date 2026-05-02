@@ -1,0 +1,13 @@
+/* resources/css/brand-theme.css */
+/* Default (admin panel) — neutral, no brand coloring */
+:root {
+  --color-brand-primary: hsl(221.2 83.2% 53.3%);   /* shadcn-vue blue default */
+  --color-brand-secondary: hsl(210 40% 96.1%);      /* shadcn-vue muted default */
+}
+
+/* Per-brand overrides — applied via data-brand attribute on layout root */
+/* Phase 5 sets: <div :data-brand="brand.slug" :style="`--brand-primary: ${brand.primary_color}; ...`"> */
+[data-brand] {
+  --color-brand-primary: var(--brand-primary, hsl(221.2 83.2% 53.3%));
+  --color-brand-secondary: var(--brand-secondary, hsl(210 40% 96.1%));
+}
