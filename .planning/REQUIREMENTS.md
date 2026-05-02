@@ -110,14 +110,51 @@
 
 ## Traceability
 
-| REQ-ID | Phase | Notes |
-|--------|-------|-------|
-| AUTH-01 – AUTH-06 | Phase 2 | Fortify, roles, invite setup |
-| BRAND-01 – BRAND-04 | Phase 3 | Admin panel — brand CRUD + key mode detection |
-| STRIPE-01 – STRIPE-05 | Phase 3 | Admin panel — Stripe account CRUD + StripeService |
-| PAY-01 – PAY-07 | Phase 4 | Payment builder + link generation |
-| CLIENT-01 – CLIENT-08 | Phase 5 | Client payment page + Elements + 3DS |
-| WEBHOOK-01 – WEBHOOK-06 | Phase 6 | Per-account webhooks + queued fulfillment |
-| NOTIFY-01 – NOTIFY-02 | Phase 7 | Admin email notification |
-| DASH-01 – DASH-04 | Phase 7 | Dashboard + reporting |
-| SEC-01 – SEC-04 | Phase 1, 3, 5, 6 | Cross-cutting — noted per phase |
+| REQ-ID | Phase | Status |
+|--------|-------|--------|
+| AUTH-01 | Phase 2 | Pending |
+| AUTH-02 | Phase 2 | Pending |
+| AUTH-03 | Phase 2 | Pending |
+| AUTH-04 | Phase 2 | Pending |
+| AUTH-05 | Phase 2 | Pending |
+| AUTH-06 | Phase 2 | Pending |
+| BRAND-01 | Phase 3 | Pending |
+| BRAND-02 | Phase 3 | Pending |
+| BRAND-03 | Phase 3 | Pending |
+| BRAND-04 | Phase 3 | Pending |
+| STRIPE-01 | Phase 3 | Pending |
+| STRIPE-02 | Phase 3 | Pending |
+| STRIPE-03 | Phase 3 | Pending |
+| STRIPE-04 | Phase 3 | Pending |
+| STRIPE-05 | Phase 3 | Pending |
+| PAY-01 | Phase 4 | Pending |
+| PAY-02 | Phase 4 | Pending |
+| PAY-03 | Phase 4 | Pending |
+| PAY-04 | Phase 4 | Pending |
+| PAY-05 | Phase 4 | Pending |
+| PAY-06 | Phase 4 | Pending |
+| PAY-07 | Phase 4 | Pending |
+| CLIENT-01 | Phase 5 | Pending |
+| CLIENT-02 | Phase 5 | Pending |
+| CLIENT-03 | Phase 5 | Pending |
+| CLIENT-04 | Phase 5 | Pending |
+| CLIENT-05 | Phase 5 | Pending |
+| CLIENT-06 | Phase 5 | Pending |
+| CLIENT-07 | Phase 5 | Pending |
+| CLIENT-08 | Phase 5 | Pending |
+| WEBHOOK-01 | Phase 6 | Pending |
+| WEBHOOK-02 | Phase 6 | Pending |
+| WEBHOOK-03 | Phase 6 | Pending |
+| WEBHOOK-04 | Phase 6 | Pending |
+| WEBHOOK-05 | Phase 6 | Pending |
+| WEBHOOK-06 | Phase 6 | Pending |
+| NOTIFY-01 | Phase 7 | Pending |
+| NOTIFY-02 | Phase 7 | Pending |
+| DASH-01 | Phase 7 | Pending |
+| DASH-02 | Phase 7 | Pending |
+| DASH-03 | Phase 7 | Pending |
+| DASH-04 | Phase 7 | Pending |
+| SEC-01 | Phase 1 | Pending |
+| SEC-02 | Phase 4 | Pending |
+| SEC-03 | Phase 6 | Pending |
+| SEC-04 | Phase 5 | Pending |
