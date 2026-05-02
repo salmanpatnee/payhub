@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"C:\\\\Users\\\\Salman\\\\Herd\\\\payhub\" status)",
+      "Bash(git -C \"C:\\\\Users\\\\Salman\\\\Herd\\\\payhub\" diff --stat)",
+      "Bash(git *)",
+      "Skill(gsd-execute-phase)",
+      "Skill(gsd-code-review)",
+      "Skill(gsd-code-review-fix)",
+      "Bash(php artisan *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\Salman\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Salman-Herd-payhub\\\\8c456f18-c9f5-4433-bf1f-3cc2aa3d292e\\\\tasks\\\\bvo57on8u.output\" -Wait)",
+      "Bash(Select-String -Pattern \"PASS|FAIL|Tests:|OK|Error|tests\")",
+      "Bash(Remove-Item *)"
+    ]
+  }
+}
