@@ -40,6 +40,11 @@ Phase 1 is next. Run `/gsd-discuss-phase 1` or `/gsd-plan-phase 1` to start.
 - **Webhooks**: spatie/laravel-stripe-webhooks v3.11
 - **Queues**: Laravel Queues (database driver for dev, Redis for prod)
 
+## Git workflow
+
+- **Always** create a new branch before starting a new phase: `git checkout -b phase-{N}-{short-description}`
+- Merge to `master` only after phase is complete and tests pass
+
 ## Critical rules
 
 - **Never** call `Stripe::setApiKey()` globally — always `new StripeClient($account->secret_key)`
