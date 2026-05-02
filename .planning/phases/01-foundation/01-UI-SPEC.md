@@ -1,7 +1,7 @@
 ---
 phase: 1
 slug: foundation
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-05-02
@@ -108,7 +108,7 @@ Standard 8-point scale. Declared values are multiples of 4.
 | 2xl | 48px | Major section breaks, page-level vertical rhythm |
 | 3xl | 64px | Page-level top/bottom padding |
 
-Exceptions: Touch targets on mobile must meet 44px minimum (Tailwind `min-h-[44px]`). Apply to Button and interactive Card components starting Phase 5.
+44px is an accessibility exception for touch targets, NOT a spacing token. Apply it only via `min-h-[44px]` directly on interactive components (Button, interactive Card) starting Phase 5. It does not belong to the spacing scale above.
 
 ---
 
@@ -119,11 +119,11 @@ Four sizes, two weights. Applied via Tailwind utility classes using shadcn-vue's
 | Role | Size | Weight | Line Height | Tailwind Class | Usage |
 |------|------|--------|-------------|----------------|-------|
 | Body | 14px | 400 (regular) | 1.5 | `text-sm font-normal leading-normal` | Form helper text, table cells, descriptions |
-| Label | 14px | 500 (medium) | 1.4 | `text-sm font-medium leading-snug` | Form field labels, badge text |
+| Label | 14px | 600 (semibold) | 1.4 | `text-sm font-semibold leading-snug` | Form field labels, badge text |
 | Heading | 20px | 600 (semibold) | 1.25 | `text-xl font-semibold leading-tight` | Page section headings, card titles |
 | Display | 28px | 600 (semibold) | 1.2 | `text-2xl font-semibold leading-tight` | Page-level headings (Phase 2+ login page, dashboard header) |
 
-Weights in use: regular (400) and semibold (600). Medium (500) is used for labels only as a midpoint — do not introduce additional weights.
+Weights in use: regular (400) and semibold (600). Do not introduce additional weights.
 
 ---
 
@@ -216,11 +216,11 @@ These are the only UI-related success criteria for Phase 1:
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-05-02

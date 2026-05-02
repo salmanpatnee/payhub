@@ -67,5 +67,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-02
-Stopped at: Roadmap and STATE.md created; REQUIREMENTS.md traceability updated
-Resume file: None
+Stopped at: Phase 1 UI-SPEC approved
+Resume file: .planning/phases/01-foundation/01-UI-SPEC.md
