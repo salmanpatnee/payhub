@@ -12,7 +12,15 @@ Clients always feel they are paying the same brand they interacted with, regardl
 
 ### Validated
 
-(None yet — ship to validate)
+**Phase 1: Foundation** *(validated 2026-05-03)*
+- Laravel 13 + Inertia v3 + Vue 3 + Tailwind CSS 4 + shadcn-vue scaffolded and running
+- All D-03 packages installed at pinned versions (Fortify, spatie/permission, stripe-php, stripe-webhooks, Telescope)
+- Schema correct: brands, stripe_accounts (TEXT encrypted cols), payments (unsignedBigInteger cents)
+- AES-256 encryption round-trip verified for Stripe credentials (SEC-01)
+- Integer cents enforced for amounts — no float drift
+- Model relationships traversable (Brand → StripeAccounts → Payments)
+- Idempotent seeder: 1 brand, 1 Stripe account, 1 admin user, 2 roles
+- 49/49 tests passing
 
 ### Active
 
@@ -114,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-02 after initialization*
+*Last updated: 2026-05-03 — Phase 1 complete*
