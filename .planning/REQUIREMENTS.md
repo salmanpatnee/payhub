@@ -1,0 +1,123 @@
+# PayHub — v1 Requirements
+
+## v1 Requirements
+
+### Auth & Access (AUTH)
+
+- [ ] **AUTH-01**: User can log in with email and password via Laravel Fortify
+- [ ] **AUTH-02**: User session persists across page loads until explicit logout
+- [ ] **AUTH-03**: User can log out from any authenticated page
+- [ ] **AUTH-04**: Admin can assign roles (Admin / User) to team members
+- [ ] **AUTH-05**: Access to admin features is restricted to Admin role only
+- [ ] **AUTH-06**: Unauthenticated access to client payment page (/pay/{uuid}) is allowed without login
+
+### Brand Management (BRAND)
+
+- [ ] **BRAND-01**: Admin can create a brand (name, logo, primary color, secondary color)
+- [ ] **BRAND-02**: Admin can edit brand details
+- [ ] **BRAND-03**: Admin can list all brands
+- [ ] **BRAND-04**: System detects test vs live Stripe keys and blocks test keys in production
+
+### Stripe Account Management (STRIPE)
+
+- [ ] **STRIPE-01**: Admin can add a Stripe account (publishable key + secret key) and link it to a brand
+- [ ] **STRIPE-02**: Secret key is encrypted at rest using AES-256 (Laravel encrypted cast)
+- [ ] **STRIPE-03**: System validates the key pair against Stripe API on save
+- [ ] **STRIPE-04**: Admin can edit an existing Stripe account's keys
+- [ ] **STRIPE-05**: Admin can deactivate or archive a Stripe account without deleting it
+
+### Payment Creation (PAY)
+
+- [ ] **PAY-01**: Admin or User can create a payment specifying amount, currency, brand, and description
+- [ ] **PAY-02**: Admin or User can select a specific Stripe account for the payment (from brand's linked accounts)
+- [ ] **PAY-03**: Client email address is captured when creating a payment
+- [ ] **PAY-04**: System generates a unique shareable UUID payment link on payment creation
+- [ ] **PAY-05**: Payment amount is stored server-side and cannot be modified via client request
+- [ ] **PAY-06**: Creator selects currency per payment — USD ($) or GBP (£) only
+- [ ] **PAY-07**: Payment links never expire (valid until paid or manually cancelled)
+
+### Client Payment Experience (CLIENT)
+
+- [ ] **CLIENT-01**: Client opens payment page (/pay/{uuid}) without login
+- [ ] **CLIENT-02**: Payment page displays the correct brand's logo and colors
+- [ ] **CLIENT-03**: Stripe Elements form is embedded inline (no redirect to stripe.com)
+- [ ] **CLIENT-04**: Stripe Elements is initialized with the correct brand's publishable key
+- [ ] **CLIENT-05**: System handles 3DS / SCA authentication challenges (requires_action)
+- [ ] **CLIENT-06**: Client sees a success page after payment is confirmed
+- [ ] **CLIENT-07**: Client sees an error/failure page if payment fails
+- [ ] **CLIENT-08**: Payment page is mobile-responsive
+
+### Webhooks & Status Sync (WEBHOOK)
+
+- [ ] **WEBHOOK-01**: Each Stripe account has a dedicated webhook endpoint URL (/webhook/stripe/{accountId})
+- [ ] **WEBHOOK-02**: Stripe webhook signature is verified per account using that account's signing secret
+- [ ] **WEBHOOK-03**: payment_intent.succeeded event updates payment status to completed in DB
+- [ ] **WEBHOOK-04**: payment_intent.payment_failed event updates payment status to failed in DB
+- [ ] **WEBHOOK-05**: All DB writes on payment completion are driven by webhook only (not client confirmation)
+- [ ] **WEBHOOK-06**: Webhook handler returns HTTP 200 immediately; fulfillment is queued
+
+### Notifications (NOTIFY)
+
+- [ ] **NOTIFY-01**: Admin receives email notification when a payment succeeds
+- [ ] **NOTIFY-02**: Notification is sent via queued job (non-blocking)
+
+### Dashboard & Reporting (DASH)
+
+- [ ] **DASH-01**: Admin can view all payments across all brands in a unified list
+- [ ] **DASH-02**: Admin can filter payments by brand, Stripe account, status, and date range
+- [ ] **DASH-03**: User can view their own payment history (payments they created)
+- [ ] **DASH-04**: Payment list shows: amount, currency, brand, status, created date, client email
+
+### Security (SEC)
+
+- [ ] **SEC-01**: Stripe secret keys and webhook secrets are encrypted at rest (AES-256 via Laravel encrypted cast)
+- [ ] **SEC-02**: Payment amount is read exclusively from the server-side Payment record — no client input accepted for amount
+- [ ] **SEC-03**: Webhook routes are excluded from CSRF middleware; raw body is preserved for signature verification
+- [ ] **SEC-04**: PaymentIntent client_secret is never logged, stored in URLs, or exposed beyond the payment page response
+
+---
+
+## v2 Requirements (Deferred)
+
+- Client email receipt on payment success (post-v1 — requires per-brand email sender config decision)
+- Per-brand subdomains (pay.brandA.com) — DNS/SSL complexity, defer until brand count justifies
+- Invite-only registration flow — Admin creates accounts manually for v1
+- Cancel/void a payment link — Admin can invalidate without deleting
+- Duplicate a payment link — re-use as template
+- Refund from dashboard (via Stripe API)
+- CSV export of payment history
+- Slack/webhook notifications
+- SSO (Google/Microsoft)
+- Duplicate event deduplication (webhook idempotency)
+- Retry visibility / dead-letter queue UI
+- APP_KEY rotation runbook documentation
+- Cross-brand analytics with charts
+
+---
+
+## Out of Scope
+
+- **Additional currencies beyond USD/GBP** — two currencies sufficient for agency's markets
+- **Subscriptions / recurring billing** — one-time payments only; Stripe Cashier explicitly excluded
+- **Client login / accounts** — clients are anonymous recipients of payment links
+- **Public registration** — invite-only access control
+- **Per-brand subdomains** — single domain (pay.agency.com) for v1
+- **External secret stores** (AWS Secrets Manager, Vault) — encrypted DB is sufficient
+- **Open-ended payment amounts entered by client** — amounts are always admin/user-set
+- **SaaS / multi-tenant evolution** — internal agency tool for v1
+
+---
+
+## Traceability
+
+| REQ-ID | Phase | Notes |
+|--------|-------|-------|
+| AUTH-01 – AUTH-06 | Phase 2 | Fortify, roles, invite setup |
+| BRAND-01 – BRAND-04 | Phase 3 | Admin panel — brand CRUD + key mode detection |
+| STRIPE-01 – STRIPE-05 | Phase 3 | Admin panel — Stripe account CRUD + StripeService |
+| PAY-01 – PAY-07 | Phase 4 | Payment builder + link generation |
+| CLIENT-01 – CLIENT-08 | Phase 5 | Client payment page + Elements + 3DS |
+| WEBHOOK-01 – WEBHOOK-06 | Phase 6 | Per-account webhooks + queued fulfillment |
+| NOTIFY-01 – NOTIFY-02 | Phase 7 | Admin email notification |
+| DASH-01 – DASH-04 | Phase 7 | Dashboard + reporting |
+| SEC-01 – SEC-04 | Phase 1, 3, 5, 6 | Cross-cutting — noted per phase |

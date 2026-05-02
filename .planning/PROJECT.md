@@ -33,7 +33,7 @@ Clients always feel they are paying the same brand they interacted with, regardl
 
 **Payment Creation (Admin + User)**
 - [ ] Admin/User can create a one-time payment (amount, description, brand, Stripe account, currency)
-- [ ] Multi-currency: creator selects currency per payment
+- [ ] Currency: USD ($) or GBP (£) per payment — fixed two-currency system
 - [ ] System generates unique shareable payment link
 - [ ] Payment links never expire (valid until paid or cancelled)
 
