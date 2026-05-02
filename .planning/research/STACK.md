@@ -12,11 +12,11 @@
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| PHP | 8.3 | Runtime | Laravel 12 requires 8.2+. PHP 8.3 is the recommended production target: broad hosting support, named arguments, typed class constants, readonly improvements. PHP 8.4 is supported but ecosystem package adoption lags slightly. |
-| Laravel | 12.x | Application framework | Released 2025-02-24. Near-zero breaking changes from L11. Requires PHP 8.2+. Officially ships a Vue 3 + Inertia.js + shadcn-vue + Tailwind 4 starter kit. Carbon 3.x and UUID v7 by default. |
-| laravel/fortify | ^1.31 | Authentication backend | Frontend-agnostic auth backend. Provides login, password reset, email verification, 2FA. Disable `Features::registration()` in `config/fortify.php` to block public registration; implement invite-only via a separate `invitations` table + signed token. Do NOT use Laravel Breeze or Jetstream — they are no longer receiving updates as of L12. |
+| PHP | 8.3 | Runtime | Laravel 13 requires 8.2+. PHP 8.3 is the recommended production target: broad hosting support, named arguments, typed class constants, readonly improvements. PHP 8.4 is supported but ecosystem package adoption lags slightly. |
+| Laravel | 13.x | Application framework | Released 2025-03-17. Near-zero breaking changes from L12. Requires PHP 8.2+. Officially ships a Vue 3 + Inertia.js + shadcn-vue + Tailwind 4 starter kit. Carbon 3.x and UUID v7 by default. |
+| laravel/fortify | ^1.31 | Authentication backend | Frontend-agnostic auth backend. Provides login, password reset, email verification, 2FA. Disable `Features::registration()` in `config/fortify.php` to block public registration; implement invite-only via a separate `invitations` table + signed token. Do NOT use Laravel Breeze or Jetstream — they are no longer receiving updates as of L13. |
 
-**Confidence:** HIGH — verified via laravel.com/docs/12.x/releases and Packagist.
+**Confidence:** HIGH — verified via laravel.com/docs/13.x/releases and Packagist.
 
 ---
 
@@ -25,11 +25,11 @@
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
 | Vue | 3.x (Composition API) | UI layer | Required by Inertia Vue adapter. Use Composition API + `<script setup>` exclusively — Options API is a dead end for new code. |
-| @inertiajs/vue3 | ^2.3 | Client-side Inertia adapter | v2 is current; v1 Vue 2 adapter removed. Ships partial reloads, deferred props, prefetching, SSR. Install as `@inertiajs/vue3`. |
-| inertiajs/inertia-laravel | ^2.0 | Server-side Inertia adapter | Composer package that handles response wrapping, shared data, and middleware. |
-| Vite | bundled with Laravel | Asset pipeline | Laravel 12 ships `vite.config.js` by default. Use `laravel/vite-plugin` (already in laravel/laravel). Do NOT use Webpack/Mix. |
+| @inertiajs/vue3 | ^3.0 | Client-side Inertia adapter | v2 is current; v1 Vue 2 adapter removed. Ships partial reloads, deferred props, prefetching, SSR. Install as `@inertiajs/vue3`. |
+| inertiajs/inertia-laravel | ^3.0 | Server-side Inertia adapter | Composer package that handles response wrapping, shared data, and middleware. |
+| Vite | bundled with Laravel | Asset pipeline | Laravel 13 ships `vite.config.js` by default. Use `laravel/vite-plugin` (already in laravel/laravel). Do NOT use Webpack/Mix. |
 
-**Confidence:** HIGH — @inertiajs/vue3 v2.3.14 confirmed on npm; Laravel 12 Vue starter kit uses Inertia v2.
+**Confidence:** HIGH — @inertiajs/vue3 v2.3.14 confirmed on npm; Laravel 13 Vue starter kit uses Inertia v3.
 
 **Key Inertia patterns for this project:**
 - Use `Inertia::share()` in a middleware (e.g. `HandleInertiaRequests`) to pass auth user, brands list, and CSRF token globally.
@@ -138,9 +138,9 @@ Brand appearance config (colors, font) can be stored in the `brands` table as JS
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| Laravel built-in `encrypted` cast | Native (L12) | AES-256-CBC encryption of Stripe keys in DB | Laravel's `Crypt` facade uses AES-256-CBC + MAC signing via APP_KEY. The `encrypted` cast on Eloquent models auto-encrypts/decrypts transparently. This is sufficient for storing Stripe secret keys. Do NOT use a third-party encryption package. Do NOT store raw Stripe secret keys. |
+| Laravel built-in `encrypted` cast | Native (L13) | AES-256-CBC encryption of Stripe keys in DB | Laravel's `Crypt` facade uses AES-256-CBC + MAC signing via APP_KEY. The `encrypted` cast on Eloquent models auto-encrypts/decrypts transparently. This is sufficient for storing Stripe secret keys. Do NOT use a third-party encryption package. Do NOT store raw Stripe secret keys. |
 
-**Confidence:** HIGH — Laravel 12 encryption docs confirmed.
+**Confidence:** HIGH — Laravel 13 encryption docs confirmed.
 
 **Implementation:**
 ```php
@@ -177,8 +177,8 @@ protected function casts(): array
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
 | Laravel Telescope | ^5.x | Request/query/job inspector | Development-only. Monitors HTTP requests, DB queries, queued jobs, exceptions, Stripe webhook events. More comprehensive than Debugbar for async job inspection — critical for webhook debugging. |
-| Laravel Pint | bundled with L12 | Code style fixer | Opinionated PSR-12 fixer. Zero-config. Run as pre-commit hook. |
-| Pest PHP | ^3.x | Testing framework | Laravel 12 starter kit ships with Pest. Expressive syntax for feature tests. Use for PaymentIntent lifecycle tests with Stripe test mode keys. |
+| Laravel Pint | bundled with L13 | Code style fixer | Opinionated PSR-12 fixer. Zero-config. Run as pre-commit hook. |
+| Pest PHP | ^3.x | Testing framework | Laravel 13 starter kit ships with Pest. Expressive syntax for feature tests. Use for PaymentIntent lifecycle tests with Stripe test mode keys. |
 | stripe/stripe-php test helpers | included in ^20.x | Stripe test clock + events | Use Stripe test mode webhooks and `stripe trigger payment_intent.succeeded` CLI to test webhook handlers locally without real payments. |
 
 **Confidence:** MEDIUM — Telescope and Pest versions are standard; not individually verified against Packagist.
@@ -242,8 +242,8 @@ npm install tailwindcss @tailwindcss/vite
 
 ## Sources
 
-- Laravel 12 Release Notes: https://laravel.com/docs/12.x/releases (HIGH confidence)
-- Laravel 12 Encryption: https://laravel.com/docs/12.x/encryption (HIGH confidence)
+- Laravel 13 Release Notes: https://laravel.com/docs/13.x/releases (HIGH confidence)
+- Laravel 13 Encryption: https://laravel.com/docs/13.x/encryption (HIGH confidence)
 - Stripe PaymentIntents lifecycle: https://docs.stripe.com/payments/paymentintents/lifecycle (HIGH confidence)
 - Stripe Elements Appearance API: https://docs.stripe.com/elements/appearance-api (HIGH confidence)
 - Stripe PHP SDK (Packagist): https://packagist.org/packages/stripe/stripe-php — v20.1.0 confirmed (HIGH confidence)

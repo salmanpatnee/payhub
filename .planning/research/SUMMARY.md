@@ -8,9 +8,9 @@
 
 ## Executive Summary
 
-PayHub is a monolithic Laravel 12 application serving two distinct surfaces from a single domain: an authenticated admin/user panel (Inertia.js SPA) for managing brands and creating payment links, and unauthenticated client payment pages (UUID-addressed, Stripe Elements) for collecting payments. The defining architectural challenge is that every brand maps to a completely separate Stripe account, meaning each payment operation requires per-brand credential resolution, per-account PaymentIntent creation, and per-account webhook signature verification. The correct pattern throughout is a StripeAccount model that holds AES-256-encrypted credentials, a StripeService that instantiates a fresh StripeClient per account (never globally), and per-brand webhook URLs that resolve the correct signing secret on each inbound event.
+PayHub is a monolithic Laravel 13 application serving two distinct surfaces from a single domain: an authenticated admin/user panel (Inertia.js SPA) for managing brands and creating payment links, and unauthenticated client payment pages (UUID-addressed, Stripe Elements) for collecting payments. The defining architectural challenge is that every brand maps to a completely separate Stripe account, meaning each payment operation requires per-brand credential resolution, per-account PaymentIntent creation, and per-account webhook signature verification. The correct pattern throughout is a StripeAccount model that holds AES-256-encrypted credentials, a StripeService that instantiates a fresh StripeClient per account (never globally), and per-brand webhook URLs that resolve the correct signing secret on each inbound event.
 
-The stack is fully decided with high confidence: PHP 8.3, Laravel 12, Fortify (invite-only, no public registration), Inertia.js v2 + Vue 3 (Composition API only), Tailwind CSS v4, shadcn-vue 2.6 (Reka UI primitives), stripe/stripe-php v20, vue-stripe-js v2, and spatie/laravel-stripe-webhooks v3.11 for multi-secret webhook handling. Laravel Cashier is explicitly excluded. The data model has four core entities: Brand, StripeAccount, Payment, and User, with StripeAccount secret_key and webhook_secret stored with the Laravel encrypted cast.
+The stack is fully decided with high confidence: PHP 8.3, Laravel 13, Fortify (invite-only, no public registration), Inertia.js v3 + Vue 3 (Composition API only), Tailwind CSS v4, shadcn-vue 2.6 (Reka UI primitives), stripe/stripe-php v20, vue-stripe-js v2, and spatie/laravel-stripe-webhooks v3.11 for multi-secret webhook handling. Laravel Cashier is explicitly excluded. The data model has four core entities: Brand, StripeAccount, Payment, and User, with StripeAccount secret_key and webhook_secret stored with the Laravel encrypted cast.
 
 The top execution risks are all security and correctness issues specific to multi-account Stripe: cross-account key contamination, trusting client-side payment confirmation over webhooks, webhook raw-body mutation breaking signature verification, amount tampering on the client payment page, and APP_KEY rotation destroying all encrypted Stripe secrets at once. Every one of these has a documented prevention strategy and must be addressed before the system handles real payments.
 
@@ -20,12 +20,12 @@ The top execution risks are all security and correctness issues specific to mult
 
 | Layer | Package | Version | Decision |
 |---|---|---|---|
-| Runtime | PHP | 8.3 | Laravel 12 requires 8.2+; 8.3 is the production-stable target |
-| Framework | Laravel | 12.x | Released Feb 2025; ships Vue 3 + Inertia + Tailwind 4 starter kit |
+| Runtime | PHP | 8.3 | Laravel 13 requires 8.2+; 8.3 is the production-stable target |
+| Framework | Laravel | 13.x | Released Mar 2025; ships Vue 3 + Inertia + Tailwind 4 starter kit |
 | Auth | laravel/fortify | ^1.31 | Disable public registration; invite-only via invitations table + signed URLs |
 | RBAC | spatie/laravel-permission | ^7.4 | Roles: super-admin, brand-admin, viewer |
-| Frontend adapter | @inertiajs/vue3 | ^2.3 | v2 is current; use useForm() for all form submissions |
-| Server adapter | inertiajs/inertia-laravel | ^2.0 | Handles shared data via HandleInertiaRequests middleware |
+| Frontend adapter | @inertiajs/vue3 | ^3.0 | v2 is current; use useForm() for all form submissions |
+| Server adapter | inertiajs/inertia-laravel | ^3.0 | Handles shared data via HandleInertiaRequests middleware |
 | UI framework | Vue 3 | 3.x | Composition API + script setup only |
 | Styling | Tailwind CSS | ^4.0 | CSS-first config; @import tailwindcss in app.css |
 | Components | shadcn-vue CLI | ^2.6 | Code copied into project; Reka UI v2 as primitives |
@@ -212,7 +212,7 @@ Branded client email receipt, admin notification email, refund capability via St
 |---|---|---|
 | Stack | HIGH | All packages verified on Packagist/npm with exact versions. No speculative choices. |
 | Features | HIGH | Feature set well-bounded for an internal agency tool. Dependency chain is explicit. |
-| Architecture | HIGH | Patterns verified against Stripe docs, Laravel 12 docs, and community sources. |
+| Architecture | HIGH | Patterns verified against Stripe docs, Laravel 13 docs, and community sources. |
 | Pitfalls | HIGH | All critical pitfalls backed by official Stripe documentation. CVE-2026-2890 provides real-world validation of CRITICAL-5. |
 
 Gaps requiring attention during planning:
@@ -224,7 +224,7 @@ Gaps requiring attention during planning:
 
 ## Sources
 
-- Laravel 12 release notes + encryption docs: laravel.com/docs/12.x
+- Laravel 13 release notes + encryption docs: laravel.com/docs/13.x
 - Stripe PaymentIntents lifecycle: docs.stripe.com/payments/paymentintents/lifecycle
 - Stripe webhook signature verification: docs.stripe.com/webhooks/signature
 - Stripe integration security guide: docs.stripe.com/security/guide

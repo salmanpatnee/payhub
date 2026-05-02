@@ -2,7 +2,7 @@
 
 ## Project
 
-Centralized multi-brand payment hub for an agency. Laravel 12 + Inertia.js v2 + Vue 3 + Tailwind CSS 4 + shadcn-vue + Stripe Elements. Replaces fragmented WooCommerce/Stripe setup with one app powering multiple brands.
+Centralized multi-brand payment hub for an agency. Laravel 13 + Inertia.js v3 + Vue 3 + Tailwind CSS 4 + shadcn-vue + Stripe Elements. Replaces fragmented WooCommerce/Stripe setup with one app powering multiple brands.
 
 See `.planning/PROJECT.md` for full context.
 
@@ -31,8 +31,8 @@ Phase 1 is next. Run `/gsd-discuss-phase 1` or `/gsd-plan-phase 1` to start.
 
 ## Stack
 
-- **Backend**: Laravel 12, PHP 8.3
-- **Frontend**: Vue 3 (Composition API + `<script setup>`), Inertia.js v2
+- **Backend**: Laravel 13, PHP 8.3
+- **Frontend**: Vue 3 (Composition API + `<script setup>`), Inertia.js v3
 - **Styling**: Tailwind CSS 4, shadcn-vue 2.6 (Reka UI primitives)
 - **Auth**: Laravel Fortify — invite-only, no public registration
 - **RBAC**: spatie/laravel-permission v7 (Admin / User roles)

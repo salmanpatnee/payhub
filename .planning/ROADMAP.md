@@ -12,7 +12,7 @@ PayHub ships in seven phases ordered by dependency: data model and encryption fi
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 1: Foundation** - Laravel 12 + Inertia v2 + Vue 3 + Tailwind 4 + shadcn-vue + Fortify install, then migrations, models, encrypted casts, factories *(completed 2026-05-03)*
+- [x] **Phase 1: Foundation** - Laravel 13 + Inertia v3 + Vue 3 + Tailwind 4 + shadcn-vue + Fortify install, then migrations, models, encrypted casts, factories *(completed 2026-05-03)*
 - [ ] **Phase 2: Auth + User Management** - Invite-only Fortify auth, role-based access, admin and user login/logout
 - [ ] **Phase 3: Brand + Stripe Account Management** - Brand CRUD, StripeAccount CRUD, key encryption, per-account StripeService, test/live key enforcement
 - [ ] **Phase 4: Payment Creation + Link Generation** - Payment form, UUID link generation, currency selection, payment history views
@@ -23,12 +23,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Foundation
-**Goal**: Laravel 12 application is scaffolded with Inertia v2, Vue 3, Tailwind CSS 4, shadcn-vue, and Fortify installed — then the database schema is correct, all four core models are in place with proper relationships, and AES-256 encryption round-trips successfully on Stripe credentials.
+**Goal**: Laravel 13 application is scaffolded with Inertia v3, Vue 3, Tailwind CSS 4, shadcn-vue, and Fortify installed — then the database schema is correct, all four core models are in place with proper relationships, and AES-256 encryption round-trips successfully on Stripe credentials.
 **Depends on**: Nothing (first phase)
 **Requirements**: SEC-01
 **Success Criteria** (what must be TRUE):
   1. `php artisan serve` and `npm run dev` start without errors; a browser renders the Inertia root page with Tailwind styles applied
-  2. Laravel Fortify is installed and registered; Inertia v2 server and client adapters are wired up
+  2. Laravel Fortify is installed and registered; Inertia v3 server and client adapters are wired up
   3. shadcn-vue CLI is initialised; at least one component (e.g. Button) is available in resources/js/components/ui/
   4. All migrations run cleanly on a fresh database with no errors
   5. A StripeAccount record with an encrypted secret_key can be saved and its decrypted value retrieved correctly via the Laravel encrypted cast

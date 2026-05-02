@@ -2,7 +2,7 @@
 
 ## What This Is
 
-PayHub is a centralized payment infrastructure system for an agency managing multiple brands. It replaces a fragmented multi-site WooCommerce setup with a single Laravel 12 + Inertia.js application that generates branded payment links, processes payments via Stripe Elements, and provides unified reporting. Clients never see backend complexity — they see the brand they trust.
+PayHub is a centralized payment infrastructure system for an agency managing multiple brands. It replaces a fragmented multi-site WooCommerce setup with a single Laravel 13 + Inertia.js application that generates branded payment links, processes payments via Stripe Elements, and provides unified reporting. Clients never see backend complexity — they see the brand they trust.
 
 ## Core Value
 
@@ -75,7 +75,7 @@ Clients always feel they are paying the same brand they interacted with, regardl
 This system solves a real operational problem: the agency runs multiple brands across separate WordPress/WooCommerce sites, each with its own Stripe account. Clients see different domains and inconsistent payment experiences, which erodes trust. PayHub centralizes this under one application.
 
 **Technical environment:**
-- Laravel 12 backend
+- Laravel 13 backend
 - Vue 3 frontend via Inertia.js (not a standalone SPA — Inertia-rendered pages)
 - Tailwind CSS 4 + shadcn/ui for styling
 - Stripe Elements for embedded, brand-styled payment forms
@@ -86,7 +86,7 @@ Each payment selects a brand → resolves linked Stripe account → creates Paym
 
 ## Constraints
 
-- **Tech Stack**: Laravel 12, Vue 3, Inertia.js, Tailwind 4, shadcn/ui, Stripe Elements — already decided
+- **Tech Stack**: Laravel 13, Vue 3, Inertia.js v3, Tailwind 4, shadcn/ui, Stripe Elements — already decided
 - **Security**: Stripe secret keys must be encrypted at rest (AES-256 in DB); no external secret management services
 - **Payments**: One-time only — no subscriptions, no recurring billing
 - **Auth**: Laravel Fortify, invite-only — no public registration, no SSO for v1

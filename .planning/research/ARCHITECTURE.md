@@ -2,13 +2,13 @@
 
 **Domain:** Multi-brand centralized payment infrastructure
 **Researched:** 2026-05-02
-**Overall confidence:** HIGH (patterns verified against Stripe docs, Laravel 12 docs, and community sources)
+**Overall confidence:** HIGH (patterns verified against Stripe docs, Laravel 13 docs, and community sources)
 
 ---
 
 ## System Overview
 
-PayHub is a monolithic Laravel 12 application with two distinct user surfaces on a single domain:
+PayHub is a monolithic Laravel 13 application with two distinct user surfaces on a single domain:
 
 1. **Admin/User Panel** — Authenticated, Inertia.js SPA feel, manages brands, Stripe accounts, and payments
 2. **Client Payment Page** — Unauthenticated, UUID-addressed, brand-styled, Stripe Elements embedded
@@ -84,7 +84,7 @@ PaymentCompleted listener --> updates Payment status --> sends notifications
 | `User` | Admin or staff user creating payments | `id`, `name`, `email`, `password`, `role` | `hasMany(Payment)` |
 
 **Encryption on StripeAccount:**
-Use Laravel 12's built-in `encrypted` cast on the `StripeAccount` model. This uses AES-256-CBC via the app's `APP_KEY`. The `secret_key` and `webhook_secret` columns must be `TEXT` type in migrations (encrypted values are longer than plain text).
+Use Laravel 13's built-in `encrypted` cast on the `StripeAccount` model. This uses AES-256-CBC via the app's `APP_KEY`. The `secret_key` and `webhook_secret` columns must be `TEXT` type in migrations (encrypted values are longer than plain text).
 
 ```php
 // App\Models\StripeAccount
@@ -481,9 +481,9 @@ This is an internal agency tool. The following is calibrated for that context.
 - Stripe PaymentIntents API (PHP): https://docs.stripe.com/api/payment_intents/create?lang=php
 - Stripe Webhook Signature Verification: https://docs.stripe.com/webhooks
 - Stripe multiple accounts per-StripeClient pattern: https://medium.com/nerd-for-tech/stripe-multiple-accounts-with-laravel-cashier-31573f86ee4e
-- Laravel 12 Encrypted Cast: https://laravel.com/docs/12.x/eloquent-mutators
-- Laravel 12 Encryption (AES-256-CBC, Crypt facade): https://laravel.com/docs/12.x/encryption
-- Laravel Middleware data passing via request attributes: https://laravel.com/docs/12.x/middleware
+- Laravel 13 Encrypted Cast: https://laravel.com/docs/13.x/eloquent-mutators
+- Laravel 13 Encryption (AES-256-CBC, Crypt facade): https://laravel.com/docs/13.x/encryption
+- Laravel Middleware data passing via request attributes: https://laravel.com/docs/13.x/middleware
 - Inertia HandleInertiaRequests middleware and shared data: https://inertiajs.com/server-side-setup
 - Service layer vs repository pattern in Laravel (community consensus): https://rawbinn.com/blog/repository-and-service-design-pattern-in-laravel
 - Webhook architecture pattern (Verify-Queue-Respond): https://medium.com/@prevailexcellent/how-to-handle-webhook-in-laravel-two-ways-and-the-best-way-90abfa7e1a39

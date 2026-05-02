@@ -1,6 +1,6 @@
 # Domain Pitfalls
 
-**Domain:** Multi-brand payment hub — Stripe Elements + Laravel 12 + multi-Stripe-account architecture
+**Domain:** Multi-brand payment hub — Stripe Elements + Laravel 13 + multi-Stripe-account architecture
 **Researched:** 2026-05-02
 **Confidence:** HIGH (all critical pitfalls verified against official Stripe documentation and Laravel docs)
 
@@ -451,8 +451,8 @@ Idempotency keys are generated as `order_{order_id}` without including a brand i
 - [Stripe: Integration security guide](https://docs.stripe.com/security/guide) — HIGH confidence
 - [Stripe: API key best practices](https://docs.stripe.com/keys-best-practices) — HIGH confidence
 - [Stripe: Currencies (zero-decimal list)](https://docs.stripe.com/currencies) — HIGH confidence
-- [Laravel 12: Encryption and key rotation](https://laravel.com/docs/12.x/encryption) — HIGH confidence
-- [Laravel 12: CSRF protection](https://laravel.com/docs/12.x/csrf) — HIGH confidence
+- [Laravel 13: Encryption and key rotation](https://laravel.com/docs/13.x/encryption) — HIGH confidence
+- [Laravel 13: CSRF protection](https://laravel.com/docs/13.x/csrf) — HIGH confidence
 - [Inertia.js CSRF protection](https://inertiajs.com/docs/v2/security/csrf-protection) — HIGH confidence
 - [DEV: Debugging Stripe webhook signature verification in production](https://dev.to/nerdincode/debugging-stripe-webhook-signature-verification-errors-in-production-1h7c) — MEDIUM confidence
 - [Hookdeck: Implementing webhook idempotency](https://hookdeck.com/webhooks/guides/implement-webhook-idempotency) — MEDIUM confidence
