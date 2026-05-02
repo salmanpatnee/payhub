@@ -37,6 +37,7 @@ it('encrypts webhook_secret on save and decrypts correctly on read', function ()
 
     $rawRow = DB::table('stripe_accounts')->where('id', $account->id)->value('webhook_secret');
     expect($rawRow)->not->toBe($plainSecret);
+    expect($rawRow)->not->toBeNull();
 
     $fresh = StripeAccount::find($account->id);
     expect($fresh->webhook_secret)->toBe($plainSecret);
