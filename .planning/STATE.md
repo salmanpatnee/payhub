@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: executing
+stopped_at: Completed 02-00-PLAN.md — Wave 0 auth test stubs created
+last_updated: "2026-05-03T09:16:44.097Z"
+last_activity: 2026-05-03
+progress:
+  total_phases: 7
+  completed_phases: 1
+  total_plans: 7
+  completed_plans: 3
+  percent: 43
+---
+
 # Project State
 
 ## Project Reference
@@ -10,15 +26,16 @@ See: .planning/PROJECT.md (updated 2026-05-02)
 ## Current Position
 
 Phase: 2 of 7 (Auth + User Management) — Planned, ready to execute
-Plan: 0 of 5 in current phase
-Status: Phase 2 planned (5 plans across 3 waves) — run /gsd-execute-phase 2
-Last activity: 2026-05-03 — Phase 2 plan set created
+Plan: 1 of 5 in current phase
+Status: Ready to execute
+Last activity: 2026-05-03
 
 Progress: [█░░░░░░░░░] 14%
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: -
 - Total execution time: 0 hours
@@ -30,10 +47,12 @@ Progress: [█░░░░░░░░░] 14%
 | - | - | - | - |
 
 **Recent Trend:**
+
 - Last 5 plans: none yet
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 02-auth-user-management P00 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -49,6 +68,7 @@ Recent decisions affecting current work:
 - [Phase 2]: Email verification disabled — Features::emailVerification() removed to simplify test setup (open question resolved)
 - [Phase 2]: Hard-delete chosen for user deletion — no soft deletes in Phase 2 (open question resolved)
 - [Phase 2]: Computed spread pattern chosen for admin-only nav items in AppSidebar (no NavItem type extension needed)
+- [Phase 02]: Wave 0 stubs use PHPUnit class-style with forgetCachedPermissions() + Role::firstOrCreate() in setUp() to prevent spatie permission cache contamination across tests
 
 ### Pending Todos
 
@@ -72,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-03
-Stopped at: Phase 2 plan set complete — 5 plans in 3 waves ready for execution
-Resume file: .planning/phases/02-auth-user-management/
+Last session: 2026-05-03T09:16:44.086Z
+Stopped at: Completed 02-00-PLAN.md — Wave 0 auth test stubs created
+Resume file: None

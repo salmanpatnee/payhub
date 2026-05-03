@@ -5,11 +5,11 @@
 ### Auth & Access (AUTH)
 
 - [ ] **AUTH-01**: User can log in with email and password via Laravel Fortify
-- [ ] **AUTH-02**: User session persists across page loads until explicit logout
+- [x] **AUTH-02**: User session persists across page loads until explicit logout
 - [ ] **AUTH-03**: User can log out from any authenticated page
-- [ ] **AUTH-04**: Admin can assign roles (Admin / User) to team members
-- [ ] **AUTH-05**: Access to admin features is restricted to Admin role only
-- [ ] **AUTH-06**: Unauthenticated access to client payment page (/pay/{uuid}) is allowed without login
+- [x] **AUTH-04**: Admin can assign roles (Admin / User) to team members
+- [x] **AUTH-05**: Access to admin features is restricted to Admin role only
+- [x] **AUTH-06**: Unauthenticated access to client payment page (/pay/{uuid}) is allowed without login
 
 ### Brand Management (BRAND)
 
@@ -113,11 +113,11 @@
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
 | AUTH-01 | Phase 2 | Pending |
-| AUTH-02 | Phase 2 | Pending |
+| AUTH-02 | Phase 2 | Complete |
 | AUTH-03 | Phase 2 | Pending |
-| AUTH-04 | Phase 2 | Pending |
-| AUTH-05 | Phase 2 | Pending |
-| AUTH-06 | Phase 2 | Pending |
+| AUTH-04 | Phase 2 | Complete |
+| AUTH-05 | Phase 2 | Complete |
+| AUTH-06 | Phase 2 | Complete |
 | BRAND-01 | Phase 3 | Pending |
 | BRAND-02 | Phase 3 | Pending |
 | BRAND-03 | Phase 3 | Pending |
