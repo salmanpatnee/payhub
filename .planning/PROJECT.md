@@ -22,12 +22,18 @@ Clients always feel they are paying the same brand they interacted with, regardl
 - Idempotent seeder: 1 brand, 1 Stripe account, 1 admin user, 2 roles
 - 49/49 tests passing
 
-### Active
+### Validated
 
-**Auth & Access**
-- [ ] Admin can invite team members (no public registration)
-- [ ] Admin and User can log in with email/password via Laravel Fortify
-- [ ] Role-based access: Admin has full access, User can create payments and view own history
+**Phase 2: Auth + User Management** *(validated 2026-05-03)*
+- Invite-only auth — registration disabled; admin creates accounts manually
+- Admin and User login/logout via Laravel Fortify; session persistence with remember token
+- Role-based access: role:admin middleware guards all /admin/* routes; User role gets 403
+- Admin CRUD for team members (create, edit role, delete; self-delete blocked)
+- AppSidebar role-aware nav: Users link admin-only; all other nav visible to both roles
+- /pay/{uuid} stub accessible without session (Phase 5 will implement)
+- 51/51 tests passing
+
+### Active
 
 **Brand Management (Admin only)**
 - [ ] Admin can create and manage brands (logo, colors, display name)
