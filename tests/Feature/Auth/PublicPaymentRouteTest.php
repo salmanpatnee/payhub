@@ -30,6 +30,7 @@ class PublicPaymentRouteTest extends TestCase
     {
         $response = $this->get(route('pay.show', ['uuid' => 'test-uuid']));
 
-        $response->assertNotRedirect(route('login'));
+        // assertNotRedirect does not exist in Laravel 13 — assert 404 (not a redirect)
+        $response->assertStatus(404);
     }
 }
