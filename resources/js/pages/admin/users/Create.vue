@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ArrowLeft, UserPlus } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -39,7 +40,17 @@ function submit() {
 <template>
     <Head title="Add team member" />
 
-    <div class="p-6 max-w-lg">
+    <div class="p-6">
+        <!-- Page header -->
+        <div class="mb-6">
+            <Button variant="ghost" size="sm" as-child class="-ml-2 mb-4">
+                <Link href="/admin/users">
+                    <ArrowLeft class="size-4 mr-1" />
+                    Back to users
+                </Link>
+            </Button>
+        </div>
+
         <Card>
             <CardHeader>
                 <CardTitle>Add team member</CardTitle>
@@ -48,7 +59,7 @@ function submit() {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <form id="create-user-form" class="space-y-4" @submit.prevent="submit">
+                <form id="create-user-form" class="grid grid-cols-2 gap-4" @submit.prevent="submit">
                     <div class="grid gap-2">
                         <Label for="name">Name</Label>
                         <Input
@@ -88,7 +99,7 @@ function submit() {
                     <div class="grid gap-2">
                         <Label for="role">Role</Label>
                         <Select v-model="form.role">
-                            <SelectTrigger id="role">
+                            <SelectTrigger id="role" class="w-full">
                                 <SelectValue placeholder="Select a role" />
                             </SelectTrigger>
                             <SelectContent>
@@ -100,11 +111,9 @@ function submit() {
                     </div>
                 </form>
             </CardContent>
-            <CardFooter class="flex justify-between">
-                <Button variant="outline" as-child>
-                    <Link href="/admin/users">Back to users</Link>
-                </Button>
+            <CardFooter class="flex justify-end">
                 <Button type="submit" form="create-user-form" :disabled="form.processing">
+                    <UserPlus class="size-4 mr-1" />
                     Create user
                 </Button>
             </CardFooter>

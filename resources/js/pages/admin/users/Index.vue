@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { Pencil, Trash2 } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +30,8 @@ defineOptions({
     },
 });
 
+const page         = usePage();
+const authUserId   = computed(() => page.props.auth.user?.id);
 const deleteTarget = ref<UserRow | null>(null);
 const deleteOpen   = ref(false);
 
@@ -57,64 +59,67 @@ function executeDelete() {
     <div class="p-6 space-y-6">
         <!-- Page header -->
         <div class="flex items-center justify-between">
-            <h1 class="text-xl font-medium">Team Members</h1>
+            <h1 class="text-xl font-semibold">Team Members</h1>
             <Button as-child>
                 <Link href="/admin/users/create">Add user</Link>
             </Button>
         </div>
 
         <!-- User table -->
-        <table class="w-full text-sm">
-            <thead>
-                <tr class="border-b border-border">
-                    <th class="text-left py-3 pr-4 font-medium text-muted-foreground">Name</th>
-                    <th class="text-left py-3 pr-4 font-medium text-muted-foreground">Email</th>
-                    <th class="text-left py-3 pr-4 font-medium text-muted-foreground">Role</th>
-                    <th class="text-right py-3 font-medium text-muted-foreground">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <template v-if="users.length > 0">
-                    <tr
-                        v-for="user in users"
-                        :key="user.id"
-                        class="border-b border-border last:border-0"
-                    >
-                        <td class="py-3 pr-4">{{ user.name }}</td>
-                        <td class="py-3 pr-4 text-muted-foreground">{{ user.email }}</td>
-                        <td class="py-3 pr-4">
-                            <Badge :variant="user.roles.includes('admin') ? 'secondary' : 'outline'">
-                                {{ user.roles[0] ?? 'user' }}
-                            </Badge>
-                        </td>
-                        <td class="py-3 text-right">
-                            <div class="flex items-center justify-end gap-1">
-                                <Button variant="ghost" size="icon" as-child>
-                                    <Link :href="`/admin/users/${user.id}/edit`" :aria-label="`Edit ${user.name}`">
-                                        <Pencil class="size-4" />
-                                    </Link>
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    :aria-label="`Delete ${user.name}`"
-                                    @click="confirmDelete(user)"
-                                >
-                                    <Trash2 class="size-4 text-destructive" />
-                                </Button>
-                            </div>
-                        </td>
+        <div class="rounded-lg border border-border bg-card overflow-hidden">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-muted/40 border-b border-border">
+                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</th>
+                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Email</th>
+                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Role</th>
+                        <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actions</th>
                     </tr>
-                </template>
-                <template v-else>
-                    <tr>
-                        <td colspan="4" class="py-12 text-center text-muted-foreground text-sm">
-                            No team members yet. Add the first user above.
-                        </td>
-                    </tr>
-                </template>
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    <template v-if="users.length > 0">
+                        <tr
+                            v-for="user in users"
+                            :key="user.id"
+                            class="border-b border-border last:border-0 hover:bg-muted/50 transition-colors"
+                        >
+                            <td class="px-4 py-3">{{ user.name }}</td>
+                            <td class="px-4 py-3 text-muted-foreground">{{ user.email }}</td>
+                            <td class="px-4 py-3">
+                                <Badge :variant="user.roles.includes('admin') ? 'secondary' : 'outline'">
+                                    {{ user.roles[0] ?? 'user' }}
+                                </Badge>
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <div class="flex items-center justify-end gap-1">
+                                    <Button variant="ghost" size="icon" as-child>
+                                        <Link :href="`/admin/users/${user.id}/edit`" :aria-label="`Edit ${user.name}`">
+                                            <Pencil class="size-4" />
+                                        </Link>
+                                    </Button>
+                                    <Button
+                                        v-if="user.id !== authUserId"
+                                        variant="ghost"
+                                        size="icon"
+                                        :aria-label="`Delete ${user.name}`"
+                                        @click="confirmDelete(user)"
+                                    >
+                                        <Trash2 class="size-4 text-destructive" />
+                                    </Button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <template v-else>
+                        <tr>
+                            <td colspan="4" class="px-4 py-12 text-center text-muted-foreground text-sm">
+                                No team members yet. Add the first user above.
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- Delete confirmation dialog -->

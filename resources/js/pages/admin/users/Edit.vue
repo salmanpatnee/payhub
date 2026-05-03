@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { ArrowLeft, Check } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -67,7 +68,17 @@ function executeDelete() {
 <template>
     <Head :title="`Edit ${user.name}`" />
 
-    <div class="p-6 max-w-lg">
+    <div class="p-6">
+        <!-- Back navigation -->
+        <div class="mb-6">
+            <Button variant="ghost" size="sm" as-child class="-ml-2">
+                <Link href="/admin/users">
+                    <ArrowLeft class="size-4 mr-1" />
+                    Back to users
+                </Link>
+            </Button>
+        </div>
+
         <Card>
             <CardHeader>
                 <CardTitle>Edit team member</CardTitle>
@@ -76,7 +87,7 @@ function executeDelete() {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <form id="edit-user-form" class="space-y-4" @submit.prevent="submit">
+                <form id="edit-user-form" class="grid grid-cols-2 gap-4" @submit.prevent="submit">
                     <div class="grid gap-2">
                         <Label for="name">Name</Label>
                         <Input
@@ -116,7 +127,7 @@ function executeDelete() {
                     <div class="grid gap-2">
                         <Label for="role">Role</Label>
                         <Select v-model="form.role">
-                            <SelectTrigger id="role">
+                            <SelectTrigger id="role" class="w-full">
                                 <SelectValue placeholder="Select a role" />
                             </SelectTrigger>
                             <SelectContent>
@@ -128,21 +139,18 @@ function executeDelete() {
                     </div>
                 </form>
             </CardContent>
-            <CardFooter class="flex justify-between">
-                <div class="flex items-center gap-2">
-                    <Button variant="outline" as-child>
-                        <Link href="/admin/users">Back to users</Link>
-                    </Button>
-                    <Button
-                        v-if="!isSelf"
-                        variant="destructive"
-                        type="button"
-                        @click="deleteOpen = true"
-                    >
-                        Delete user
-                    </Button>
-                </div>
+            <CardFooter class="flex items-center justify-between">
+                <Button
+                    v-if="!isSelf"
+                    variant="destructive"
+                    type="button"
+                    @click="deleteOpen = true"
+                >
+                    Delete user
+                </Button>
+                <div v-else />
                 <Button type="submit" form="edit-user-form" :disabled="form.processing">
+                    <Check class="size-4 mr-1" />
                     Save changes
                 </Button>
             </CardFooter>
