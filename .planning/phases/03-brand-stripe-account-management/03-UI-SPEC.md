@@ -1,7 +1,7 @@
 ---
 phase: 3
 slug: brand-stripe-account-management
-status: draft
+status: approved
 shadcn_initialized: true
 preset: new-york-v4
 created: 2026-05-03
@@ -214,10 +214,10 @@ Page structure:
           <td class="px-4 py-3">
             <!-- Color swatches — inline style, NOT dynamic Tailwind classes -->
             <div class="flex items-center gap-2">
-              <span class="size-5 rounded-sm border border-border inline-block"
+              <span aria-hidden="true" class="size-5 rounded-sm border border-border inline-block"
                     :style="{ backgroundColor: brand.primary_color }"
                     :title="`Primary: ${brand.primary_color}`"></span>
-              <span class="size-5 rounded-sm border border-border inline-block"
+              <span aria-hidden="true" class="size-5 rounded-sm border border-border inline-block"
                     :style="{ backgroundColor: brand.secondary_color }"
                     :title="`Secondary: ${brand.secondary_color}`"></span>
             </div>
@@ -253,6 +253,8 @@ Page structure:
   </div>
 </div>
 ```
+
+**Focal point:** "Add brand" CTA button in the top-right page header — the primary admin action on this screen.
 
 No delete action for brands in this phase (deferred per CONTEXT.md).
 No pagination — internal tool, brand count is small.
@@ -488,6 +490,8 @@ Page structure:
 ```
 
 `publishable_key_preview`: the backend controller sends only the first 12 characters of the publishable key plus `••••••••` (e.g. `pk_live_AbCd••••••••`). This is computed server-side; the raw full key is never sent to the frontend index view.
+
+**Focal point:** "Add account" CTA button in the top-right page header — entry point for onboarding a new Stripe credential.
 
 Inactive accounts remain in the list — they are not hidden. The "Deactivate" button does not appear for already-inactive accounts.
 
@@ -767,11 +771,11 @@ The native `<input type="color">` is a browser primitive — no registry interac
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS (FLAG: focal point declarations added post-review)
+- [x] Dimension 3 Color: PASS (FLAG: aria-hidden added to swatch snippets post-review)
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-05-03
