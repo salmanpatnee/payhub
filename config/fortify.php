@@ -144,9 +144,9 @@ return [
     */
 
     'features' => [
-        Features::registration(),
+        // Features::registration(),   // REMOVED — invite-only; no public sign-up (D-01)
         Features::resetPasswords(),
-        Features::emailVerification(),
+        // Features::emailVerification(), // REMOVED — internal tool; simplifies test setup
         Features::twoFactorAuthentication([
             'confirm' => true,
             'confirmPassword' => true,
