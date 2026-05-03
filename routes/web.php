@@ -10,6 +10,8 @@ Route::inertia('/', 'Welcome', [
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    Route::inertia('/admin/brands', 'placeholders/ComingSoon')->name('brands.index');
+    Route::inertia('/payments', 'placeholders/ComingSoon')->name('payments.index');
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])
