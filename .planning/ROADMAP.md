@@ -48,7 +48,15 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. An account with the User role cannot access Admin-only routes or UI controls
   4. The client payment route (/pay/{uuid}) is reachable without any login session
   5. There is no publicly accessible registration page — new accounts can only be created by an Admin
-**Plans**: TBD
+**Plans**: 5 plans (Wave 0: test stubs, Wave 1: config + backend, Wave 2: frontend)
+
+Plans:
+- [ ] 02-00-PLAN.md — Wave 0 test stubs (AdminUserManagementTest, AdminAccessControlTest, SessionPersistenceTest, PublicPaymentRouteTest)
+- [ ] 02-01-PLAN.md — Config layer (bootstrap/app.php spatie aliases, fortify.php disable registration, HandleInertiaRequests roles)
+- [ ] 02-02-PLAN.md — Backend CRUD (routes/web.php admin group + pay stub, AdminUserController, StoreUserRequest, UpdateUserRequest)
+- [ ] 02-03-PLAN.md — Frontend shell (auth.ts types, AppSidebar role-aware nav, ComingSoon placeholder, placeholder routes)
+- [ ] 02-04-PLAN.md — Admin user pages (Index.vue user table, Create.vue form, Edit.vue form with self-delete guard)
+
 **UI hint**: yes
 
 ### Phase 3: Brand + Stripe Account Management
@@ -123,7 +131,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 2/2 | Complete | 2026-05-03 |
-| 2. Auth + User Management | 0/TBD | Not started | - |
+| 2. Auth + User Management | 0/5 | Not started | - |
 | 3. Brand + Stripe Account Management | 0/TBD | Not started | - |
 | 4. Payment Creation + Link Generation | 0/TBD | Not started | - |
 | 5. Client Payment Page | 0/TBD | Not started | - |
