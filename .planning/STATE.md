@@ -30,29 +30,7 @@ Plan: 0 of TBD in current phase
 Status: Phase 3 validated and approved — ready to plan Phase 4
 Last activity: 2026-05-05
 
-Progress: [█░░░░░░░░░] 14%
-
-## Performance Metrics
-
-**Velocity:**
-
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: none yet
-- Trend: -
-
-*Updated after each plan completion*
-| Phase 02-auth-user-management P00 | 3min | 2 tasks | 4 files |
+Progress: [████░░░░░░] 43%
 
 ## Accumulated Context
 
@@ -69,6 +47,10 @@ Recent decisions affecting current work:
 - [Phase 2]: Hard-delete chosen for user deletion — no soft deletes in Phase 2 (open question resolved)
 - [Phase 2]: Computed spread pattern chosen for admin-only nav items in AppSidebar (no NavItem type extension needed)
 - [Phase 02]: Wave 0 stubs use PHPUnit class-style with forgetCachedPermissions() + Role::firstOrCreate() in setUp() to prevent spatie permission cache contamination across tests
+- [Phase 03]: Stripe accounts decoupled from brands — moved to top-level /admin/stripe-accounts route; brand_id dropped from stripe_accounts table
+- [Phase 03]: website_url added to brands table (nullable)
+- [Phase 03]: webhook_secret made nullable on stripe_accounts — not required at account creation time
+- [Phase 03]: ConfirmDeleteDialog extracted as reusable component
 
 ### Pending Todos
 
@@ -92,6 +74,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-03T09:16:44.086Z
-Stopped at: Completed 02-00-PLAN.md — Wave 0 auth test stubs created
+Last session: 2026-05-05
+Stopped at: Phase 3 validated, approved, committed, merged to master, pushed — ready to plan Phase 4
 Resume file: None
