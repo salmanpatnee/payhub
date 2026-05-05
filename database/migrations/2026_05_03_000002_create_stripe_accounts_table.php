@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('account_name');
             $table->string('publishable_key');
             $table->text('secret_key');
-            $table->text('webhook_secret');
+            $table->text('webhook_secret')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

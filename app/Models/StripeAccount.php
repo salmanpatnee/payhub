@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class StripeAccount extends Model
@@ -12,7 +11,7 @@ class StripeAccount extends Model
     use HasFactory;
 
     protected $fillable = [
-        'brand_id', 'account_name', 'publishable_key', 'is_active',
+        'account_name', 'publishable_key', 'is_active',
         // secret_key and webhook_secret are NOT mass-assignable — assign explicitly only
     ];
 
@@ -23,11 +22,6 @@ class StripeAccount extends Model
             'webhook_secret' => 'encrypted',
             'is_active'      => 'boolean',
         ];
-    }
-
-    public function brand(): BelongsTo
-    {
-        return $this->belongsTo(Brand::class);
     }
 
     public function payments(): HasMany

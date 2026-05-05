@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Brand;
 use App\Models\StripeAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -10,9 +9,7 @@ uses(RefreshDatabase::class);
 it('encrypts secret_key on save and decrypts correctly on read', function () {
     $plainKey = 'sk_test_placeholder_for_dev_only';
 
-    $brand   = Brand::factory()->create();
     $account = StripeAccount::factory()->create([
-        'brand_id'   => $brand->id,
         'secret_key' => $plainKey,
     ]);
 
@@ -29,9 +26,7 @@ it('encrypts secret_key on save and decrypts correctly on read', function () {
 it('encrypts webhook_secret on save and decrypts correctly on read', function () {
     $plainSecret = 'whsec_placeholder_for_dev_only';
 
-    $brand   = Brand::factory()->create();
     $account = StripeAccount::factory()->create([
-        'brand_id'       => $brand->id,
         'webhook_secret' => $plainSecret,
     ]);
 

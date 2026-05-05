@@ -8,24 +8,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-it('brand has many stripe accounts', function () {
-    $brand          = Brand::factory()->create();
-    $stripeAccount  = StripeAccount::factory()->create(['brand_id' => $brand->id]);
-
-    expect($brand->stripeAccounts)->toHaveCount(1);
-    expect($brand->stripeAccounts->first()->id)->toBe($stripeAccount->id);
-});
-
-it('stripe account belongs to brand', function () {
-    $brand         = Brand::factory()->create();
-    $stripeAccount = StripeAccount::factory()->create(['brand_id' => $brand->id]);
-
-    expect($stripeAccount->brand->id)->toBe($brand->id);
-});
-
 it('payment belongs to brand, stripe account, and user', function () {
     $brand         = Brand::factory()->create();
-    $stripeAccount = StripeAccount::factory()->create(['brand_id' => $brand->id]);
+    $stripeAccount = StripeAccount::factory()->create();
     $user          = User::factory()->create();
 
     $payment = Payment::factory()->create([
@@ -41,7 +26,7 @@ it('payment belongs to brand, stripe account, and user', function () {
 
 it('brand has many payments', function () {
     $brand         = Brand::factory()->create();
-    $stripeAccount = StripeAccount::factory()->create(['brand_id' => $brand->id]);
+    $stripeAccount = StripeAccount::factory()->create();
     $user          = User::factory()->create();
 
     Payment::factory()->count(3)->create([

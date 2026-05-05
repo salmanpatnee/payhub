@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
-import { Building2, CreditCard, LayoutGrid, Settings, Users } from 'lucide-vue-next';
+import { Building2, CreditCard, LayoutGrid, Settings, Users, Wallet } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -23,11 +23,12 @@ const isAdmin = computed(() =>
 );
 
 const mainNavItems = computed((): NavItem[] => [
-    { title: 'Dashboard', href: dashboard(),         icon: LayoutGrid },
-    { title: 'Brands',    href: '/admin/brands',     icon: Building2 },
-    { title: 'Payments',  href: '/payments',          icon: CreditCard },
+    { title: 'Dashboard',       href: dashboard(),                icon: LayoutGrid },
+    { title: 'Brands',          href: '/admin/brands',            icon: Building2 },
+    { title: 'Stripe Accounts', href: '/admin/stripe-accounts',   icon: Wallet },
+    { title: 'Payments',        href: '/payments',                icon: CreditCard },
     ...(isAdmin.value ? [{ title: 'Users', href: '/admin/users', icon: Users } as NavItem] : []),
-    { title: 'Settings',  href: '/settings/profile', icon: Settings },
+    { title: 'Settings',        href: '/settings/profile',        icon: Settings },
 ]);
 </script>
 

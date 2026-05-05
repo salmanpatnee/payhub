@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Admin\BrandController;
+use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -10,7 +13,6 @@ Route::inertia('/', 'Welcome', [
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
-    Route::inertia('/admin/brands', 'placeholders/ComingSoon')->name('brands.index');
     Route::inertia('/payments', 'placeholders/ComingSoon')->name('payments.index');
 });
 
@@ -20,6 +22,27 @@ Route::middleware(['auth', 'verified', 'role:admin'])
     ->group(function () {
         Route::resource('users', AdminUserController::class)
             ->except(['show']);
+
+        Route::resource('brands', BrandController::class)
+            ->except(['show']);
+
+        Route::resource('stripe-accounts', StripeAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'stripe-accounts/{stripe_account}/deactivate',
+            [StripeAccountController::class, 'deactivate']
+        )->name('stripe-accounts.deactivate');
+
+        Route::post(
+            'stripe-accounts/test-connection',
+            [StripeAccountController::class, 'testKeyConnection']
+        )->name('stripe-accounts.test-connection');
+
+        Route::post(
+            'stripe-accounts/{stripe_account}/test-connection',
+            [StripeAccountController::class, 'testStoredConnection']
+        )->name('stripe-accounts.test-stored-connection');
     });
 
 // Phase 5 stub — MUST be outside auth group (D-07: /pay/{uuid} reachable without session)
