@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { Pencil, Plus, PowerOff } from 'lucide-vue-next';
+import { CheckCircle2, Pencil, Plus, PowerOff, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,28 +12,21 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 
 type StripeAccountRow = {
     id: number;
     account_name: string;
-    publishable_key: string;
     publishable_key_preview: string;
     is_active: boolean;
 };
 
-type BrandProp = { id: number; name: string };
-
-const props = defineProps<{
-    brand: BrandProp;
-    stripeAccounts: StripeAccountRow[];
-}>();
+defineProps<{ stripeAccounts: StripeAccountRow[] }>();
 
 defineOptions({
     layout: {
         breadcrumbs: [
-            { title: 'Brands', href: '/admin/brands' },
-            { title: props.brand.name, href: `/admin/brands/${props.brand.id}/edit` },
-            { title: 'Stripe Accounts', href: '#' },
+            { title: 'Stripe Accounts', href: '/admin/stripe-accounts' },
         ],
     },
 });
@@ -42,6 +35,10 @@ const deactivateTarget = ref<StripeAccountRow | null>(null);
 const deactivateOpen   = ref(false);
 const deactivateForm   = useForm({});
 
+const deleteTarget = ref<StripeAccountRow | null>(null);
+const deleteOpen   = ref(false);
+const deleteForm   = useForm({});
+
 function confirmDeactivate(account: StripeAccountRow) {
     deactivateTarget.value = account;
     deactivateOpen.value   = true;
@@ -49,37 +46,44 @@ function confirmDeactivate(account: StripeAccountRow) {
 
 function executeDeactivate() {
     if (!deactivateTarget.value) return;
-    deactivateForm.patch(
-        `/admin/brands/${props.brand.id}/stripe-accounts/${deactivateTarget.value.id}/deactivate`,
-        {
-            onSuccess: () => {
-                deactivateOpen.value   = false;
-                deactivateTarget.value = null;
-            },
-        }
-    );
+    deactivateForm.patch(`/admin/stripe-accounts/${deactivateTarget.value.id}/deactivate`, {
+        onSuccess: () => {
+            deactivateOpen.value   = false;
+            deactivateTarget.value = null;
+        },
+    });
+}
+
+function confirmDelete(account: StripeAccountRow) {
+    deleteTarget.value = account;
+    deleteOpen.value   = true;
+}
+
+function executeDelete() {
+    if (!deleteTarget.value) return;
+    deleteForm.delete(`/admin/stripe-accounts/${deleteTarget.value.id}`, {
+        onSuccess: () => {
+            deleteOpen.value   = false;
+            deleteTarget.value = null;
+        },
+    });
 }
 </script>
 
 <template>
-    <Head :title="`Stripe Accounts — ${brand.name}`" />
+    <Head title="Stripe Accounts" />
 
     <div class="p-6 space-y-6">
-        <!-- Page header with brand context -->
         <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-xl font-semibold">Stripe Accounts</h1>
-                <p class="text-sm text-muted-foreground mt-0.5">{{ brand.name }}</p>
-            </div>
+            <h1 class="text-xl font-semibold">Stripe Accounts</h1>
             <Button as-child>
-                <Link :href="`/admin/brands/${brand.id}/stripe-accounts/create`">
+                <Link href="/admin/stripe-accounts/create">
                     <Plus class="size-4 mr-1" />
                     Add account
                 </Link>
             </Button>
         </div>
 
-        <!-- Accounts table -->
         <div class="rounded-lg border border-border bg-card overflow-hidden">
             <table class="w-full text-sm">
                 <thead>
@@ -101,15 +105,17 @@ function executeDeactivate() {
                             {{ account.publishable_key_preview }}
                         </td>
                         <td class="px-4 py-3">
-                            <Badge :variant="account.is_active ? 'secondary' : 'outline'">
-                                {{ account.is_active ? 'Active' : 'Inactive' }}
-                            </Badge>
+                            <div v-if="account.is_active" class="inline-flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-500">
+                                <CheckCircle2 class="size-4" />
+                                Active
+                            </div>
+                            <Badge v-else variant="outline">Inactive</Badge>
                         </td>
                         <td class="px-4 py-3 text-right">
                             <div class="flex items-center justify-end gap-1">
                                 <Button variant="ghost" size="icon" as-child>
                                     <Link
-                                        :href="`/admin/brands/${brand.id}/stripe-accounts/${account.id}/edit`"
+                                        :href="`/admin/stripe-accounts/${account.id}/edit`"
                                         :aria-label="`Edit ${account.account_name}`"
                                     >
                                         <Pencil class="size-4" />
@@ -119,16 +125,26 @@ function executeDeactivate() {
                                     v-if="account.is_active"
                                     variant="ghost"
                                     size="icon"
+                                    class="cursor-pointer"
                                     :aria-label="`Deactivate ${account.account_name}`"
                                     @click="confirmDeactivate(account)"
                                 >
                                     <PowerOff class="size-4 text-destructive" />
                                 </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="cursor-pointer"
+                                    :disabled="deleteForm.processing && deleteTarget?.id === account.id"
+                                    :aria-label="`Delete ${account.account_name}`"
+                                    @click="confirmDelete(account)"
+                                >
+                                    <Trash2 class="size-4 text-destructive" />
+                                </Button>
                             </div>
                         </td>
                     </tr>
 
-                    <!-- Empty state -->
                     <tr v-if="stripeAccounts.length === 0">
                         <td colspan="4" class="px-4 py-12 text-center text-muted-foreground text-sm">
                             No Stripe accounts yet. Add an account to enable payment collection.
@@ -139,7 +155,6 @@ function executeDeactivate() {
         </div>
     </div>
 
-    <!-- Deactivation confirmation dialog -->
     <Dialog v-model:open="deactivateOpen">
         <DialogContent>
             <DialogHeader>
@@ -161,4 +176,12 @@ function executeDeactivate() {
             </DialogFooter>
         </DialogContent>
     </Dialog>
+
+    <ConfirmDeleteDialog
+        v-model:open="deleteOpen"
+        :title="`Delete ${deleteTarget?.account_name ?? 'account'}?`"
+        description="This account will be permanently removed. This cannot be undone."
+        :processing="deleteForm.processing"
+        @confirm="executeDelete"
+    />
 </template>

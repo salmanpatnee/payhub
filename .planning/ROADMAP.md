@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Laravel 13 + Inertia v3 + Vue 3 + Tailwind 4 + shadcn-vue + Fortify install, then migrations, models, encrypted casts, factories *(completed 2026-05-03)*
 - [x] **Phase 2: Auth + User Management** - Invite-only Fortify auth, role-based access, admin and user login/logout *(completed 2026-05-03)*
-- [ ] **Phase 3: Brand + Stripe Account Management** - Brand CRUD, StripeAccount CRUD, key encryption, per-account StripeService, test/live key enforcement
+- [x] **Phase 3: Brand + Stripe Account Management** - Brand CRUD, StripeAccount CRUD, key encryption, per-account StripeService, test/live key enforcement *(completed 2026-05-05)*
 - [ ] **Phase 4: Payment Creation + Link Generation** - Payment form, UUID link generation, currency selection, payment history views
 - [ ] **Phase 5: Client Payment Page** - Branded unauthenticated payment page, Stripe Elements, 3DS handling, success/failure pages
 - [ ] **Phase 6: Webhooks + Status Sync** - Per-account webhook endpoints, signature verification, queued fulfillment, authoritative status writes
@@ -132,7 +132,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Foundation | 2/2 | Complete | 2026-05-03 |
 | 2. Auth + User Management | 5/5 | Complete | 2026-05-03 |
-| 3. Brand + Stripe Account Management | 0/TBD | Not started | - |
+| 3. Brand + Stripe Account Management | 5/5 | Complete | 2026-05-05 |
 | 4. Payment Creation + Link Generation | 0/TBD | Not started | - |
 | 5. Client Payment Page | 0/TBD | Not started | - |
 | 6. Webhooks + Status Sync | 0/TBD | Not started | - |

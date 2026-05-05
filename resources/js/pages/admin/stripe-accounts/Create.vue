@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Plus } from 'lucide-vue-next';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { ArrowLeft, CheckCircle2, Loader2, Plus, XCircle, Zap } from 'lucide-vue-next';
+import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -15,16 +15,10 @@ import { Input } from '@/components/ui/input';
 import InputError from '@/components/InputError.vue';
 import { Label } from '@/components/ui/label';
 
-type BrandProp = { id: number; name: string };
-
-const props = defineProps<{ brand: BrandProp }>();
-
 defineOptions({
     layout: {
         breadcrumbs: [
-            { title: 'Brands', href: '/admin/brands' },
-            { title: props.brand.name, href: `/admin/brands/${props.brand.id}/edit` },
-            { title: 'Stripe Accounts', href: `/admin/brands/${props.brand.id}/stripe-accounts` },
+            { title: 'Stripe Accounts', href: '/admin/stripe-accounts' },
             { title: 'Add account', href: '#' },
         ],
     },
@@ -36,8 +30,29 @@ const form = useForm({
     secret_key:      '',
 });
 
+const testStatus = ref<'idle' | 'testing' | 'ok' | 'fail'>('idle');
+const testMessage = ref('');
+
+function testConnection() {
+    testStatus.value = 'testing';
+    testMessage.value = '';
+    router.post('/admin/stripe-accounts/test-connection',
+        { secret_key: form.secret_key, publishable_key: form.publishable_key },
+        {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => { testStatus.value = 'ok'; testMessage.value = 'Connected successfully.'; },
+            onError: (errors) => {
+                const e = errors as Record<string, string>;
+                testStatus.value = 'fail';
+                testMessage.value = e.stripe_api ?? e.secret_key ?? e.publishable_key ?? 'Connection test failed.';
+            },
+        }
+    );
+}
+
 function submit() {
-    form.post(`/admin/brands/${props.brand.id}/stripe-accounts`);
+    form.post('/admin/stripe-accounts');
 }
 </script>
 
@@ -47,7 +62,7 @@ function submit() {
     <div class="p-6">
         <div class="mb-6">
             <Button variant="ghost" size="sm" as-child class="-ml-2">
-                <Link :href="`/admin/brands/${brand.id}/stripe-accounts`">
+                <Link href="/admin/stripe-accounts">
                     <ArrowLeft class="size-4 mr-1" />
                     Back to accounts
                 </Link>
@@ -63,12 +78,6 @@ function submit() {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <!-- Stripe API validation error alert -->
-                <Alert v-if="form.errors.stripe_api" variant="destructive" class="mb-4">
-                    <AlertTitle>Stripe key validation failed</AlertTitle>
-                    <AlertDescription>{{ form.errors.stripe_api }}</AlertDescription>
-                </Alert>
-
                 <form id="create-account-form" class="space-y-4" @submit.prevent="submit">
                     <div class="grid gap-2">
                         <Label for="account_name">Account name</Label>
@@ -113,9 +122,30 @@ function submit() {
                         </p>
                         <InputError :message="form.errors.secret_key" />
                     </div>
+
+                    <div
+                        v-if="testStatus !== 'idle'"
+                        class="flex items-center gap-2 text-sm rounded-md px-3 py-2"
+                        :class="testStatus === 'ok' ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : testStatus === 'fail' ? 'bg-destructive/10 text-destructive' : 'text-muted-foreground'"
+                    >
+                        <Loader2 v-if="testStatus === 'testing'" class="size-4 animate-spin" />
+                        <CheckCircle2 v-else-if="testStatus === 'ok'" class="size-4" />
+                        <XCircle v-else-if="testStatus === 'fail'" class="size-4" />
+                        {{ testStatus === 'testing' ? 'Testing connection…' : testMessage }}
+                    </div>
                 </form>
             </CardContent>
-            <CardFooter class="flex justify-end">
+            <CardFooter class="flex justify-between">
+                <Button
+                    type="button"
+                    variant="outline"
+                    :disabled="!form.secret_key || !form.publishable_key || testStatus === 'testing'"
+                    @click="testConnection"
+                >
+                    <Loader2 v-if="testStatus === 'testing'" class="size-4 mr-1 animate-spin" />
+                    <Zap v-else class="size-4 mr-1" />
+                    Test connection
+                </Button>
                 <Button type="submit" form="create-account-form" :disabled="form.processing">
                     <Plus class="size-4 mr-1" />
                     Save account

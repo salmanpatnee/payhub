@@ -17,19 +17,15 @@ class BrandController extends Controller
     public function index(): Response
     {
         return Inertia::render('admin/brands/Index', [
-            'brands' => Brand::withCount('stripeAccounts')
-                ->orderBy('name')
+            'brands' => Brand::orderBy('name')
                 ->get()
                 ->map(fn (Brand $brand) => [
-                    'id'                    => $brand->id,
-                    'name'                  => $brand->name,
-                    'slug'                  => $brand->slug,
-                    'logo_url'              => $brand->logo_path
-                        ? Storage::disk('public')->url($brand->logo_path)
-                        : null,
-                    'primary_color'         => $brand->primary_color,
-                    'secondary_color'       => $brand->secondary_color,
-                    'stripe_accounts_count' => $brand->stripe_accounts_count,
+                    'id'              => $brand->id,
+                    'name'            => $brand->name,
+                    'slug'            => $brand->slug,
+                    'website_url'     => $brand->website_url,
+                    'primary_color'   => $brand->primary_color,
+                    'secondary_color' => $brand->secondary_color,
                 ]),
         ]);
     }
@@ -60,9 +56,8 @@ class BrandController extends Controller
             'brand' => [
                 'id'              => $brand->id,
                 'name'            => $brand->name,
-                'logo_url'        => $brand->logo_path
-                    ? Storage::disk('public')->url($brand->logo_path)
-                    : null,
+                'website_url'     => $brand->website_url,
+                'logo_url'        => $brand->logo_path ? '/storage/' . $brand->logo_path : null,
                 'primary_color'   => $brand->primary_color,
                 'secondary_color' => $brand->secondary_color,
             ],
@@ -84,6 +79,23 @@ class BrandController extends Controller
 
         return redirect()->route('admin.brands.index')
             ->with('success', 'Brand updated.');
+    }
+
+    public function destroy(Brand $brand): RedirectResponse
+    {
+        if ($brand->payments()->exists()) {
+            return redirect()->route('admin.brands.index')
+                ->with('error', 'Cannot delete a brand that has payments.');
+        }
+
+        if ($brand->logo_path) {
+            Storage::disk('public')->delete($brand->logo_path);
+        }
+
+        $brand->delete();
+
+        return redirect()->route('admin.brands.index')
+            ->with('success', 'Brand deleted.');
     }
 
     private function generateUniqueSlug(string $name): string

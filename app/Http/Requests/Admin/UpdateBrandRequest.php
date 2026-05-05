@@ -16,6 +16,7 @@ class UpdateBrandRequest extends FormRequest
     {
         return [
             'name'            => ['required', 'string', 'max:255'],
+            'website_url'     => ['nullable', 'url', 'max:255'],
             'logo'            => [
                 'nullable',
                 File::types(['jpg', 'jpeg', 'png', 'webp', 'svg'])

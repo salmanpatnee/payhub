@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -23,16 +24,25 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             ->except(['show']);
 
         Route::resource('brands', BrandController::class)
-            ->except(['show', 'destroy']);
+            ->except(['show']);
 
-        Route::resource('brands.stripe-accounts', StripeAccountController::class)
-            ->except(['show'])
-            ->scoped(['stripe_account' => 'id']);
+        Route::resource('stripe-accounts', StripeAccountController::class)
+            ->except(['show']);
 
         Route::patch(
-            'brands/{brand}/stripe-accounts/{stripe_account}/deactivate',
+            'stripe-accounts/{stripe_account}/deactivate',
             [StripeAccountController::class, 'deactivate']
-        )->name('brands.stripe-accounts.deactivate');
+        )->name('stripe-accounts.deactivate');
+
+        Route::post(
+            'stripe-accounts/test-connection',
+            [StripeAccountController::class, 'testKeyConnection']
+        )->name('stripe-accounts.test-connection');
+
+        Route::post(
+            'stripe-accounts/{stripe_account}/test-connection',
+            [StripeAccountController::class, 'testStoredConnection']
+        )->name('stripe-accounts.test-stored-connection');
     });
 
 // Phase 5 stub — MUST be outside auth group (D-07: /pay/{uuid} reachable without session)

@@ -8,16 +8,15 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
+
 class PaymentFactory extends Factory
 {
     public function definition(): array
     {
-        $brand = Brand::factory()->create();
-
         return [
             'uuid'                      => Str::uuid(),
-            'brand_id'                  => $brand->id,
-            'stripe_account_id'         => StripeAccount::factory()->create(['brand_id' => $brand->id])->id,
+            'brand_id'                  => Brand::factory(),
+            'stripe_account_id'         => StripeAccount::factory(),
             'user_id'                   => User::factory(),
             'amount'                    => $this->faker->numberBetween(500, 100000),
             'currency'                  => $this->faker->randomElement(['usd', 'gbp']),

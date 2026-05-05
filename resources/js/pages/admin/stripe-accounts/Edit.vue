@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Check } from 'lucide-vue-next';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { ArrowLeft, Check, CheckCircle2, Loader2, XCircle, Zap } from 'lucide-vue-next';
+import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -15,41 +15,55 @@ import { Input } from '@/components/ui/input';
 import InputError from '@/components/InputError.vue';
 import { Label } from '@/components/ui/label';
 
-type BrandProp = { id: number; name: string };
-
 type StripeAccountProp = {
     id: number;
     account_name: string;
     publishable_key: string;
     is_active: boolean;
-    // secret_key: intentionally absent — never sent from backend
 };
-
-const props = defineProps<{
-    brand: BrandProp;
-    stripeAccount: StripeAccountProp;
-}>();
 
 defineOptions({
     layout: {
         breadcrumbs: [
-            { title: 'Brands', href: '/admin/brands' },
-            { title: props.brand.name, href: `/admin/brands/${props.brand.id}/edit` },
-            { title: 'Stripe Accounts', href: `/admin/brands/${props.brand.id}/stripe-accounts` },
-            { title: props.stripeAccount.account_name, href: '#' },
+            { title: 'Stripe Accounts', href: '/admin/stripe-accounts' },
+            { title: 'Edit account', href: '#' },
         ],
     },
 });
 
+const props = defineProps<{ stripeAccount: StripeAccountProp }>();
+
 const form = useForm({
+    _method:         'PUT',
     account_name:    props.stripeAccount.account_name,
     publishable_key: props.stripeAccount.publishable_key,
-    secret_key:      '',  // always blank on load — user pastes new key to replace
+    secret_key:      '',
 });
 
+const testStatus = ref<'idle' | 'testing' | 'ok' | 'fail'>('idle');
+const testMessage = ref('');
+
+function testConnection() {
+    testStatus.value = 'testing';
+    testMessage.value = '';
+    const url = form.secret_key
+        ? '/admin/stripe-accounts/test-connection'
+        : `/admin/stripe-accounts/${props.stripeAccount.id}/test-connection`;
+    const data = form.secret_key ? { secret_key: form.secret_key, publishable_key: form.publishable_key } : {};
+    router.post(url, data, {
+        preserveState: true,
+        preserveScroll: true,
+        onSuccess: () => { testStatus.value = 'ok'; testMessage.value = 'Connected successfully.'; },
+        onError: (errors) => {
+            const e = errors as Record<string, string>;
+            testStatus.value = 'fail';
+            testMessage.value = e.stripe_api ?? e.secret_key ?? e.publishable_key ?? 'Connection test failed.';
+        },
+    });
+}
+
 function submit() {
-    // No file upload — regular patch is fine (no method spoofing needed)
-    form.patch(`/admin/brands/${props.brand.id}/stripe-accounts/${props.stripeAccount.id}`);
+    form.post(`/admin/stripe-accounts/${props.stripeAccount.id}`);
 }
 </script>
 
@@ -59,7 +73,7 @@ function submit() {
     <div class="p-6">
         <div class="mb-6">
             <Button variant="ghost" size="sm" as-child class="-ml-2">
-                <Link :href="`/admin/brands/${brand.id}/stripe-accounts`">
+                <Link href="/admin/stripe-accounts">
                     <ArrowLeft class="size-4 mr-1" />
                     Back to accounts
                 </Link>
@@ -75,12 +89,6 @@ function submit() {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <!-- Stripe API validation error alert -->
-                <Alert v-if="form.errors.stripe_api" variant="destructive" class="mb-4">
-                    <AlertTitle>Stripe key validation failed</AlertTitle>
-                    <AlertDescription>{{ form.errors.stripe_api }}</AlertDescription>
-                </Alert>
-
                 <form id="edit-account-form" class="space-y-4" @submit.prevent="submit">
                     <div class="grid gap-2">
                         <Label for="account_name">Account name</Label>
@@ -110,24 +118,47 @@ function submit() {
                         <InputError :message="form.errors.publishable_key" />
                     </div>
 
-                    <!-- Secret key — NEVER pre-filled, always blank on load -->
                     <div class="grid gap-2">
                         <Label for="secret_key">Secret key</Label>
+                        <div class="flex h-9 items-center rounded-md border border-input bg-muted/30 px-3 text-sm font-mono tracking-widest text-muted-foreground">
+                            ••••••••••••••••••••
+                        </div>
                         <Input
                             id="secret_key"
                             v-model="form.secret_key"
                             type="password"
-                            placeholder="sk_••••••••••••••••"
+                            placeholder="Paste new key to replace"
                             autocomplete="new-password"
                         />
                         <p class="text-xs text-muted-foreground">
-                            Leave blank to keep the current secret key. Paste a new key to replace it.
+                            Leave blank to keep the current key. Paste a new value to replace it.
                         </p>
                         <InputError :message="form.errors.secret_key" />
                     </div>
+
+                    <div
+                        v-if="testStatus !== 'idle'"
+                        class="flex items-center gap-2 text-sm rounded-md px-3 py-2"
+                        :class="testStatus === 'ok' ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400' : testStatus === 'fail' ? 'bg-destructive/10 text-destructive' : 'text-muted-foreground'"
+                    >
+                        <Loader2 v-if="testStatus === 'testing'" class="size-4 animate-spin" />
+                        <CheckCircle2 v-else-if="testStatus === 'ok'" class="size-4" />
+                        <XCircle v-else-if="testStatus === 'fail'" class="size-4" />
+                        {{ testStatus === 'testing' ? 'Testing connection…' : testMessage }}
+                    </div>
                 </form>
             </CardContent>
-            <CardFooter class="flex justify-end">
+            <CardFooter class="flex justify-between">
+                <Button
+                    type="button"
+                    variant="outline"
+                    :disabled="testStatus === 'testing'"
+                    @click="testConnection"
+                >
+                    <Loader2 v-if="testStatus === 'testing'" class="size-4 mr-1 animate-spin" />
+                    <Zap v-else class="size-4 mr-1" />
+                    Test connection
+                </Button>
                 <Button type="submit" form="edit-account-form" :disabled="form.processing">
                     <Check class="size-4 mr-1" />
                     Save changes

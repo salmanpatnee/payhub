@@ -18,12 +18,11 @@ import { Label } from '@/components/ui/label';
 type BrandProp = {
     id: number;
     name: string;
+    website_url: string | null;
     logo_url: string | null;
     primary_color: string;
     secondary_color: string;
 };
-
-const props = defineProps<{ brand: BrandProp }>();
 
 defineOptions({
     layout: {
@@ -34,21 +33,23 @@ defineOptions({
     },
 });
 
+const props = defineProps<{ brand: BrandProp }>();
+
 const form = useForm({
+    _method:         'PUT',
     name:            props.brand.name,
+    website_url:     props.brand.website_url ?? '',
     primary_color:   props.brand.primary_color,
     secondary_color: props.brand.secondary_color,
-    logo:            null as File | null,  // never pre-filled from server
+    logo:            null as File | null,
 });
 
-// For the live preview: start with existing logo_url or null
 const logoPreviewUrl = ref<string | null>(props.brand.logo_url);
 
 function handleLogoChange(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (file) {
         form.logo = file;
-        // Revoke blob URL only if it was created by us (not the existing server URL)
         if (logoPreviewUrl.value && logoPreviewUrl.value.startsWith('blob:')) {
             URL.revokeObjectURL(logoPreviewUrl.value);
         }
@@ -61,11 +62,7 @@ const previewPrimary   = computed(() => HEX_RE.test(form.primary_color)   ? form
 const previewSecondary = computed(() => HEX_RE.test(form.secondary_color) ? form.secondary_color : '#cccccc');
 
 function submit() {
-    // CRITICAL: Must use post() with _method spoofing for multipart PUT.
-    // form.put() does NOT support multipart/form-data in Inertia v3.
-    form.post(`/admin/brands/${props.brand.id}`, {
-        _method: 'put',
-    });
+    form.post(`/admin/brands/${props.brand.id}`);
 }
 </script>
 
@@ -83,24 +80,32 @@ function submit() {
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Left: form card -->
             <Card>
                 <CardHeader>
                     <CardTitle>Edit brand</CardTitle>
                     <CardDescription>
-                        Update the brand's visual identity. Changes apply to all future payment pages using this brand.
+                        Update the brand's details and visual identity.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form id="edit-brand-form" class="space-y-4" @submit.prevent="submit">
-                        <!-- Brand name -->
                         <div class="grid gap-2">
                             <Label for="name">Brand name</Label>
                             <Input id="name" v-model="form.name" type="text" required />
                             <InputError :message="form.errors.name" />
                         </div>
 
-                        <!-- Logo upload with current logo preview -->
+                        <div class="grid gap-2">
+                            <Label for="website_url">Website URL</Label>
+                            <Input
+                                id="website_url"
+                                v-model="form.website_url"
+                                type="url"
+                                placeholder="https://example.com"
+                            />
+                            <InputError :message="form.errors.website_url" />
+                        </div>
+
                         <div class="grid gap-2">
                             <Label for="logo">Logo</Label>
                             <div v-if="brand.logo_url" class="mb-2">
@@ -125,7 +130,6 @@ function submit() {
                             <InputError :message="form.errors.logo" />
                         </div>
 
-                        <!-- Primary color -->
                         <div class="grid gap-2">
                             <Label>Primary color</Label>
                             <div class="flex items-center gap-2">
@@ -146,7 +150,6 @@ function submit() {
                             <InputError :message="form.errors.primary_color" />
                         </div>
 
-                        <!-- Secondary color -->
                         <div class="grid gap-2">
                             <Label>Secondary color</Label>
                             <div class="flex items-center gap-2">
@@ -176,7 +179,6 @@ function submit() {
                 </CardFooter>
             </Card>
 
-            <!-- Right: live preview card -->
             <div class="rounded-lg border border-border overflow-hidden bg-card" aria-hidden="true">
                 <div
                     class="h-16 flex items-center px-4 gap-3"
@@ -203,12 +205,6 @@ function submit() {
                     <p class="text-sm text-muted-foreground">
                         This is how the brand header will appear on client payment pages.
                     </p>
-                    <div class="flex gap-2 pt-2">
-                        <span class="text-xs text-muted-foreground">Primary:</span>
-                        <span class="text-xs font-mono">{{ form.primary_color || '—' }}</span>
-                        <span class="text-xs text-muted-foreground ml-2">Secondary:</span>
-                        <span class="text-xs font-mono">{{ form.secondary_color || '—' }}</span>
-                    </div>
                 </div>
             </div>
         </div>

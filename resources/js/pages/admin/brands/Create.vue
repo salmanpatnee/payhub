@@ -26,6 +26,7 @@ defineOptions({
 
 const form = useForm({
     name:            '',
+    website_url:     '',
     primary_color:   '#000000',
     secondary_color: '#cccccc',
     logo:            null as File | null,
@@ -82,6 +83,18 @@ function submit() {
                             <Label for="name">Brand name</Label>
                             <Input id="name" v-model="form.name" type="text" required />
                             <InputError :message="form.errors.name" />
+                        </div>
+
+                        <!-- Website URL -->
+                        <div class="grid gap-2">
+                            <Label for="website_url">Website URL</Label>
+                            <Input
+                                id="website_url"
+                                v-model="form.website_url"
+                                type="url"
+                                placeholder="https://example.com"
+                            />
+                            <InputError :message="form.errors.website_url" />
                         </div>
 
                         <!-- Logo upload -->

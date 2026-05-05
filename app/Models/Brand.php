@@ -10,12 +10,7 @@ class Brand extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'slug', 'logo_path', 'primary_color', 'secondary_color'];
-
-    public function stripeAccounts(): HasMany
-    {
-        return $this->hasMany(StripeAccount::class);
-    }
+    protected $fillable = ['name', 'slug', 'website_url', 'logo_path', 'primary_color', 'secondary_color'];
 
     public function payments(): HasMany
     {
