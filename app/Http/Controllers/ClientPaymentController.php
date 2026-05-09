@@ -27,14 +27,35 @@ class ClientPaymentController extends Controller
         // secret_key auto-decrypted by Laravel encrypted cast
         // app()->make() allows test mocking via app()->bind(StripeClient::class, ...)
         $stripe = app()->make(StripeClient::class, ['apiKey' => $payment->stripeAccount->secret_key]);
-        $pi = $stripe->paymentIntents->create([
-            'amount'                    => $payment->amount,   // integer cents from DB — SEC-02
-            'currency'                  => $payment->currency, // 'usd' or 'gbp'
-            'automatic_payment_methods' => ['enabled' => true], // handles 3DS automatically — CLIENT-05
-        ]);
 
-        // D-02: Store PI ID so Phase 6 webhook handler can look up the Payment
-        $payment->update(['stripe_payment_intent_id' => $pi->id]);
+        // CR-01 fix: retrieve-and-reuse pattern — no duplicate PIs on refresh
+        // Confirmable states: requires_payment_method, requires_confirmation, requires_action
+        // Terminal states: succeeded, canceled — must create a new PI
+        $confirmableStates = ['requires_payment_method', 'requires_confirmation', 'requires_action'];
+
+        if ($payment->stripe_payment_intent_id) {
+            $pi = $stripe->paymentIntents->retrieve($payment->stripe_payment_intent_id);
+
+            if (! in_array($pi->status, $confirmableStates)) {
+                // Existing PI is in a terminal state — create a fresh one
+                $pi = $stripe->paymentIntents->create([
+                    'amount'                    => $payment->amount,
+                    'currency'                  => $payment->currency,
+                    'automatic_payment_methods' => ['enabled' => true],
+                ]);
+                $payment->update(['stripe_payment_intent_id' => $pi->id]);
+            }
+            // else: reuse the existing confirmable PI — do NOT update stripe_payment_intent_id
+        } else {
+            // No PI exists yet — create one
+            $pi = $stripe->paymentIntents->create([
+                'amount'                    => $payment->amount,   // integer cents from DB — SEC-02
+                'currency'                  => $payment->currency, // 'usd' or 'gbp'
+                'automatic_payment_methods' => ['enabled' => true], // handles 3DS automatically — CLIENT-05
+            ]);
+            // D-02: Store PI ID so Phase 6 webhook handler can look up the Payment
+            $payment->update(['stripe_payment_intent_id' => $pi->id]);
+        }
 
         // SEC-04: clientSecret only in Inertia props — NEVER logged, NEVER in URL
         return Inertia::render('ClientPayment/Pay', [
@@ -54,6 +75,16 @@ class ClientPaymentController extends Controller
         }
 
         $payment->loadMissing('brand');
+
+        // CR-02 fix: server-side status guard — prevent success page spoofing via crafted URLs
+        // Even if redirect_status=succeeded is present in the URL, a known-failed or cancelled
+        // payment must NOT display a success confirmation (no money changed hands).
+        if (in_array($payment->status, ['failed', 'cancelled'])) {
+            return Inertia::render('ClientPayment/Unavailable', [
+                'status' => $payment->status,
+                'brand'  => $this->brandProps($payment->brand),
+            ]);
+        }
 
         return Inertia::render('ClientPayment/Success', [
             'payment' => [

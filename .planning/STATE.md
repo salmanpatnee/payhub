@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 planned 2026-05-09 — 5 plans ready to execute
+stopped_at: Phase 5 gap-closure planned 2026-05-09 — 6 plans ready to execute (05-05 closes CR-01, CR-02)
 last_updated: "2026-05-09"
 last_activity: 2026-05-09
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-05-02)
 
 Phase: 5 of 7 (Client Payment Page) — ready to execute
 Plan: 0 of 5 in current phase
-Status: Phase 5 planned — 5 plans in 4 waves, ready to execute
+Status: Phase 5 gap-closure planned — 6 plans in 5 waves (05-05 closes CR-01, CR-02), ready to execute
 Last activity: 2026-05-09
 
 Progress: [████░░░░░░] 43%
