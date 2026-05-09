@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Auth + User Management** - Invite-only Fortify auth, role-based access, admin and user login/logout *(completed 2026-05-03)*
 - [x] **Phase 3: Brand + Stripe Account Management** - Brand CRUD, StripeAccount CRUD, key encryption, per-account StripeService, test/live key enforcement *(completed 2026-05-05)*
 - [x] **Phase 4: Payment Creation + Link Generation** - Payment form, UUID link generation, currency selection, payment history views *(completed 2026-05-09)*
-- [ ] **Phase 5: Client Payment Page** - Branded unauthenticated payment page, Stripe Elements, 3DS handling, success/failure pages
+- [x] **Phase 5: Client Payment Page** - Branded unauthenticated payment page, Stripe Elements, 3DS handling, success/failure pages *(completed 2026-05-09)*
 - [ ] **Phase 6: Webhooks + Status Sync** - Per-account webhook endpoints, signature verification, queued fulfillment, authoritative status writes
 - [ ] **Phase 7: Notifications + Dashboard** - Admin email notification, unified dashboard, filtering, user payment history
 
@@ -97,14 +97,15 @@ Plans:
   4. After a successful payment the client is redirected to a branded success page; after a failure the client sees a branded error page with a clear message
   5. The client payment page renders correctly on mobile screens
   6. The PaymentIntent client_secret is never exposed in URLs, logs, or API responses beyond the page load that renders the Elements form
-**Plans**: 5 plans (Wave 0: test stubs, Wave 1: controller + routes, Wave 2: layout + resolver, Wave 3: Pay.vue + terminal pages)
+**Plans**: 6 plans (Wave 0: test stubs, Wave 1: controller + routes, Wave 2: layout + resolver, Wave 3: Pay.vue + terminal pages, Wave 4: gap closure CR-01/CR-02/WR-01/WR-02)
 
 Plans:
-- [ ] 05-00-PLAN.md — Wave 0: ClientPaymentTest.php stubs with Mockery StripeClient pattern (12 test cases, all RED)
-- [ ] 05-01-PLAN.md — Wave 1: ClientPaymentController (show/success/failed) + routes/web.php replacement (3 public routes)
-- [ ] 05-02-PLAN.md — Wave 2: app.ts resolver (ClientPayment/ → null) + PaymentLayout.vue (branded standalone layout)
-- [ ] 05-03-PLAN.md — Wave 3a: Pay.vue (Stripe Elements, loadStripe gate, confirmPayment, brand theming)
-- [ ] 05-04-PLAN.md — Wave 3b: Success.vue + Failed.vue + Unavailable.vue (terminal + guard pages)
+- [x] 05-00-PLAN.md — Wave 0: ClientPaymentTest.php stubs with Mockery StripeClient pattern (12 test cases, all RED)
+- [x] 05-01-PLAN.md — Wave 1: ClientPaymentController (show/success/failed) + routes/web.php replacement (3 public routes)
+- [x] 05-02-PLAN.md — Wave 2: app.ts resolver (ClientPayment/ → null) + PaymentLayout.vue (branded standalone layout)
+- [x] 05-03-PLAN.md — Wave 3a: Pay.vue (Stripe Elements, loadStripe gate, confirmPayment, brand theming)
+- [x] 05-04-PLAN.md — Wave 3b: Success.vue + Failed.vue + Unavailable.vue (terminal + guard pages)
+- [x] 05-05-PLAN.md — Wave 4 (gap closure): CR-01 retrieve-and-reuse PI, CR-02 success status guard, WR-01/WR-02 Vue null guards
 
 **UI hint**: yes
 
@@ -143,6 +144,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Auth + User Management | 5/5 | Complete | 2026-05-03 |
 | 3. Brand + Stripe Account Management | 5/5 | Complete | 2026-05-05 |
 | 4. Payment Creation + Link Generation | 3/3 | Complete | 2026-05-09 |
-| 5. Client Payment Page | 0/5 | In progress | - |
+| 5. Client Payment Page | 6/6 | Complete | 2026-05-09 |
 | 6. Webhooks + Status Sync | 0/TBD | Not started | - |
 | 7. Notifications + Dashboard | 0/TBD | Not started | - |
