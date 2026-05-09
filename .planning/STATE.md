@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 approved 2026-05-09
+stopped_at: Phase 5 planned 2026-05-09 — 5 plans ready to execute
 last_updated: "2026-05-09"
 last_activity: 2026-05-09
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 17
+  total_plans: 22
   completed_plans: 15
   percent: 57
 ---
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-05-02)
 
 ## Current Position
 
-Phase: 5 of 7 (Client Payment Page) — ready to plan
-Plan: 0 of TBD in current phase
-Status: Phase 4 complete and approved — ready to plan Phase 5
+Phase: 5 of 7 (Client Payment Page) — ready to execute
+Plan: 0 of 5 in current phase
+Status: Phase 5 planned — 5 plans in 4 waves, ready to execute
 Last activity: 2026-05-09
 
 Progress: [████░░░░░░] 43%
@@ -51,6 +51,10 @@ Recent decisions affecting current work:
 - [Phase 03]: website_url added to brands table (nullable)
 - [Phase 03]: webhook_secret made nullable on stripe_accounts — not required at account creation time
 - [Phase 03]: ConfirmDeleteDialog extracted as reusable component
+- [Phase 05]: ClientPayment/ pages use app.ts resolver returning null + direct PaymentLayout import (brand props can't flow through resolver)
+- [Phase 05]: loadStripe() called in onMounted; StripeElements conditionally rendered after stripeLoaded=true (prevents window.Stripe undefined error)
+- [Phase 05]: getComputedStyle for --brand-primary must be called after layout root mounts (not in setup()); computed reads after mount resolves timing
+- [Phase 05]: Mockery-based StripeClient stub pattern used in tests — $this->app->bind(StripeClient::class, fn() => $mockService)
 
 ### Pending Todos
 
@@ -74,6 +78,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-05
-Stopped at: Phase 4 context gathered — 4 gray areas discussed, CONTEXT.md written
-Resume file: .planning/phases/04-payment-creation-link-generation/04-CONTEXT.md
+Last session: 2026-05-09
+Stopped at: Phase 5 planned — 5 plans (05-00 through 05-04) in 4 waves, verification passed
+Resume file: .planning/phases/05-client-payment-page/05-01-PLAN.md

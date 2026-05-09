@@ -767,7 +767,7 @@ const props = defineProps<{
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Do ClientPayment pages use `return null` in app.ts resolver or `return PaymentLayout`?**
    - What we know: `PaymentLayout` needs brand props that vary per payment, not shared-data props.
