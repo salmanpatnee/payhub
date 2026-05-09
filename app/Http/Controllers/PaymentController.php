@@ -65,6 +65,8 @@ class PaymentController extends Controller
 
     public function show(Payment $payment): Response
     {
+        $payment->loadMissing(['brand', 'stripeAccount']);
+
         return Inertia::render('payments/Show', [
             'payment' => [
                 'uuid'         => $payment->uuid,
@@ -77,7 +79,11 @@ class PaymentController extends Controller
                 'package'      => $payment->package,
                 'note'         => $payment->note,
                 'brand_name'   => $payment->brand->name,
-                'created_at'   => $payment->created_at->toISOString(),
+                'account_name' => $payment->stripeAccount->account_name,
+                'created_at'                 => $payment->created_at->toISOString(),
+                'stripe_payment_intent_id'   => $payment->stripe_payment_intent_id,
+                'paid_at'                    => $payment->paid_at?->toISOString(),
+                'expires_at'                 => $payment->expires_at?->toISOString(),
             ],
         ]);
     }
