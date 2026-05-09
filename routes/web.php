@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\PaymentController;
 
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
@@ -13,7 +14,8 @@ Route::inertia('/', 'Welcome', [
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
-    Route::inertia('/payments', 'placeholders/ComingSoon')->name('payments.index');
+    Route::resource('payments', PaymentController::class)
+         ->only(['index', 'create', 'store', 'show']);
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])

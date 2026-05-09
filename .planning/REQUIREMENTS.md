@@ -28,13 +28,14 @@
 
 ### Payment Creation (PAY)
 
-- [ ] **PAY-01**: Admin or User can create a payment specifying amount, currency, brand, and description
-- [ ] **PAY-02**: Admin or User can select a specific Stripe account for the payment (from brand's linked accounts)
-- [ ] **PAY-03**: Client email address is captured when creating a payment
-- [ ] **PAY-04**: System generates a unique shareable UUID payment link on payment creation
-- [ ] **PAY-05**: Payment amount is stored server-side and cannot be modified via client request
-- [ ] **PAY-06**: Creator selects currency per payment — USD ($) or GBP (£) only
-- [ ] **PAY-07**: Payment links never expire (valid until paid or manually cancelled)
+- [x] **PAY-01**: Admin or User can create a payment specifying amount, currency, brand, client name, client email, service (open text), package (Basic / Standard / Premium / Platinum / Diamond), and an optional note
+- [x] **PAY-02**: Admin or User can select a specific Stripe account for the payment (from active accounts)
+- [x] **PAY-03**: Client name and email address are captured when creating a payment
+- [x] **PAY-04**: System generates a unique shareable UUID payment link on payment creation
+- [x] **PAY-05**: Payment amount is stored server-side and cannot be modified via client request
+- [x] **PAY-06**: Creator selects currency per payment — USD ($) or GBP (£) only
+- [x] **PAY-07**: Payment links never expire (valid until paid or manually cancelled)
+- [x] **PAY-08**: Payment creation form shows live Stripe fee breakdown (Stripe fee and amount received) computed client-side from the entered amount and currency
 
 ### Client Payment Experience (CLIENT)
 
@@ -71,7 +72,7 @@
 ### Security (SEC)
 
 - [ ] **SEC-01**: Stripe secret keys and webhook secrets are encrypted at rest (AES-256 via Laravel encrypted cast)
-- [ ] **SEC-02**: Payment amount is read exclusively from the server-side Payment record — no client input accepted for amount
+- [x] **SEC-02**: Payment amount is read exclusively from the server-side Payment record — no client input accepted for amount
 - [ ] **SEC-03**: Webhook routes are excluded from CSRF middleware; raw body is preserved for signature verification
 - [ ] **SEC-04**: PaymentIntent client_secret is never logged, stored in URLs, or exposed beyond the payment page response
 
@@ -127,13 +128,14 @@
 | STRIPE-03 | Phase 3 | Pending |
 | STRIPE-04 | Phase 3 | Pending |
 | STRIPE-05 | Phase 3 | Pending |
-| PAY-01 | Phase 4 | Pending |
-| PAY-02 | Phase 4 | Pending |
-| PAY-03 | Phase 4 | Pending |
-| PAY-04 | Phase 4 | Pending |
-| PAY-05 | Phase 4 | Pending |
-| PAY-06 | Phase 4 | Pending |
-| PAY-07 | Phase 4 | Pending |
+| PAY-01 | Phase 4 | Complete |
+| PAY-02 | Phase 4 | Complete |
+| PAY-03 | Phase 4 | Complete |
+| PAY-04 | Phase 4 | Complete |
+| PAY-05 | Phase 4 | Complete |
+| PAY-06 | Phase 4 | Complete |
+| PAY-07 | Phase 4 | Complete |
+| PAY-08 | Phase 4 | Complete |
 | CLIENT-01 | Phase 5 | Pending |
 | CLIENT-02 | Phase 5 | Pending |
 | CLIENT-03 | Phase 5 | Pending |
@@ -155,6 +157,6 @@
 | DASH-03 | Phase 7 | Pending |
 | DASH-04 | Phase 7 | Pending |
 | SEC-01 | Phase 1 | Pending |
-| SEC-02 | Phase 4 | Pending |
+| SEC-02 | Phase 4 | Complete |
 | SEC-03 | Phase 6 | Pending |
 | SEC-04 | Phase 5 | Pending |

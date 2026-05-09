@@ -73,15 +73,16 @@ Plans:
 **UI hint**: yes
 
 ### Phase 4: Payment Creation + Link Generation
-**Goal**: Admin and User can create a payment record specifying brand, Stripe account, amount (USD or GBP), description, and client email — and receive a unique shareable link that never expires until paid or cancelled.
+**Goal**: Admin and User can create a payment record specifying brand, Stripe account, amount (USD or GBP), client name, client email, service, package (Basic / Standard / Premium / Platinum / Diamond), and an optional note — with a live Stripe fee breakdown shown on the form — and receive a unique shareable link that never expires until paid or cancelled.
 **Depends on**: Phase 3
-**Requirements**: PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06, PAY-07, SEC-02
+**Requirements**: PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06, PAY-07, PAY-08, SEC-02
 **Success Criteria** (what must be TRUE):
-  1. Admin or User can submit the payment creation form and a payment record is saved to the database with the correct brand, Stripe account, amount in cents, currency, description, and client email
+  1. Admin or User can submit the payment creation form and a payment record is saved with the correct brand, Stripe account, amount in cents, currency, client name, client email, service, package, and note
   2. The system generates a UUID-based shareable link (/pay/{uuid}) immediately after creation; the link is copyable from the UI
   3. Currency selection is restricted to USD and GBP; no other currency can be submitted
   4. The payment amount read when processing is always sourced from the server-side Payment record — no client-supplied amount is accepted
   5. The generated link remains accessible and in a pending state until the payment is completed or manually cancelled
+  6. The creation form shows a live fee breakdown (Stripe fee and amount received) that updates when amount or currency changes
 **Plans**: TBD
 **UI hint**: yes
 
