@@ -41,8 +41,14 @@ const errorMessage  = ref<string | null>(null)
 // Call loadStripe() in onMounted — sets window.Stripe which vue-stripe-js requires
 // Only after this resolves should StripeElements mount
 onMounted(async () => {
-    await loadStripe(props.stripeAccount.publishable_key)
-    stripeLoaded.value = true
+    // WR-01: Check return value — loadStripe() returns null if Stripe.js CDN fails to load
+    // (network error, ad-blocker). Only set stripeLoaded=true when Stripe is available.
+    const stripe = await loadStripe(props.stripeAccount.publishable_key)
+    if (stripe !== null) {
+        stripeLoaded.value = true
+    }
+    // If stripe is null, stripeLoaded remains false → loading skeleton stays visible
+    // and the StripeElements component never mounts, preventing unhandled runtime errors.
 })
 
 // formatAmount: copies pattern from resources/js/pages/payments/Show.vue lines 61-66
@@ -96,6 +102,13 @@ const elementsOptions = computed(() => ({
 // SEC-04: return_url is /pay/{uuid}/success — client_secret is NOT in the URL
 // Stripe appends payment_intent_client_secret to the return_url; the success controller discards it
 async function submit(instance: any, elements: any): Promise<void> {
+    // WR-02: Guard against null instance/elements — possible if Stripe failed to initialise
+    // (should not occur when stripeLoaded gate is working, but defensive programming)
+    if (!instance || !elements) {
+        errorMessage.value = 'Payment system is unavailable. Please refresh and try again.'
+        return
+    }
+
     processing.value = true
     errorMessage.value = null
 
