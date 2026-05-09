@@ -33,6 +33,30 @@ function mockStripeClient(): void
     app()->bind(StripeClient::class, fn () => $mockStripe);
 }
 
+function mockStripeClientWithRetrieve(string $existingPiId, string $existingStatus, string $existingClientSecret): void
+{
+    $retrievedPi = PaymentIntent::constructFrom([
+        'id'            => $existingPiId,
+        'client_secret' => $existingClientSecret,
+        'status'        => $existingStatus,
+    ]);
+
+    $newPi = PaymentIntent::constructFrom([
+        'id'            => 'pi_new_after_terminal',
+        'client_secret' => 'pi_new_after_terminal_secret',
+        'status'        => 'requires_payment_method',
+    ]);
+
+    $mockPaymentIntents = Mockery::mock();
+    $mockPaymentIntents->shouldReceive('retrieve')->with($existingPiId)->andReturn($retrievedPi);
+    $mockPaymentIntents->shouldReceive('create')->andReturn($newPi);
+
+    $mockStripe = Mockery::mock(StripeClient::class);
+    $mockStripe->paymentIntents = $mockPaymentIntents;
+
+    app()->bind(StripeClient::class, fn () => $mockStripe);
+}
+
 // CLIENT-01: Guest can access pay route without authentication
 it('guest can access pay route without authentication', function () {
     $payment = Payment::factory()->create(['status' => 'pending']);
@@ -139,4 +163,58 @@ it('non-pending payment does not call StripeClient', function () {
          ->assertInertia(fn ($page) => $page->component('ClientPayment/Unavailable'));
     // stripe_payment_intent_id not overwritten
     expect($payment->fresh()->stripe_payment_intent_id)->toBeNull();
+});
+
+// CR-01: Existing confirmable PI is reused (retrieve, not create) on page refresh
+it('reuses existing PaymentIntent when stripe_payment_intent_id is set and PI is confirmable', function () {
+    $payment = Payment::factory()->create([
+        'status'                   => 'pending',
+        'stripe_payment_intent_id' => 'pi_existing_confirmable',
+    ]);
+
+    mockStripeClientWithRetrieve('pi_existing_confirmable', 'requires_payment_method', 'pi_existing_confirmable_secret');
+
+    $this->get("/pay/{$payment->uuid}")
+         ->assertInertia(fn ($page) => $page
+             ->component('ClientPayment/Pay')
+             ->where('clientSecret', 'pi_existing_confirmable_secret')
+         );
+
+    // stripe_payment_intent_id must remain unchanged — no new PI created
+    expect($payment->fresh()->stripe_payment_intent_id)->toBe('pi_existing_confirmable');
+});
+
+// CR-01: Terminal PI (succeeded) triggers new PI creation
+it('creates a new PaymentIntent when existing PI is in terminal state', function () {
+    $payment = Payment::factory()->create([
+        'status'                   => 'pending',
+        'stripe_payment_intent_id' => 'pi_existing_terminal',
+    ]);
+
+    mockStripeClientWithRetrieve('pi_existing_terminal', 'succeeded', 'pi_existing_terminal_secret');
+
+    $this->get("/pay/{$payment->uuid}")
+         ->assertInertia(fn ($page) => $page
+             ->component('ClientPayment/Pay')
+             ->where('clientSecret', 'pi_new_after_terminal_secret')
+         );
+
+    // stripe_payment_intent_id must be updated to the new PI id
+    expect($payment->fresh()->stripe_payment_intent_id)->toBe('pi_new_after_terminal');
+});
+
+// CR-02: Crafted redirect_status=succeeded URL for a failed payment renders Unavailable
+it('success page renders Unavailable for failed payment even when redirect_status=succeeded', function () {
+    $payment = Payment::factory()->create(['status' => 'failed']);
+
+    $this->get("/pay/{$payment->uuid}/success?redirect_status=succeeded")
+         ->assertInertia(fn ($page) => $page->component('ClientPayment/Unavailable'));
+});
+
+// CR-02: Crafted redirect_status=succeeded URL for a cancelled payment renders Unavailable
+it('success page renders Unavailable for cancelled payment even when redirect_status=succeeded', function () {
+    $payment = Payment::factory()->create(['status' => 'cancelled']);
+
+    $this->get("/pay/{$payment->uuid}/success?redirect_status=succeeded")
+         ->assertInertia(fn ($page) => $page->component('ClientPayment/Unavailable'));
 });
