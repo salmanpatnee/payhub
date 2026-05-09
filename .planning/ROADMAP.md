@@ -97,7 +97,15 @@ Plans:
   4. After a successful payment the client is redirected to a branded success page; after a failure the client sees a branded error page with a clear message
   5. The client payment page renders correctly on mobile screens
   6. The PaymentIntent client_secret is never exposed in URLs, logs, or API responses beyond the page load that renders the Elements form
-**Plans**: TBD
+**Plans**: 5 plans (Wave 0: test stubs, Wave 1: controller + routes, Wave 2: layout + resolver, Wave 3: Pay.vue + terminal pages)
+
+Plans:
+- [ ] 05-00-PLAN.md — Wave 0: ClientPaymentTest.php stubs with Mockery StripeClient pattern (12 test cases, all RED)
+- [ ] 05-01-PLAN.md — Wave 1: ClientPaymentController (show/success/failed) + routes/web.php replacement (3 public routes)
+- [ ] 05-02-PLAN.md — Wave 2: app.ts resolver (ClientPayment/ → null) + PaymentLayout.vue (branded standalone layout)
+- [ ] 05-03-PLAN.md — Wave 3a: Pay.vue (Stripe Elements, loadStripe gate, confirmPayment, brand theming)
+- [ ] 05-04-PLAN.md — Wave 3b: Success.vue + Failed.vue + Unavailable.vue (terminal + guard pages)
+
 **UI hint**: yes
 
 ### Phase 6: Webhooks + Status Sync
@@ -135,6 +143,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Auth + User Management | 5/5 | Complete | 2026-05-03 |
 | 3. Brand + Stripe Account Management | 5/5 | Complete | 2026-05-05 |
 | 4. Payment Creation + Link Generation | 3/3 | Complete | 2026-05-09 |
-| 5. Client Payment Page | 0/TBD | Not started | - |
+| 5. Client Payment Page | 0/5 | In progress | - |
 | 6. Webhooks + Status Sync | 0/TBD | Not started | - |
 | 7. Notifications + Dashboard | 0/TBD | Not started | - |
