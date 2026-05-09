@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\PaymentController;
 
 use Illuminate\Support\Facades\Route;
@@ -47,7 +48,10 @@ Route::middleware(['auth', 'verified', 'role:admin'])
         )->name('stripe-accounts.test-stored-connection');
     });
 
-// Phase 5 stub — MUST be outside auth group (D-07: /pay/{uuid} reachable without session)
-Route::get('/pay/{uuid}', fn () => abort(404))->name('pay.show');
+// Public payment routes — no auth middleware (CLIENT-01)
+// {payment} matches controller $payment param; getRouteKeyName()='uuid' resolves by UUID value
+Route::get('/pay/{payment}',         [ClientPaymentController::class, 'show'])->name('pay.show');
+Route::get('/pay/{payment}/success', [ClientPaymentController::class, 'success'])->name('pay.success');
+Route::get('/pay/{payment}/failed',  [ClientPaymentController::class, 'failed'])->name('pay.failed');
 
 require __DIR__.'/settings.php';
