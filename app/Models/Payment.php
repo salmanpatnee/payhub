@@ -13,8 +13,10 @@ class Payment extends Model
 
     protected $fillable = [
         'uuid', 'brand_id', 'stripe_account_id', 'user_id',
-        'amount', 'currency', 'description', 'status',
-        'client_email', 'stripe_payment_intent_id', 'expires_at', 'paid_at',
+        'amount', 'currency', 'status',
+        'client_email', 'client_name',
+        'service', 'package', 'note',
+        'stripe_payment_intent_id', 'expires_at', 'paid_at',
     ];
 
     protected static function boot(): void

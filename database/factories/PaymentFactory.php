@@ -14,18 +14,24 @@ class PaymentFactory extends Factory
     public function definition(): array
     {
         return [
-            'uuid'                      => Str::uuid(),
-            'brand_id'                  => Brand::factory(),
-            'stripe_account_id'         => StripeAccount::factory(),
-            'user_id'                   => User::factory(),
-            'amount'                    => $this->faker->numberBetween(500, 100000),
-            'currency'                  => $this->faker->randomElement(['usd', 'gbp']),
-            'description'               => $this->faker->sentence(),
-            'status'                    => 'pending',
-            'client_email'              => $this->faker->safeEmail(),
-            'stripe_payment_intent_id'  => null,
-            'expires_at'                => null,
-            'paid_at'                   => null,
+            'uuid'                     => Str::uuid(),
+            'brand_id'                 => Brand::factory(),
+            'stripe_account_id'        => StripeAccount::factory(),
+            'user_id'                  => User::factory(),
+            'amount'                   => $this->faker->numberBetween(500, 100000),
+            'currency'                 => $this->faker->randomElement(['usd', 'gbp']),
+            'client_name'              => $this->faker->name(),
+            'client_email'             => $this->faker->safeEmail(),
+            'service'                  => $this->faker->sentence(3),
+            'package'                  => $this->faker->randomElement([
+                                             'basic', 'standard', 'premium',
+                                             'platinum', 'diamond', null,
+                                         ]),
+            'note'                     => null,
+            'status'                   => 'pending',
+            'stripe_payment_intent_id' => null,
+            'expires_at'               => null,
+            'paid_at'                  => null,
         ];
     }
 }

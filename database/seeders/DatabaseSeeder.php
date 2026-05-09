@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Brand;
+use App\Models\Payment;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -27,10 +28,9 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        StripeAccount::firstOrCreate(
+        $stripeAccount = StripeAccount::firstOrCreate(
             ['account_name' => 'Demo Stripe Account'],
             [
-                'brand_id'        => $brand->id,
                 'publishable_key' => 'pk_test_placeholder_for_dev_only',
                 'secret_key'      => 'sk_test_placeholder_for_dev_only',
                 'webhook_secret'  => 'whsec_placeholder_for_dev_only',
@@ -47,5 +47,29 @@ class DatabaseSeeder extends Seeder
         );
 
         $admin->syncRoles(['admin']);
+
+        $user = User::firstOrCreate(
+            ['email' => 'user@payhub.test'],
+            [
+                'name'     => 'PayHub User',
+                'password' => Hash::make('password'),
+            ]
+        );
+        $user->syncRoles(['user']);
+
+        Payment::create([
+            'brand_id'          => $brand->id,
+            'stripe_account_id' => $stripeAccount->id,
+            'user_id'           => $admin->id,
+            'amount'            => 2500,
+            'currency'          => 'usd',
+            'client_name'       => 'Alice Smith',
+            'client_email'      => 'alice@example.com',
+            'service'           => 'Web Design',
+            'package'           => 'standard',
+            'note'              => 'Demo payment for dev testing',
+            'status'            => 'pending',
+            'expires_at'        => null,
+        ]);
     }
 }

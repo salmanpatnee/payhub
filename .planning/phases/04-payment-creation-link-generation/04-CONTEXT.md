@@ -6,7 +6,7 @@
 <domain>
 ## Phase Boundary
 
-Admin and User can create a payment record specifying brand, Stripe account (independent selection), amount in decimal dollars/pounds (converted to cents server-side), currency (USD or GBP), description, and client email. On success the system generates a UUID-based shareable link (/pay/{uuid}) and redirects to a dedicated show page with a prominent copy button.
+Admin and User can create a payment record specifying brand, Stripe account (independent selection), amount in decimal dollars/pounds (converted to cents server-side), currency (USD or GBP), client name, client email, service (open text), package (Basic / Standard / Premium / Platinum / Diamond), and an optional note. The creation form shows a live Stripe fee breakdown (fee kept by Stripe vs amount received) before submission. On success the system generates a UUID-based shareable link (/pay/{uuid}) and redirects to a dedicated show page with a prominent copy button.
 
 Payment list at /payments is a simple table scoped by role (Admin sees all, User sees own). No filtering in Phase 4 — filters come in Phase 7.
 
@@ -37,12 +37,30 @@ No Stripe API calls in Phase 4. No PaymentIntent creation. No client-facing paym
 - **D-06:** After successful `store()`, redirect to `/payments/{uuid}` (show page). The show page displays the shareable link prominently in a copy-to-clipboard box, plus payment summary (amount formatted, currency, status badge, client email, brand name). A "Back to payments" link returns to the index.
 - **D-07:** Phase 4 `/payments` index is a **simple unfiltered table** — columns: amount (formatted), currency, brand name, Stripe account name, status (badge), created at, client email, copy-link action. No search or filtering. Full filtering deferred to Phase 7 dashboard (DASH-02).
 
+### Payment Form Fields
+- **D-08:** `client_name` (string, required) — customer name. Separate from `client_email`. Stored in DB. Displayed on show page and index table.
+- **D-09:** `client_email` (string, required) — already in schema. No change.
+- **D-10:** `service` (string, nullable) — free-text field replacing the old `description` column. Describes what service is being charged for.
+- **D-11:** `package` (enum, nullable) — dropdown with exactly five options: Basic, Standard, Premium, Platinum, Diamond. Stored as lowercase in DB (`basic`, `standard`, `premium`, `platinum`, `diamond`). Displayed as title-case in UI.
+- **D-12:** `note` (text, nullable) — textarea for internal notes. Not shown to client on payment page.
+- **D-13:** `description` column dropped. `service` + `package` + `note` replace it. Migration must remove `description` and add `client_name`, `service`, `package`, `note`.
+
+### Stripe Fee Breakdown (creation form)
+- **D-14:** The payment create form shows a live fee breakdown panel below the amount/currency fields. Computed client-side (Vue `computed`) — no server round-trip.
+  - USD rate: **2.9% + $0.30** per transaction (Stripe standard)
+  - GBP rate: **1.5% + £0.20** per transaction (Stripe standard UK)
+  - Display three rows: **Charge amount**, **Stripe fee**, **You receive**
+  - All formatted with `Intl.NumberFormat` matching the selected currency
+  - Labelled as "Estimated — based on standard Stripe rates"
+  - Breakdown only shows when amount > 0
+
 ### Claude's Discretion
 - Exact shadcn-vue components used in the payment form and table (follow patterns from brands/Create.vue and brands/Index.vue)
 - Route naming conventions (suggest `payments.index`, `payments.create`, `payments.store`, `payments.show`)
 - Status badge colors (pending = yellow/warning, completed = green/success, failed = red/destructive)
 - Copy-to-clipboard implementation (native `navigator.clipboard.writeText` or a small utility)
 - How the formatted amount is displayed (e.g. `$25.00` / `£10.50` — format server-side in the Inertia prop or client-side with `Intl.NumberFormat`)
+- Visual layout of fee breakdown panel (Card, table-like rows, or inline summary — match shadcn-vue style)
 
 </decisions>
 
@@ -105,13 +123,18 @@ No Stripe API calls in Phase 4. No PaymentIntent creation. No client-facing paym
 <specifics>
 ## Specific Ideas
 
-- The payment create form needs two Select dropdowns populated from Inertia props: `brands` (all brands) and `stripeAccounts` (only `is_active = true` accounts). Both required fields.
+- Payment create form fields (in order): Brand (Select), Stripe Account (Select), Currency (Select: USD/GBP), Amount (number input), Client Name (text input), Client Email (email input), Service (text input), Package (Select: Basic/Standard/Premium/Platinum/Diamond), Note (textarea).
+- Fee breakdown panel renders below amount/currency. Vue `computed` recalculates on every amount or currency change. USD: `fee = amount * 0.029 + 0.30`. GBP: `fee = amount * 0.015 + 0.20`. `youReceive = amount - fee`.
+- Two Select dropdowns populated from Inertia props: `brands` (all brands) and `stripeAccounts` (only `is_active = true` accounts). Both required.
 - Amount field: `<Input type="number" min="0.01" step="0.01" />` with placeholder "0.00". FormRequest: `$validated['amount'] = (int) round($request->amount * 100)`.
-- Currency field: a Select with two options only — "USD ($)" and "GBP (£)". Default to USD.
+- Currency field: Select with two options only — "USD ($)" and "GBP (£)". Default to USD.
+- Package field: Select with five options — Basic, Standard, Premium, Platinum, Diamond. Optional. Value sent as lowercase.
+- `service` and `note` are nullable strings — no minimum length validation.
 - After store, controller returns `redirect()->route('payments.show', $payment)` (routes by uuid via getRouteKeyName).
-- Show page (`/payments/{uuid}`): prominent link box with `window.location.origin . '/pay/' . $payment->uuid` and a clipboard copy button. Below: payment detail summary card.
-- Index table: amount formatted as `$25.00` or `£10.50` — use PHP `number_format($payment->amount / 100, 2)` with currency symbol prefix in the Inertia prop, or format client-side with `Intl.NumberFormat`.
-- `user_id` on the payment must be set to `auth()->id()` in the controller store method — not from client input.
+- Show page (`/payments/{uuid}`): prominent link box with `window.location.origin . '/pay/' . $payment->uuid` and clipboard copy button. Below: payment detail summary card showing client name, client email, service, package, note, amount, currency, brand, status.
+- Index table columns: Client Name, Client Email, Service, Package, Amount (formatted), Currency, Brand, Status badge, Created, Copy Link action.
+- `user_id` set to `auth()->id()` in controller store — never from client input.
+- Migration: add `client_name` (string), `service` (string nullable), `package` (enum nullable), `note` (text nullable). Remove `description`. Run `migrate:fresh --seed`.
 
 </specifics>
 
