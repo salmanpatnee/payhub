@@ -17,6 +17,8 @@ createInertiaApp({
                 return AuthLayout;
             case name.startsWith('settings/'):
                 return [AppLayout, SettingsLayout];
+            case name.startsWith('ClientPayment/'):
+                return null;  // Each ClientPayment page imports PaymentLayout directly and passes brand props
             default:
                 return AppLayout;
         }
