@@ -26,7 +26,7 @@ class ClientPaymentController extends Controller
         // D-01: Per-account StripeClient — NEVER Stripe::setApiKey() globally
         // secret_key auto-decrypted by Laravel encrypted cast
         // app()->make() allows test mocking via app()->bind(StripeClient::class, ...)
-        $stripe = app()->make(StripeClient::class, ['apiKey' => $payment->stripeAccount->secret_key]);
+        $stripe = app()->make(StripeClient::class, ['config' => $payment->stripeAccount->secret_key]);
 
         // CR-01 fix: retrieve-and-reuse pattern — no duplicate PIs on refresh
         // Confirmable states: requires_payment_method, requires_confirmation, requires_action
