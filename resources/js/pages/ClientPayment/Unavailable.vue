@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3'
 import { CheckCircle2, XCircle, Ban } from 'lucide-vue-next'
-import {
-    Card, CardContent, CardHeader, CardTitle, CardDescription,
-} from '@/components/ui/card'
 import PaymentLayout from '@/layouts/PaymentLayout.vue'
 import { computed } from 'vue'
 
@@ -18,7 +15,6 @@ const props = defineProps<{
     }
 }>()
 
-// Status-to-content map (UI-SPEC.md Unavailable.vue section — exact copy strings)
 const content = computed(() => {
     const map: Record<string, { title: string; description: string; pageTitle: string; icon: string }> = {
         completed: {
@@ -48,37 +44,31 @@ const content = computed(() => {
     <PaymentLayout :brand="props.brand">
         <Head :title="content.pageTitle" />
 
-        <Card class="rounded-xl shadow-sm text-center">
-            <CardHeader>
-                <!-- Status-aware icon (UI-SPEC.md Unavailable.vue) -->
-                <!-- completed: CheckCircle2, green-50 -->
-                <div
-                    v-if="status === 'completed'"
-                    class="flex h-14 w-14 items-center justify-center rounded-full bg-green-50 mx-auto"
-                >
-                    <CheckCircle2 class="size-7 text-green-600" />
-                </div>
-                <!-- failed: XCircle, red-50 -->
-                <div
-                    v-else-if="status === 'failed'"
-                    class="flex h-14 w-14 items-center justify-center rounded-full bg-red-50 mx-auto"
-                >
-                    <XCircle class="size-7 text-destructive" />
-                </div>
-                <!-- cancelled: Ban, muted -->
-                <div
-                    v-else
-                    class="flex h-14 w-14 items-center justify-center rounded-full bg-muted mx-auto"
-                >
-                    <Ban class="size-7 text-muted-foreground" />
-                </div>
+        <div class="text-center space-y-4">
+            <!-- Status-aware icon -->
+            <div
+                v-if="status === 'completed'"
+                class="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mx-auto"
+            >
+                <CheckCircle2 class="size-8 text-green-600" />
+            </div>
+            <div
+                v-else-if="status === 'failed'"
+                class="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 mx-auto"
+            >
+                <XCircle class="size-8 text-red-600" />
+            </div>
+            <div
+                v-else
+                class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 mx-auto"
+            >
+                <Ban class="size-8 text-slate-500" />
+            </div>
 
-                <CardTitle class="text-xl">{{ content.title }}</CardTitle>
-                <CardDescription>{{ content.description }}</CardDescription>
-            </CardHeader>
-
-            <!-- Empty CardContent — guard page has no actions -->
-            <CardContent />
-        </Card>
+            <div>
+                <h1 class="text-2xl font-semibold tracking-tight text-slate-900">{{ content.title }}</h1>
+                <p class="text-sm text-slate-500 mt-1">{{ content.description }}</p>
+            </div>
+        </div>
     </PaymentLayout>
 </template>

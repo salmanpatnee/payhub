@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3'
 import { CheckCircle2 } from 'lucide-vue-next'
-import {
-    Card, CardContent, CardHeader, CardTitle, CardDescription,
-} from '@/components/ui/card'
 import PaymentLayout from '@/layouts/PaymentLayout.vue'
 
 const props = defineProps<{
@@ -21,7 +18,6 @@ const props = defineProps<{
     }
 }>()
 
-// formatAmount: identical to Show.vue lines 61-66 pattern
 function formatAmount(cents: number, currency: string): string {
     return new Intl.NumberFormat(
         currency === 'gbp' ? 'en-GB' : 'en-US',
@@ -31,31 +27,49 @@ function formatAmount(cents: number, currency: string): string {
 </script>
 
 <template>
-    <PaymentLayout :brand="props.brand">
+    <PaymentLayout
+        :brand="props.brand"
+        :payment="{
+            amount: payment.amount,
+            currency: payment.currency,
+            service: payment.service,
+            status: 'completed',
+        }"
+    >
         <Head :title="`Payment received — ${props.brand.name}`" />
 
-        <Card class="rounded-xl shadow-sm text-center">
-            <CardHeader class="pb-0">
-                <!-- Success icon block (UI-SPEC.md Success.vue icon section) -->
-                <div class="flex flex-col items-center gap-2 py-2">
-                    <div class="flex h-14 w-14 items-center justify-center rounded-full bg-green-50">
-                        <CheckCircle2 class="size-7 text-green-600" />
-                    </div>
+        <div class="space-y-6">
+            <!-- Icon + heading -->
+            <div class="text-center space-y-3">
+                <div class="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mx-auto">
+                    <CheckCircle2 class="size-8 text-green-600" />
                 </div>
-                <CardTitle class="text-xl">Payment received</CardTitle>
-                <CardDescription>Thank you — your payment has been processed successfully.</CardDescription>
-            </CardHeader>
+                <div>
+                    <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Payment Successful!</h1>
+                    <p class="text-sm text-slate-500 mt-1">Your payment has been processed successfully.</p>
+                </div>
+            </div>
 
-            <CardContent class="pt-6 space-y-4">
-                <!-- Amount — text-xl font-semibold font-mono (UI-SPEC.md Success.vue) -->
-                <p class="text-xl font-semibold font-mono">
-                    {{ formatAmount(payment.amount, payment.currency) }}
-                </p>
-                <!-- Service line — D-06: shown if set, no package or note on success page -->
-                <p v-if="payment.service" class="text-sm text-muted-foreground">
-                    for {{ payment.service }}
-                </p>
-            </CardContent>
-        </Card>
+            <!-- Detail rows -->
+            <div class="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+                <div class="flex items-center justify-between px-5 py-3.5">
+                    <span class="text-sm text-slate-500">Status</span>
+                    <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
+                        <CheckCircle2 class="size-3" />
+                        Paid
+                    </span>
+                </div>
+                <div class="flex items-center justify-between px-5 py-3.5">
+                    <span class="text-sm text-slate-500">Amount</span>
+                    <span class="text-sm font-semibold font-mono text-slate-900">
+                        {{ formatAmount(payment.amount, payment.currency) }}
+                    </span>
+                </div>
+                <div v-if="payment.service" class="flex items-center justify-between px-5 py-3.5">
+                    <span class="text-sm text-slate-500">Service</span>
+                    <span class="text-sm text-slate-700">{{ payment.service }}</span>
+                </div>
+            </div>
+        </div>
     </PaymentLayout>
 </template>
