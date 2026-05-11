@@ -1,10 +1,11 @@
 ---
 phase: 5
 slug: client-payment-page
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-09
+approved: 2026-05-11
 ---
 
 # Phase 5 — Validation Strategy
@@ -80,4 +81,4 @@ created: 2026-05-09
 - [ ] Feedback latency < 15s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-05-11

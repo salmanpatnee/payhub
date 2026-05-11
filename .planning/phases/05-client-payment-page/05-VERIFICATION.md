@@ -1,7 +1,7 @@
 ---
 phase: 05-client-payment-page
 verified: 2026-05-09T12:00:00Z
-status: human_needed
+status: approved
 score: 9/9 must-haves verified
 overrides_applied: 0
 re_verification:
@@ -160,3 +160,4 @@ Phase 5 goal is achieved: all automated checks pass (16/16 tests, 0 blockers, al
 _Verified: 2026-05-09T12:00:00Z_
 _Verifier: Claude (gsd-verifier)_
 _Re-verification after gap closure: CR-01 idempotency + CR-02 status guard_
+_Approved by human: 2026-05-11 — UI polish committed (85b5be8); phase closed_
