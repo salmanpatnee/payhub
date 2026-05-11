@@ -10,7 +10,41 @@
       "Bash(php artisan *)",
       "Bash(Get-Content \"C:\\\\Users\\\\Salman\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Salman-Herd-payhub\\\\8c456f18-c9f5-4433-bf1f-3cc2aa3d292e\\\\tasks\\\\bvo57on8u.output\" -Wait)",
       "Bash(Select-String -Pattern \"PASS|FAIL|Tests:|OK|Error|tests\")",
-      "Bash(Remove-Item *)"
+      "Bash(Remove-Item *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(\\(Get-ChildItem \"C:\\\\Users\\\\salmanabdul.ghani\\\\Herd\\\\payhub\\\\vendor\" -Force\\) | Select-Object Name, Attributes, LinkType)",
+      "PowerShell($items = Get-ChildItem \"C:\\\\Users\\\\salmanabdul.ghani\\\\Herd\\\\payhub\\\\vendor\" -Force -ErrorAction SilentlyContinue; Write-Output \"Count: $\\($items.Count\\)\"; $items | ForEach-Object { Write-Output \"$\\($_.Name\\) [$\\($_.Attributes\\)]\" })",
+      "Bash(Get-ChildItem *)",
+      "Bash(Sort-Object Name)",
+      "Skill(gsd-discuss-phase)",
+      "Bash(Start-Sleep -Seconds 15)",
+      "Bash(Get-Content \"C:\\\\Users\\\\SALMAN~1.GHA\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-salmanabdul-ghani-Herd-payhub\\\\6dd3a006-16c8-40f2-800c-1656098354ff\\\\tasks\\\\bklbuavzk.output\" -Tail 20)",
+      "Bash(npx shadcn-vue@latest *)",
+      "Bash(npm run *)",
+      "Bash(bash scripts/start-server.sh)",
+      "Bash(python3 scripts/mcp-client.py call -u http://localhost:8808 -t browser_navigate -p '{\"url\": \"https://www.ukassignmenthelp.uk/order-now\"}')",
+      "Bash(npx @playwright/mcp@latest --port 8808 --shared-browser-context)",
+      "Bash(python3 scripts/mcp-client.py call -u http://localhost:8808 -t browser_close -p '{}')",
+      "Bash(python3 scripts/mcp-client.py call -u http://localhost:8808 -t browser_take_screenshot -p '{\"type\": \"png\"}')",
+      "Bash(python3 scripts/mcp-client.py call -u http://localhost:8808 -t browser_evaluate -p \"{\\\\\"function\\\\\": \\\\\"\\(\\) => { const logo = document.querySelector\\('img[src*=logo], .logo img, header img, .site-logo img, img[alt*=logo i], img[alt*=assignment i]'\\); const btn = document.querySelector\\('a.order-btn, .btn-primary, header a[href*=order], nav a[href*=order], .order-now-btn'\\); const btnStyle = btn ? window.getComputedStyle\\(btn\\) : null; return { logoSrc: logo ? logo.src : null, logoAlt: logo ? logo.alt : null, btnBg: btnStyle ? btnStyle.backgroundColor : null, btnColor: btnStyle ? btnStyle.color : null, headerBg: window.getComputedStyle\\(document.querySelector\\('header, .site-header, nav, .navbar'\\)\\).backgroundColor }; }\\\\\"}\")",
+      "Bash(python3 scripts/mcp-client.py call -u http://localhost:8808 -t browser_evaluate -p \"{\\\\\"function\\\\\": \\\\\"\\(\\) => { const headerEl = document.querySelector\\('header, .site-header, #masthead'\\); const navEl = document.querySelector\\('nav, .navbar, .main-nav'\\); const allLinks = Array.from\\(document.querySelectorAll\\('a'\\)\\).slice\\(0, 30\\).map\\(a => \\({ text: a.textContent.trim\\(\\).slice\\(0,20\\), color: window.getComputedStyle\\(a\\).color, bg: window.getComputedStyle\\(a\\).backgroundColor }\\)\\).filter\\(l => l.bg !== 'rgba\\(0, 0, 0, 0\\)' && l.bg !== 'transparent'\\); const logoImg = document.querySelector\\('img[alt*=assignment i]'\\); return { headerBgComputed: headerEl ? window.getComputedStyle\\(headerEl\\).backgroundColor : null, navBg: navEl ? window.getComputedStyle\\(navEl\\).backgroundColor : null, coloredLinks: allLinks.slice\\(0,5\\), logoSrc: logoImg ? logoImg.src : null }; }\\\\\"}\")",
+      "PowerShell(cd C:\\\\Users\\\\salmanabdul.ghani\\\\Herd\\\\payhub; php artisan tinker --execute=\"try { `$b = App\\\\Models\\\\Brand::create\\(['name'=>'UK Assignment Help','slug'=>'uk-assignment-help','logo_url'=>'https://cdn-bgglc.nitrocdn.com/LrkzGtyRCAfTeyUOKCwwmPHrFiqtwyAc/assets/images/optimized/rev-216eb1f/www.ukassignmenthelp.uk/wp-content/uploads/2019/12/header-logo-1.png','primary_color'=>'#18A000','secondary_color'=>'#000000']\\); echo 'Created ID:'.\\\\$b->id; } catch\\(Exception \\\\$e\\) { echo 'ERR:'.\\\\$e->getMessage\\(\\); }\" 2>&1)",
+      "PowerShell(New-Item *)",
+      "Bash(python3 scripts/mcp-client.py call -u http://localhost:8808 -t browser_navigate -p '{\"url\": \"http://payhub.test/pay/74465715-05cb-41b0-a2f0-64772c4d0f69\"}')",
+      "PowerShell($job = Start-Job -ScriptBlock { Set-Location \"C:\\\\Users\\\\salmanabdul.ghani\\\\.claude\\\\skills\\\\browser-use\"; npx @playwright/mcp@latest --port 8808 --shared-browser-context 2>&1 }; Start-Sleep 6; Set-Location \"C:\\\\Users\\\\salmanabdul.ghani\\\\.claude\\\\skills\\\\browser-use\"; python3 scripts/mcp-client.py call -u http://localhost:8808 -t browser_navigate -p '{\"url\": \"http://payhub.test/pay/74465715-05cb-41b0-a2f0-64772c4d0f69\"}' 2>&1)",
+      "Bash(python3 scripts/mcp-client.py call -u \"http://localhost:8808\" -t \"browser_navigate\" -p \"{\\\\\"url\\\\\": \\\\\"http://payhub.test/pay/74465715-05cb-41b0-a2f0-64772c4d0f69\\\\\"}\")",
+      "PowerShell(netstat *)",
+      "Bash(curl -s http://localhost:8808/)",
+      "Bash(curl -s -X POST http://localhost:8808/mcp -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}')",
+      "Bash(curl *)",
+      "Bash(python3 scripts/mcp-client.py call --url \"http://localhost:8808\" --tool \"browser_navigate\" --params '{\"url\":\"http://payhub.test/pay/74465715-05cb-41b0-a2f0-64772c4d0f69\"}')",
+      "Bash(python3 -c ' *)",
+      "Skill(update-config)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "laravel-boost"
+  ],
+  "showClearContextOnPlanAccept": true,
+  "enableAllProjectMcpServers": true
 }
