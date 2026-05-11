@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Head } from '@inertiajs/vue3'
-import { AlertCircle } from 'lucide-vue-next'
+import { AlertCircle, LockIcon } from 'lucide-vue-next'
 import { StripeElements, StripeElement } from 'vue-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 import PaymentLayout from '@/layouts/PaymentLayout.vue'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 
 const props = defineProps<{
@@ -33,11 +32,8 @@ const stripeLoaded  = ref(false)
 const processing    = ref(false)
 const errorMessage  = ref<string | null>(null)
 
-// Call loadStripe() in onMounted — sets window.Stripe which vue-stripe-js requires
-// Only after this resolves should StripeElements mount
+// WR-01: Check return value — loadStripe() returns null if Stripe.js CDN fails to load
 onMounted(async () => {
-    // WR-01: Check return value — loadStripe() returns null if Stripe.js CDN fails to load
-    // (network error, ad-blocker). Only set stripeLoaded=true when Stripe is available.
     const stripe = await loadStripe(props.stripeAccount.publishable_key)
     if (stripe !== null) {
         stripeLoaded.value = true
@@ -45,10 +41,16 @@ onMounted(async () => {
 })
 
 function formatAmount(cents: number, currency: string): string {
-    return new Intl.NumberFormat(
+    const formatter = new Intl.NumberFormat(
         currency === 'gbp' ? 'en-GB' : 'en-US',
         { style: 'currency', currency: currency.toUpperCase() }
-    ).format(cents / 100)
+    )
+    return formatter.formatToParts(cents / 100).map((part, i, parts) => {
+        if (part.type === 'currency' && parts[i + 1]?.type !== 'literal') {
+            return part.value + ' '
+        }
+        return part.value
+    }).join('')
 }
 
 const elementsOptions = computed(() => ({
@@ -85,8 +87,8 @@ const elementsOptions = computed(() => ({
     },
 }))
 
-// confirmPayment — NEVER write DB status here (CLAUDE.md rule — Phase 6 webhooks only)
-// SEC-04: return_url is /pay/{uuid}/success — client_secret is NOT in the URL
+// NEVER write DB status here — all payment status comes from webhooks only
+// SEC-04: return_url never contains client_secret
 async function submit(instance: any, elements: any): Promise<void> {
     // WR-02: Guard against null instance/elements
     if (!instance || !elements) {
@@ -119,20 +121,22 @@ async function submit(instance: any, elements: any): Promise<void> {
             amount: payment.amount,
             currency: payment.currency,
             service: payment.service,
+            package: payment.package,
             status: 'pending',
         }"
     >
         <Head :title="`Pay ${props.brand.name}`" />
 
-        <div class="space-y-6">
+        <div class="form-content space-y-6">
+            <!-- Header -->
             <div>
-                <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Complete your payment</h1>
-                <p class="text-sm text-slate-500 mt-1">Enter your card details below to complete this payment.</p>
+                <h1 class="text-2xl font-bold tracking-tight text-slate-900">Complete your payment</h1>
+                <p class="text-sm text-slate-500 mt-1.5 leading-relaxed">
+                    Enter your card details below to pay securely.
+                </p>
             </div>
 
-            <Separator />
-
-            <!-- Stripe Elements — conditional on stripeLoaded gate -->
+            <!-- Stripe Elements — gated on stripeLoaded -->
             <template v-if="stripeLoaded">
                 <StripeElements
                     :stripe-key="stripeAccount.publishable_key"
@@ -150,23 +154,57 @@ async function submit(instance: any, elements: any): Promise<void> {
                             <Button
                                 type="submit"
                                 size="lg"
-                                class="w-full bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary)]/90 focus-visible:ring-[var(--brand-primary)]/50"
+                                class="w-full bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary)]/90 focus-visible:ring-[var(--brand-primary)]/50 font-semibold tracking-wide cursor-pointer"
                                 :disabled="processing"
                             >
                                 <Spinner v-if="processing" class="size-4 mr-2" />
-                                <span>{{ processing ? 'Processing...' : `Pay ${formatAmount(payment.amount, payment.currency)}` }}</span>
+                                <span>{{ processing ? 'Processing…' : `Pay ${formatAmount(payment.amount, payment.currency)}` }}</span>
                             </Button>
+
+                            <!-- Security micro-copy -->
+                            <p class="flex items-center justify-center gap-1.5 text-xs text-slate-600 text-center leading-relaxed">
+                                <LockIcon class="size-3 shrink-0" />
+                                Your card details are never stored · 256-bit SSL
+                            </p>
                         </form>
                     </template>
                 </StripeElements>
             </template>
 
-            <!-- Loading skeleton — shown before Stripe.js loads -->
+            <!-- Loading skeleton -->
             <template v-else>
-                <div class="h-32 flex items-center justify-center">
-                    <Spinner class="size-5 text-slate-400" />
+                <div class="space-y-3">
+                    <div class="skeleton-row h-12 rounded-lg"></div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="skeleton-row h-12 rounded-lg"></div>
+                        <div class="skeleton-row h-12 rounded-lg"></div>
+                    </div>
+                    <div class="skeleton-row h-12 rounded-lg"></div>
+                    <div class="skeleton-row h-12 rounded-lg mt-2 opacity-75"></div>
                 </div>
             </template>
         </div>
     </PaymentLayout>
 </template>
+
+<style scoped>
+.form-content {
+    animation: contentIn 0.4s ease-out 0.22s both;
+}
+
+@keyframes contentIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.skeleton-row {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+</style>
