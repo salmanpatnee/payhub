@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 approved 2026-05-11 — UI polish committed (85b5be8); Phase 6 is next
+stopped_at: Phase 6 context gathered 2026-05-11 — webhook_secret setup decisions captured; ready to plan
 last_updated: "2026-05-11"
 last_activity: 2026-05-11
 progress:
@@ -79,5 +79,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-11
-Stopped at: Phase 5 approved — UI polish committed (85b5be8); two-column layout, Success.vue redesign (animated SVG checkmark, confetti, receipt card), uuid+package added to Success props, declined-card inline error confirmed correct Stripe behavior; Phase 6 ready to plan
-Resume file: .planning/phases/05-client-payment-page/05-05-SUMMARY.md
+Stopped at: Phase 6 context gathered — webhook_secret provisioning UI decisions locked; custom webhook controller recommended over spatie; ready to plan Phase 6
+Resume file: .planning/phases/06-webhooks-status-sync/06-CONTEXT.md
