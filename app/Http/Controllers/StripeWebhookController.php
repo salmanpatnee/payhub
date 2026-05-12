@@ -19,6 +19,10 @@ class StripeWebhookController extends Controller
 
     public function handle(Request $request, StripeAccount $stripeAccount): Response
     {
+        if (! $stripeAccount->is_active) {
+            return response('', 200); // Acknowledge to Stripe; skip processing
+        }
+
         $payload = $request->getContent();
         $sigHeader = $request->header('Stripe-Signature', '');
 
