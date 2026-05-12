@@ -25,17 +25,18 @@ class HandleStripeWebhookJob implements ShouldQueue
     {
         // eventData is $event->data->object->toArray() — a flat PaymentIntent array
         $piId = $this->eventData['id'] ?? null;
-        $payment = Payment::where('stripe_payment_intent_id', $piId)->first();
 
-        if (! $payment || in_array($payment->status, ['completed', 'failed'])) {
-            return; // idempotency gate 2
-        }
-
-        match ($this->eventType) {
-            'payment_intent.succeeded' => $payment->update(['status' => 'completed', 'paid_at' => now()]),
-            'payment_intent.payment_failed' => $payment->update(['status' => 'failed']),
-            default => null,
-        };
+        // Atomic update: WHERE status = 'pending' acts as an idempotency guard.
+        // Adding stripe_account_id scopes the update to the correct account.
+        // If $updated === 0, the payment is already in a terminal state (or not found) — no-op.
+        $updated = Payment::where('stripe_payment_intent_id', $piId)
+            ->where('stripe_account_id', $this->stripeAccountId)
+            ->where('status', 'pending')
+            ->update(match ($this->eventType) {
+                'payment_intent.succeeded' => ['status' => 'completed', 'paid_at' => now()],
+                'payment_intent.payment_failed' => ['status' => 'failed'],
+                default => [],
+            });
     }
 
     public function failed(?\Throwable $exception): void
