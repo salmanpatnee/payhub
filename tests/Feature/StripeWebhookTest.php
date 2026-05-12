@@ -3,9 +3,11 @@
 use App\Jobs\HandleStripeWebhookJob;
 use App\Models\Payment;
 use App\Models\StripeAccount;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -17,9 +19,9 @@ beforeEach(function () {
     Role::firstOrCreate(['name' => 'user', 'guard_name' => 'web']);
 });
 
-function fakeStripeSignature(string $payload, string $secret): string
+function fakeStripeSignature(string $payload, string $secret, int $timestamp = 0): string
 {
-    $timestamp = time();
+    $timestamp = $timestamp ?: time();
     $signedPayload = $timestamp.'.'.$payload;
     $signature = hash_hmac('sha256', $signedPayload, $secret);
 
@@ -199,16 +201,16 @@ it('webhook route has no csrf protection', function () {
 
 // D-04: blank webhook_secret on submit preserves existing secret
 it('blank webhook_secret on stripe account update preserves existing secret', function () {
-    $admin = \App\Models\User::factory()->create(['email_verified_at' => now()]);
+    $admin = User::factory()->create(['email_verified_at' => now()]);
     $admin->syncRoles(['admin']);
 
     $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_original123']);
 
     $this->actingAs($admin)
         ->put(route('admin.stripe-accounts.update', $account), [
-            'account_name'    => $account->account_name,
+            'account_name' => $account->account_name,
             'publishable_key' => $account->publishable_key,
-            'webhook_secret'  => '',
+            'webhook_secret' => '',
         ])
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('admin.stripe-accounts.index'));
@@ -220,7 +222,7 @@ it('blank webhook_secret on stripe account update preserves existing secret', fu
 
 // D-03: edit() response has has_webhook_secret bool (never the raw secret)
 it('edit() returns has_webhook_secret bool and webhook_endpoint_url — never the raw secret', function () {
-    $admin = \App\Models\User::factory()->create(['email_verified_at' => now()]);
+    $admin = User::factory()->create(['email_verified_at' => now()]);
     $admin->syncRoles(['admin']);
 
     $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_test_secret']);
@@ -228,7 +230,7 @@ it('edit() returns has_webhook_secret bool and webhook_endpoint_url — never th
     $this->actingAs($admin)
         ->get(route('admin.stripe-accounts.edit', $account))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('stripeAccount.has_webhook_secret')
             ->where('stripeAccount.has_webhook_secret', true)
             ->has('stripeAccount.webhook_endpoint_url')
@@ -238,32 +240,32 @@ it('edit() returns has_webhook_secret bool and webhook_endpoint_url — never th
 
 // T-06-10: webhook_secret with invalid prefix (not whsec_) is rejected
 it('webhook_secret not starting with whsec_ is rejected with validation error', function () {
-    $admin = \App\Models\User::factory()->create(['email_verified_at' => now()]);
+    $admin = User::factory()->create(['email_verified_at' => now()]);
     $admin->syncRoles(['admin']);
 
     $account = StripeAccount::factory()->create();
 
     $this->actingAs($admin)
         ->put(route('admin.stripe-accounts.update', $account), [
-            'account_name'    => $account->account_name,
+            'account_name' => $account->account_name,
             'publishable_key' => $account->publishable_key,
-            'webhook_secret'  => 'sk_live_invalid_format',
+            'webhook_secret' => 'sk_live_invalid_format',
         ])
         ->assertSessionHasErrors(['webhook_secret']);
 });
 
 // update() writes a new whsec_ value when provided
 it('providing a valid whsec_ value updates webhook_secret', function () {
-    $admin = \App\Models\User::factory()->create(['email_verified_at' => now()]);
+    $admin = User::factory()->create(['email_verified_at' => now()]);
     $admin->syncRoles(['admin']);
 
     $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_old_value']);
 
     $this->actingAs($admin)
         ->put(route('admin.stripe-accounts.update', $account), [
-            'account_name'    => $account->account_name,
+            'account_name' => $account->account_name,
             'publishable_key' => $account->publishable_key,
-            'webhook_secret'  => 'whsec_new_value_abc',
+            'webhook_secret' => 'whsec_new_value_abc',
         ])
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('admin.stripe-accounts.index'));
