@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Stripe\Exception\ApiConnectionException;
+use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\AuthenticationException;
 use Stripe\StripeClient;
 
@@ -54,7 +55,7 @@ class StripeAccountController extends Controller
                 'publishable_key' => $stripeAccount->publishable_key,
                 'is_active' => $stripeAccount->is_active,
                 'has_webhook_secret' => ! empty($stripeAccount->webhook_secret),
-                'webhook_endpoint_url' => config('app.url').'/webhook/stripe/'.$stripeAccount->id,
+                'webhook_endpoint_url' => route('webhook.stripe', $stripeAccount),
                 // secret_key: NEVER included — not even masked
                 // webhook_secret: NEVER included — use has_webhook_secret (bool) only
             ],
@@ -162,6 +163,8 @@ class StripeAccountController extends Controller
             return 'The secret key could not be verified with Stripe. Check that it is correct and try again.';
         } catch (ApiConnectionException $e) {
             return 'Could not connect to Stripe to validate the key. Check your network and try again.';
+        } catch (ApiErrorException $e) {
+            return 'Stripe returned an unexpected error: '.$e->getMessage();
         }
     }
 }
