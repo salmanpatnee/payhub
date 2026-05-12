@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 6 — Plan 06-01 complete (StripeWebhookController + route + CSRF); 06-02 next
+stopped_at: Phase 6 — Plan 06-02 complete (HandleStripeWebhookJob impl + WEBHOOK-03/04/05 GREEN); 06-03 next
 last_updated: "2026-05-12"
 last_activity: 2026-05-12
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 27
-  completed_plans: 23
-  percent: 78
+  completed_plans: 24
+  percent: 81
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-05-02)
 ## Current Position
 
 Phase: 6 of 7 (Webhooks + Status Sync) — executing
-Plan: 2 of 4 in current phase (06-01 complete)
-Status: Phase 6 executing — 06-01 (StripeWebhookController + route + CSRF) done; 06-02 (HandleStripeWebhookJob impl) next
+Plan: 3 of 4 in current phase (06-02 complete)
+Status: Phase 6 executing — 06-02 (HandleStripeWebhookJob impl + WEBHOOK-03/04/05 GREEN) done; 06-03 (StripeAccount webhook_secret edit UI) next
 Last activity: 2026-05-12
 
 Progress: [████████░░] 78%
@@ -59,6 +59,7 @@ Recent decisions affecting current work:
 - [Phase 06]: phpunit.xml APP_BASE_PATH corrected to salmanabdul.ghani user path (pre-existing path mismatch fixed)
 - [Phase 06]: HTTP_STRIPE_SIGNATURE server var used in tests (not withHeaders()) — Laravel call() bypasses defaultHeaders; raw body must be preserved for Webhook::constructEvent()
 - [Phase 06]: HandleStripeWebhookJob stub created with typed constructor args — Wave 2 (06-02) implements handle()
+- [Phase 06]: eventData['id'] used for PI lookup in HandleStripeWebhookJob — controller passes toArray() of flat PaymentIntent, not nested wrapper
 
 ### Pending Todos
 
@@ -83,5 +84,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-12
-Stopped at: Phase 6 — 06-01 complete (StripeWebhookController + CSRF + 7 GREEN tests); 06-02 (HandleStripeWebhookJob) ready
-Resume file: .planning/phases/06-webhooks-status-sync/06-02-PLAN.md
+Stopped at: Phase 6 — 06-02 complete (HandleStripeWebhookJob + WEBHOOK-03/04/05 GREEN); 06-03 next
+Resume file: .planning/phases/06-webhooks-status-sync/06-03-PLAN.md

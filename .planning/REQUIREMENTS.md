@@ -52,9 +52,9 @@
 
 - [x] **WEBHOOK-01**: Each Stripe account has a dedicated webhook endpoint URL (/webhook/stripe/{accountId})
 - [x] **WEBHOOK-02**: Stripe webhook signature is verified per account using that account's signing secret
-- [ ] **WEBHOOK-03**: payment_intent.succeeded event updates payment status to completed in DB
-- [ ] **WEBHOOK-04**: payment_intent.payment_failed event updates payment status to failed in DB
-- [ ] **WEBHOOK-05**: All DB writes on payment completion are driven by webhook only (not client confirmation)
+- [x] **WEBHOOK-03**: payment_intent.succeeded event updates payment status to completed in DB
+- [x] **WEBHOOK-04**: payment_intent.payment_failed event updates payment status to failed in DB
+- [x] **WEBHOOK-05**: All DB writes on payment completion are driven by webhook only (not client confirmation)
 - [x] **WEBHOOK-06**: Webhook handler returns HTTP 200 immediately; fulfillment is queued
 
 ### Notifications (NOTIFY)
@@ -146,9 +146,9 @@
 | CLIENT-08 | Phase 5 | Pending |
 | WEBHOOK-01 | Phase 6 | Complete |
 | WEBHOOK-02 | Phase 6 | Complete |
-| WEBHOOK-03 | Phase 6 | Pending |
-| WEBHOOK-04 | Phase 6 | Pending |
-| WEBHOOK-05 | Phase 6 | Pending |
+| WEBHOOK-03 | Phase 6 | Complete |
+| WEBHOOK-04 | Phase 6 | Complete |
+| WEBHOOK-05 | Phase 6 | Complete |
 | WEBHOOK-06 | Phase 6 | Complete |
 | NOTIFY-01 | Phase 7 | Pending |
 | NOTIFY-02 | Phase 7 | Pending |
