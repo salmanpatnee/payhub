@@ -111,17 +111,76 @@ it('payment_intent.succeeded dispatches job and returns 200', function () {
 
 // WEBHOOK-03: payment_intent.succeeded sets status to completed and paid_at
 it('payment_intent.succeeded sets status to completed and paid_at', function () {
-    $this->markTestIncomplete('stub — Wave 2 (06-02): HandleStripeWebhookJob not yet implemented');
+    $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_test123']);
+    $payment = Payment::factory()->create([
+        'status' => 'pending',
+        'stripe_payment_intent_id' => 'pi_test_succeeded',
+        'stripe_account_id' => $account->id,
+        'paid_at' => null,
+    ]);
+
+    $payload = json_encode([
+        'type' => 'payment_intent.succeeded',
+        'data' => ['object' => ['id' => 'pi_test_succeeded']],
+    ]);
+    $sig = fakeStripeSignature($payload, 'whsec_test123');
+
+    stripePost("/webhook/stripe/{$account->id}", $payload, $sig)
+        ->assertStatus(200);
+
+    $payment->refresh();
+    expect($payment->status)->toBe('completed');
+    expect($payment->paid_at)->not->toBeNull();
 });
 
 // WEBHOOK-04: payment_intent.payment_failed sets status to failed
 it('payment_intent.payment_failed sets status to failed', function () {
-    $this->markTestIncomplete('stub — Wave 2 (06-02): HandleStripeWebhookJob not yet implemented');
+    $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_test123']);
+    $payment = Payment::factory()->create([
+        'status' => 'pending',
+        'stripe_payment_intent_id' => 'pi_test_failed',
+        'stripe_account_id' => $account->id,
+        'paid_at' => null,
+    ]);
+
+    $payload = json_encode([
+        'type' => 'payment_intent.payment_failed',
+        'data' => ['object' => ['id' => 'pi_test_failed']],
+    ]);
+    $sig = fakeStripeSignature($payload, 'whsec_test123');
+
+    stripePost("/webhook/stripe/{$account->id}", $payload, $sig)
+        ->assertStatus(200);
+
+    $payment->refresh();
+    expect($payment->status)->toBe('failed');
+    expect($payment->paid_at)->toBeNull();
 });
 
 // WEBHOOK-05: idempotency — already completed payment is not re-processed
 it('already completed payment is not re-processed', function () {
-    $this->markTestIncomplete('stub — Wave 2 (06-02): HandleStripeWebhookJob not yet implemented');
+    $completedAt = now()->subHour();
+    $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_test123']);
+    $payment = Payment::factory()->create([
+        'status' => 'completed',
+        'stripe_payment_intent_id' => 'pi_test_already_done',
+        'stripe_account_id' => $account->id,
+        'paid_at' => $completedAt,
+    ]);
+
+    $payload = json_encode([
+        'type' => 'payment_intent.succeeded',
+        'data' => ['object' => ['id' => 'pi_test_already_done']],
+    ]);
+    $sig = fakeStripeSignature($payload, 'whsec_test123');
+
+    stripePost("/webhook/stripe/{$account->id}", $payload, $sig)
+        ->assertStatus(200);
+
+    $payment->refresh();
+    // Status and paid_at must not have changed
+    expect($payment->status)->toBe('completed');
+    expect($payment->paid_at->toDateTimeString())->toBe($completedAt->toDateTimeString());
 });
 
 // SEC-03: webhook route has no CSRF protection
