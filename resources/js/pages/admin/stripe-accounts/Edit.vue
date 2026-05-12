@@ -69,7 +69,9 @@ function testConnection() {
     const url = form.secret_key
         ? '/admin/stripe-accounts/test-connection'
         : `/admin/stripe-accounts/${props.stripeAccount.id}/test-connection`;
-    const data = form.secret_key ? { secret_key: form.secret_key, publishable_key: form.publishable_key } : {};
+    const data = (form.secret_key || form.publishable_key !== props.stripeAccount.publishable_key)
+        ? { secret_key: form.secret_key || undefined, publishable_key: form.publishable_key }
+        : {};
     router.post(url, data, {
         preserveState: true,
         preserveScroll: true,
