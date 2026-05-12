@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Brand + Stripe Account Management** - Brand CRUD, StripeAccount CRUD, key encryption, per-account StripeService, test/live key enforcement *(completed 2026-05-05)*
 - [x] **Phase 4: Payment Creation + Link Generation** - Payment form, UUID link generation, currency selection, payment history views *(completed 2026-05-09)*
 - [x] **Phase 5: Client Payment Page** - Branded unauthenticated payment page, Stripe Elements, 3DS handling, success/failure pages *(completed 2026-05-09)*
-- [ ] **Phase 6: Webhooks + Status Sync** - Per-account webhook endpoints, signature verification, queued fulfillment, authoritative status writes
+- [x] **Phase 6: Webhooks + Status Sync** - Per-account webhook endpoints, signature verification, queued fulfillment, authoritative status writes *(completed 2026-05-12)*
 - [ ] **Phase 7: Notifications + Dashboard** - Admin email notification, unified dashboard, filtering, user payment history
 
 ## Phase Details
