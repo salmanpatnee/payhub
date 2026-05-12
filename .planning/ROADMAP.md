@@ -123,7 +123,7 @@ Plans:
 
 Plans:
 - [x] 06-00-PLAN.md — Wave 0: StripeWebhookTest.php stubs (11 test cases, all RED) + fakeStripeSignature() helper
-- [ ] 06-01-PLAN.md — Wave 1a: StripeWebhookController + webhook route + CSRF exclusion (bootstrap/app.php)
+- [x] 06-01-PLAN.md — Wave 1a: StripeWebhookController + webhook route + CSRF exclusion (bootstrap/app.php)
 - [ ] 06-02-PLAN.md — Wave 1b: HandleStripeWebhookJob (status DB writes, idempotency gate 2)
 - [ ] 06-03-PLAN.md — Wave 2: StripeAccountController edit/update + UpdateStripeAccountRequest + Edit.vue webhook_secret fields
 
@@ -151,5 +151,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Brand + Stripe Account Management | 5/5 | Complete | 2026-05-05 |
 | 4. Payment Creation + Link Generation | 3/3 | Complete | 2026-05-09 |
 | 5. Client Payment Page | 6/6 | Complete | 2026-05-09 |
-| 6. Webhooks + Status Sync | 1/4 | Executing | - |
+| 6. Webhooks + Status Sync | 2/4 | Executing | - |
 | 7. Notifications + Dashboard | 0/TBD | Not started | - |

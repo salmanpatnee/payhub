@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 6 — Plan 06-00 complete (Wave 0 stubs); 06-01 next
+stopped_at: Phase 6 — Plan 06-01 complete (StripeWebhookController + route + CSRF); 06-02 next
 last_updated: "2026-05-12"
 last_activity: 2026-05-12
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 27
-  completed_plans: 22
-  percent: 74
+  completed_plans: 23
+  percent: 78
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-02)
 
 ## Current Position
 
-Phase: 6 of 7 (Webhooks + Status Sync) — ready to execute
-Plan: 1 of 4 in current phase (06-00 complete)
-Status: Phase 6 executing — 06-00 (Wave 0 stubs) done; 06-01 (StripeWebhookController + route) next
+Phase: 6 of 7 (Webhooks + Status Sync) — executing
+Plan: 2 of 4 in current phase (06-01 complete)
+Status: Phase 6 executing — 06-01 (StripeWebhookController + route + CSRF) done; 06-02 (HandleStripeWebhookJob impl) next
 Last activity: 2026-05-12
 
-Progress: [███████░░░] 74%
+Progress: [████████░░] 78%
 
 ## Accumulated Context
 
@@ -57,6 +57,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Mockery-based StripeClient stub pattern used in tests — $this->app->bind(StripeClient::class, fn() => $mockService)
 - [Phase 06]: fakeStripeSignature() uses hash_hmac sha256 with t=,v1= format matching Stripe constructEvent requirement
 - [Phase 06]: phpunit.xml APP_BASE_PATH corrected to salmanabdul.ghani user path (pre-existing path mismatch fixed)
+- [Phase 06]: HTTP_STRIPE_SIGNATURE server var used in tests (not withHeaders()) — Laravel call() bypasses defaultHeaders; raw body must be preserved for Webhook::constructEvent()
+- [Phase 06]: HandleStripeWebhookJob stub created with typed constructor args — Wave 2 (06-02) implements handle()
 
 ### Pending Todos
 
@@ -81,5 +83,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-12
-Stopped at: Phase 6 — 06-00 complete (Wave 0: 11 RED stubs + fakeStripeSignature); 06-01 (StripeWebhookController + route) ready
-Resume file: .planning/phases/06-webhooks-status-sync/06-01-PLAN.md
+Stopped at: Phase 6 — 06-01 complete (StripeWebhookController + CSRF + 7 GREEN tests); 06-02 (HandleStripeWebhookJob) ready
+Resume file: .planning/phases/06-webhooks-status-sync/06-02-PLAN.md
