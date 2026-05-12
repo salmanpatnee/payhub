@@ -5,7 +5,7 @@ use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\PaymentController;
-
+use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -16,7 +16,7 @@ Route::inertia('/', 'Welcome', [
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
     Route::resource('payments', PaymentController::class)
-         ->only(['index', 'create', 'store', 'show']);
+        ->only(['index', 'create', 'store', 'show']);
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])
@@ -50,8 +50,13 @@ Route::middleware(['auth', 'verified', 'role:admin'])
 
 // Public payment routes — no auth middleware (CLIENT-01)
 // {payment} matches controller $payment param; getRouteKeyName()='uuid' resolves by UUID value
-Route::get('/pay/{payment}',         [ClientPaymentController::class, 'show'])->name('pay.show');
+Route::get('/pay/{payment}', [ClientPaymentController::class, 'show'])->name('pay.show');
 Route::get('/pay/{payment}/success', [ClientPaymentController::class, 'success'])->name('pay.success');
-Route::get('/pay/{payment}/failed',  [ClientPaymentController::class, 'failed'])->name('pay.failed');
+Route::get('/pay/{payment}/failed', [ClientPaymentController::class, 'failed'])->name('pay.failed');
+
+// Webhook routes — public, no auth middleware, no CSRF (SEC-03)
+// {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)
+Route::post('/webhook/stripe/{stripeAccount}', [StripeWebhookController::class, 'handle'])
+    ->name('webhook.stripe');
 
 require __DIR__.'/settings.php';
