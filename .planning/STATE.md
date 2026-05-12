@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 6 — Plan 06-02 complete (HandleStripeWebhookJob impl + WEBHOOK-03/04/05 GREEN); 06-03 next
+stopped_at: Phase 6 — Plan 06-03 complete (StripeAccount webhook_secret edit UI + D-03/D-04 GREEN); 06-04 next (if any)
 last_updated: "2026-05-12"
 last_activity: 2026-05-12
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 27
-  completed_plans: 24
-  percent: 81
+  completed_plans: 25
+  percent: 85
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-02)
 ## Current Position
 
 Phase: 6 of 7 (Webhooks + Status Sync) — executing
-Plan: 3 of 4 in current phase (06-02 complete)
-Status: Phase 6 executing — 06-02 (HandleStripeWebhookJob impl + WEBHOOK-03/04/05 GREEN) done; 06-03 (StripeAccount webhook_secret edit UI) next
+Plan: 4 of 4 in current phase (06-03 complete)
+Status: Phase 6 executing — 06-03 (StripeAccount webhook_secret edit UI + D-03/D-04 GREEN) done; Phase 6 all plans complete
 Last activity: 2026-05-12
 
-Progress: [████████░░] 78%
+Progress: [████████░░] 85%
 
 ## Accumulated Context
 
@@ -60,6 +60,8 @@ Recent decisions affecting current work:
 - [Phase 06]: HTTP_STRIPE_SIGNATURE server var used in tests (not withHeaders()) — Laravel call() bypasses defaultHeaders; raw body must be preserved for Webhook::constructEvent()
 - [Phase 06]: HandleStripeWebhookJob stub created with typed constructor args — Wave 2 (06-02) implements handle()
 - [Phase 06]: eventData['id'] used for PI lookup in HandleStripeWebhookJob — controller passes toArray() of flat PaymentIntent, not nested wrapper
+- [Phase 06]: has_webhook_secret (bool) pattern — raw encrypted value never in Inertia response; webhook_secret excluded from fill() (T-06-03, T-06-11)
+- [Phase 06]: blank-means-preserve pattern applied to webhook_secret in update() — same as secret_key (D-04)
 
 ### Pending Todos
 
@@ -84,5 +86,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-12
-Stopped at: Phase 6 — 06-02 complete (HandleStripeWebhookJob + WEBHOOK-03/04/05 GREEN); 06-03 next
-Resume file: .planning/phases/06-webhooks-status-sync/06-03-PLAN.md
+Stopped at: Phase 6 — 06-03 complete (webhook_secret edit UI + D-03/D-04 GREEN); all 4 Phase 6 plans complete
+Resume file: None (Phase 6 complete — Phase 7 next)
