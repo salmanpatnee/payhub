@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 6 context gathered 2026-05-11 — webhook_secret setup decisions captured; ready to plan
-last_updated: "2026-05-11"
-last_activity: 2026-05-11
+stopped_at: Phase 6 planned 2026-05-12 — 4 plans in 2 waves; ready to execute
+last_updated: "2026-05-12"
+last_activity: 2026-05-12
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 23
+  total_plans: 27
   completed_plans: 21
   percent: 71
 ---
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02)
 
 ## Current Position
 
-Phase: 6 of 7 (Webhooks + Status Sync) — ready to plan
-Plan: 0 of TBD in current phase
-Status: Phase 5 approved — 6 plans executed + UI polish; Phase 6 next
-Last activity: 2026-05-11
+Phase: 6 of 7 (Webhooks + Status Sync) — ready to execute
+Plan: 0 of 4 in current phase
+Status: Phase 6 planned — 4 plans (Wave 0: stubs, Wave 1: controller+job, Wave 2: admin UI); Phase 6 execute next
+Last activity: 2026-05-12
 
 Progress: [███████░░░] 71%
 
@@ -78,6 +78,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-11
-Stopped at: Phase 6 context gathered — webhook_secret provisioning UI decisions locked; custom webhook controller recommended over spatie; ready to plan Phase 6
-Resume file: .planning/phases/06-webhooks-status-sync/06-CONTEXT.md
+Last session: 2026-05-12
+Stopped at: Phase 6 planned — 4 plans verified (WEBHOOK-01..06, SEC-03 covered); CSRF exclusion via preventRequestForgery() not VerifyCsrfToken (L13); custom StripeWebhookController; ready to execute
+Resume file: .planning/phases/06-webhooks-status-sync/06-00-PLAN.md
