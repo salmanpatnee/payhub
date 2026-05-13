@@ -187,6 +187,23 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 - Laravel can be deployed using [Laravel Cloud](https://cloud.laravel.com/), which is the fastest way to deploy and scale production Laravel applications.
 
+## Hostinger Shared Hosting — Queue Configuration
+
+Shared hosting has no persistent processes. Two options:
+
+**Option A — Sync driver (recommended for this app)**
+Set in production `.env`:
+```
+QUEUE_CONNECTION=sync
+```
+Jobs run inline — no worker needed. Safe for PayHub webhooks since `HandleStripeWebhookJob` is a fast DB write.
+
+**Option B — Cron-based worker**
+hPanel → Advanced → Cron Jobs → add (every minute):
+```
+* * * * * cd /home/username/public_html && php artisan queue:work --stop-when-empty --max-time=55 >> /dev/null 2>&1
+```
+
 === tests rules ===
 
 # Test Enforcement
