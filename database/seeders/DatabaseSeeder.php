@@ -31,8 +31,8 @@ class DatabaseSeeder extends Seeder
         $stripeAccount = StripeAccount::firstOrCreate(
             ['account_name' => 'Leo\'s Stripe Account'],
             [
-                'publishable_key' => 'pk_test_51E9QOZLrKvlnrek2O4bkkJHMGUu9lsdAIlgATgnGuM7iLUuSnvaSrQS1VTEILGPJRKM7k0d96ovTSlmu0Xnm6chy00zojFZJVl',
-                'secret_key'      => 'sk_test_51E9QOZLrKvlnrek2qONuT6QI2sdk4SvxoeaD8fZFZKjAFoP6wdJitWJ0fwaXlVjGTP3DlHA05kX8dGdWDZXzIHQ900NzyJGArT',
+                'publishable_key' => env('STRIPE_PUBLISHABLE_KEY', 'pk_test_replace_me'),
+                'secret_key'      => env('STRIPE_SECRET_KEY', 'sk_test_replace_me'),
                 'webhook_secret'  => 'whsec_placeholder_for_dev_only',
                 'is_active'       => true,
             ]
