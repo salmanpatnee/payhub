@@ -30,51 +30,77 @@ Clients always feel they are paying the same brand they interacted with, regardl
 - Role-based access: role:admin middleware guards all /admin/* routes; User role gets 403
 - Admin CRUD for team members (create, edit role, delete; self-delete blocked)
 - AppSidebar role-aware nav: Users link admin-only; all other nav visible to both roles
-- /pay/{uuid} stub accessible without session (Phase 5 will implement)
+- /pay/{uuid} stub accessible without session
 - 51/51 tests passing
+
+### Validated
+
+**Phase 3: Brand + Stripe Account Management** *(validated 2026-05-05)*
+- Admin CRUD for brands (name, slug, logo, primary/secondary color, website_url)
+- Admin CRUD for Stripe accounts (publishable + secret key pairs, webhook_secret)
+- Secret keys encrypted at rest via Laravel `encrypted` cast (AES-256)
+- Stripe accounts decoupled from brands — top-level /admin/stripe-accounts resource
+- Per-account StripeClient instantiation (never global setApiKey)
+- Test connection button verifies live key validity against Stripe API
+- ConfirmDeleteDialog extracted as reusable component
+
+### Validated
+
+**Phase 4: Payment Creation + Link Generation** *(validated 2026-05-09)*
+- Admin/User can create one-time payments (amount, service, package, note, brand, Stripe account, currency)
+- Currency: USD ($) or GBP (£) — fixed two-currency system; stored as integer cents
+- System generates UUID-based shareable payment link (/pay/{uuid})
+- Amount never accepted from client request — always read from server-side Payment record
+- Payment history views for admin (all payments) and user (own payments)
+- Payment links have no expiry in v1
+
+### Validated
+
+**Phase 5: Client Payment Page** *(validated 2026-05-09)*
+- Branded unauthenticated payment page — client sees brand logo and colors
+- Inline Stripe Elements form initialized with brand's publishable key
+- PaymentIntent created server-side under correct Stripe account; client_secret scoped to page load only
+- 3DS challenge handling — payment completes after authentication
+- Branded success and failure pages
+- PaymentIntent client_secret never logged, stored in URLs, or exposed beyond page load
+
+### Validated
+
+**Phase 6: Webhooks + Status Sync** *(validated 2026-05-13)*
+- Per-account webhook endpoint: POST /webhook/stripe/{stripeAccountId}
+- Signature verified via Stripe constructEvent with per-account webhook_secret
+- Webhook routes excluded from CSRF; raw body preserved for signature verification
+- HandleStripeWebhookJob dispatched immediately; status writes are async via queue
+- payment_intent.succeeded → status=completed, paid_at set
+- payment_intent.payment_failed → status=failed, paid_at null
+- Idempotent: already-completed payments are not re-processed on duplicate delivery
+- Deactivated accounts return 200 without processing
+- webhook_secret stored encrypted; admin UI exposes has_webhook_secret bool only (never raw value)
+- blank-means-preserve pattern: empty webhook_secret field on update preserves existing secret
+- 14/14 webhook tests passing; live E2E verified via Stripe CLI
 
 ### Active
 
-**Brand Management (Admin only)**
-- [ ] Admin can create and manage brands (logo, colors, display name)
-- [ ] v1: Single domain (pay.agency.com) renders all brands — no per-brand subdomains yet
-
-**Stripe Account Management (Admin only)**
-- [ ] Admin can add and configure Stripe accounts (publishable + secret key pairs)
-- [ ] Secret keys encrypted at rest in DB (AES-256) — no external secret stores
-- [ ] Admin can link Stripe accounts to brands
-- [ ] Admin can test Stripe connection
-
-**Payment Creation (Admin + User)**
-- [ ] Admin/User can create a one-time payment (amount, description, brand, Stripe account, currency)
-- [ ] Currency: USD ($) or GBP (£) per payment — fixed two-currency system
-- [ ] System generates unique shareable payment link
-- [ ] Payment links never expire (valid until paid or cancelled)
-
-**Client Payment Experience**
-- [ ] Client opens branded payment page (no login required)
-- [ ] Inline Stripe Elements form styled to brand colors
-- [ ] Payment processed under the selected Stripe account
-- [ ] Client receives email receipt on successful payment
-
-**Webhooks & Status Sync**
-- [ ] Stripe webhook verifies and updates payment status (pending / completed / failed)
-- [ ] Admin receives notification on payment completion (v1)
-
-**Dashboard & Reporting**
-- [ ] Admin: unified dashboard showing all payments across all brands
-- [ ] Admin: filter by brand, Stripe account, status, date
-- [ ] User: own payment history view
+**Phase 7: Notifications + Dashboard** *(next)*
+- [ ] Admin receives email notification on payment completion
+- [ ] Admin dashboard: unified payment list across all brands (amount, currency, brand, status, date, client email)
+- [ ] Admin can filter payments by brand, Stripe account, status, date range
+- [ ] User can view own payment history
 
 ### Out of Scope
 
 - Per-brand subdomains (pay.brandA.com) — deferred to v2, single domain sufficient for v1
+- Client email receipt on payment success — deferred to v2 (per-brand email sender identity unresolved)
 - Subscriptions / recurring billing — one-time payments only by design
 - External secret stores (AWS Secrets Manager, Vault) — encrypted DB sufficient
 - Slack/webhook notifications — admin email only for v1
 - SSO (Google/Microsoft) — invite-only email/password is sufficient
 - Public registration — invite-only to control access
 - Analytics / conversion tracking — deferred to optimization phase
+- Invite-only registration flow (signed URLs) — admin creates accounts manually for v1
+- Cancel/void a payment link — deferred to v2
+- CSV export of payment history — deferred to v2
+- 2FA settings UI — TwoFactorAuthenticatable on model but no UI in v1
 
 ## Context
 
@@ -82,33 +108,38 @@ This system solves a real operational problem: the agency runs multiple brands a
 
 **Technical environment:**
 - Laravel 13 backend
-- Vue 3 frontend via Inertia.js (not a standalone SPA — Inertia-rendered pages)
-- Tailwind CSS 4 + shadcn/ui for styling
+- Vue 3 frontend via Inertia.js v3 (not a standalone SPA — Inertia-rendered pages)
+- Tailwind CSS 4 + shadcn-vue for styling
 - Stripe Elements for embedded, brand-styled payment forms
 - Multi-account Stripe setup: PaymentIntents created under the brand's specific Stripe account
 
 **Stripe multi-account pattern:**
-Each payment selects a brand → resolves linked Stripe account → creates PaymentIntent under that account → initializes Elements with that account's publishable key.
+Each payment selects a brand → resolves linked Stripe account → creates PaymentIntent under that account → initializes Elements with that account's publishable key → webhook fires on that account → signature verified with that account's webhook_secret → status written authoritatively.
 
 ## Constraints
 
-- **Tech Stack**: Laravel 13, Vue 3, Inertia.js v3, Tailwind 4, shadcn/ui, Stripe Elements — already decided
+- **Tech Stack**: Laravel 13, Vue 3, Inertia.js v3, Tailwind 4, shadcn-vue, Stripe Elements — decided
 - **Security**: Stripe secret keys must be encrypted at rest (AES-256 in DB); no external secret management services
 - **Payments**: One-time only — no subscriptions, no recurring billing
 - **Auth**: Laravel Fortify, invite-only — no public registration, no SSO for v1
 - **Multi-domain**: Single domain for v1 — per-brand subdomains are v2
-- **Notifications**: Admin email only for v1 — client gets receipt, no Slack/webhook
+- **Notifications**: Admin email only for v1
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Inertia.js instead of standalone SPA | Simpler auth, SSR-friendly, less infra complexity than separate API + SPA | — Pending |
-| Stripe Elements over Stripe Checkout | Full UI control, seamless brand experience, no Stripe-hosted redirect | — Pending |
-| Single domain for v1 | Subdomains add DNS/SSL complexity — defer until brand count justifies it | — Pending |
-| Encrypted keys in DB over external secrets | No external service dependency, AES-256 sufficient for internal tool | — Pending |
-| Invite-only auth | Controlled internal tool — no public user growth needed | — Pending |
-| Multi-currency support from v1 | Agency works across markets, retrofitting later is painful | — Pending |
+| Inertia.js instead of standalone SPA | Simpler auth, SSR-friendly, less infra complexity than separate API + SPA | Implemented — no separate API layer needed |
+| Stripe Elements over Stripe Checkout | Full UI control, seamless brand experience, no Stripe-hosted redirect | Implemented — brand colors applied to Elements |
+| Single domain for v1 | Subdomains add DNS/SSL complexity — defer until brand count justifies it | Implemented — all brands on same domain |
+| Encrypted keys in DB over external secrets | No external service dependency, AES-256 sufficient for internal tool | Implemented — `encrypted` cast on secret_key + webhook_secret |
+| Invite-only auth | Controlled internal tool — no public user growth needed | Implemented — registration feature disabled in Fortify |
+| Multi-currency support from v1 | Agency works across markets, retrofitting later is painful | Implemented — USD and GBP, stored as integer cents |
+| Stripe accounts decoupled from brands | Brands and accounts are independent resources — one account can serve multiple brands | Implemented in Phase 3 |
+| Per-account StripeClient (never global setApiKey) | Prevents key cross-contamination across accounts in same request | Enforced — critical rule in CLAUDE.md |
+| All DB status writes via webhooks only | Client-side confirmPayment() cannot be trusted; webhook is authoritative | Enforced — HandleStripeWebhookJob is sole writer |
+| has_webhook_secret bool pattern | Raw encrypted value must never reach frontend | Implemented in Phase 6 — boolean only in Inertia response |
+| Queue driver: sync on shared hosting | HandleStripeWebhookJob is a fast DB write — no reason to defer on shared hosting | Documented in CLAUDE.md deployment section |
 
 ## Evolution
 
@@ -128,4 +159,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-03 — Phase 1 complete*
+*Last updated: 2026-05-13 — Phase 6 complete, Phase 7 next*
