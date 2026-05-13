@@ -13,18 +13,18 @@
 
 ### Brand Management (BRAND)
 
-- [ ] **BRAND-01**: Admin can create a brand (name, logo, primary color, secondary color)
-- [ ] **BRAND-02**: Admin can edit brand details
-- [ ] **BRAND-03**: Admin can list all brands
-- [ ] **BRAND-04**: System detects test vs live Stripe keys and blocks test keys in production
+- [x] **BRAND-01**: Admin can create a brand (name, logo, primary color, secondary color)
+- [x] **BRAND-02**: Admin can edit brand details
+- [x] **BRAND-03**: Admin can list all brands
+- [x] **BRAND-04**: System detects test vs live Stripe keys and blocks test keys in production
 
 ### Stripe Account Management (STRIPE)
 
-- [ ] **STRIPE-01**: Admin can add a Stripe account (publishable key + secret key) and link it to a brand
-- [ ] **STRIPE-02**: Secret key is encrypted at rest using AES-256 (Laravel encrypted cast)
-- [ ] **STRIPE-03**: System validates the key pair against Stripe API on save
-- [ ] **STRIPE-04**: Admin can edit an existing Stripe account's keys
-- [ ] **STRIPE-05**: Admin can deactivate or archive a Stripe account without deleting it
+- [x] **STRIPE-01**: Admin can add a Stripe account (publishable key + secret key) and link it to a brand
+- [x] **STRIPE-02**: Secret key is encrypted at rest using AES-256 (Laravel encrypted cast)
+- [x] **STRIPE-03**: System validates the key pair against Stripe API on save
+- [x] **STRIPE-04**: Admin can edit an existing Stripe account's keys
+- [x] **STRIPE-05**: Admin can deactivate or archive a Stripe account without deleting it
 
 ### Payment Creation (PAY)
 
@@ -39,14 +39,14 @@
 
 ### Client Payment Experience (CLIENT)
 
-- [ ] **CLIENT-01**: Client opens payment page (/pay/{uuid}) without login
-- [ ] **CLIENT-02**: Payment page displays the correct brand's logo and colors
-- [ ] **CLIENT-03**: Stripe Elements form is embedded inline (no redirect to stripe.com)
-- [ ] **CLIENT-04**: Stripe Elements is initialized with the correct brand's publishable key
-- [ ] **CLIENT-05**: System handles 3DS / SCA authentication challenges (requires_action)
-- [ ] **CLIENT-06**: Client sees a success page after payment is confirmed
-- [ ] **CLIENT-07**: Client sees an error/failure page if payment fails
-- [ ] **CLIENT-08**: Payment page is mobile-responsive
+- [x] **CLIENT-01**: Client opens payment page (/pay/{uuid}) without login
+- [x] **CLIENT-02**: Payment page displays the correct brand's logo and colors
+- [x] **CLIENT-03**: Stripe Elements form is embedded inline (no redirect to stripe.com)
+- [x] **CLIENT-04**: Stripe Elements is initialized with the correct brand's publishable key
+- [x] **CLIENT-05**: System handles 3DS / SCA authentication challenges (requires_action)
+- [x] **CLIENT-06**: Client sees a success page after payment is confirmed
+- [x] **CLIENT-07**: Client sees an error/failure page if payment fails
+- [x] **CLIENT-08**: Payment page is mobile-responsive
 
 ### Webhooks & Status Sync (WEBHOOK)
 
@@ -71,10 +71,10 @@
 
 ### Security (SEC)
 
-- [ ] **SEC-01**: Stripe secret keys and webhook secrets are encrypted at rest (AES-256 via Laravel encrypted cast)
+- [x] **SEC-01**: Stripe secret keys and webhook secrets are encrypted at rest (AES-256 via Laravel encrypted cast)
 - [x] **SEC-02**: Payment amount is read exclusively from the server-side Payment record — no client input accepted for amount
 - [x] **SEC-03**: Webhook routes are excluded from CSRF middleware; raw body is preserved for signature verification
-- [ ] **SEC-04**: PaymentIntent client_secret is never logged, stored in URLs, or exposed beyond the payment page response
+- [x] **SEC-04**: PaymentIntent client_secret is never logged, stored in URLs, or exposed beyond the payment page response
 
 ---
 
@@ -119,15 +119,15 @@
 | AUTH-04 | Phase 2 | Complete |
 | AUTH-05 | Phase 2 | Complete |
 | AUTH-06 | Phase 2 | Complete |
-| BRAND-01 | Phase 3 | Pending |
-| BRAND-02 | Phase 3 | Pending |
-| BRAND-03 | Phase 3 | Pending |
-| BRAND-04 | Phase 3 | Pending |
-| STRIPE-01 | Phase 3 | Pending |
-| STRIPE-02 | Phase 3 | Pending |
-| STRIPE-03 | Phase 3 | Pending |
-| STRIPE-04 | Phase 3 | Pending |
-| STRIPE-05 | Phase 3 | Pending |
+| BRAND-01 | Phase 3 | Complete |
+| BRAND-02 | Phase 3 | Complete |
+| BRAND-03 | Phase 3 | Complete |
+| BRAND-04 | Phase 3 | Complete |
+| STRIPE-01 | Phase 3 | Complete |
+| STRIPE-02 | Phase 3 | Complete |
+| STRIPE-03 | Phase 3 | Complete |
+| STRIPE-04 | Phase 3 | Complete |
+| STRIPE-05 | Phase 3 | Complete |
 | PAY-01 | Phase 4 | Complete |
 | PAY-02 | Phase 4 | Complete |
 | PAY-03 | Phase 4 | Complete |
@@ -136,14 +136,14 @@
 | PAY-06 | Phase 4 | Complete |
 | PAY-07 | Phase 4 | Complete |
 | PAY-08 | Phase 4 | Complete |
-| CLIENT-01 | Phase 5 | Pending |
-| CLIENT-02 | Phase 5 | Pending |
-| CLIENT-03 | Phase 5 | Pending |
-| CLIENT-04 | Phase 5 | Pending |
-| CLIENT-05 | Phase 5 | Pending |
-| CLIENT-06 | Phase 5 | Pending |
-| CLIENT-07 | Phase 5 | Pending |
-| CLIENT-08 | Phase 5 | Pending |
+| CLIENT-01 | Phase 5 | Complete |
+| CLIENT-02 | Phase 5 | Complete |
+| CLIENT-03 | Phase 5 | Complete |
+| CLIENT-04 | Phase 5 | Complete |
+| CLIENT-05 | Phase 5 | Complete |
+| CLIENT-06 | Phase 5 | Complete |
+| CLIENT-07 | Phase 5 | Complete |
+| CLIENT-08 | Phase 5 | Complete |
 | WEBHOOK-01 | Phase 6 | Complete |
 | WEBHOOK-02 | Phase 6 | Complete |
 | WEBHOOK-03 | Phase 6 | Complete |
@@ -156,7 +156,7 @@
 | DASH-02 | Phase 7 | Pending |
 | DASH-03 | Phase 7 | Pending |
 | DASH-04 | Phase 7 | Pending |
-| SEC-01 | Phase 1 | Pending |
+| SEC-01 | Phase 1 | Complete |
 | SEC-02 | Phase 4 | Complete |
 | SEC-03 | Phase 6 | Complete |
-| SEC-04 | Phase 5 | Pending |
+| SEC-04 | Phase 5 | Complete |
