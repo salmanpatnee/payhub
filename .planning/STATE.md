@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 6 planned 2026-05-12 — 4 plans in 2 waves; ready to execute
+stopped_at: Phase 6 complete 2026-05-12 — verified 5/5; Phase 7 (Notifications + Dashboard) next
 last_updated: "2026-05-12"
 last_activity: 2026-05-12
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 27
-  completed_plans: 21
-  percent: 71
+  completed_plans: 25
+  percent: 86
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-02)
 
 **Core value:** Clients always feel they are paying the same brand they interacted with, regardless of which Stripe account or backend system processes the payment.
-**Current focus:** Phase 6 — Webhooks + Status Sync
+**Current focus:** Phase 7 — Notifications + Dashboard
 
 ## Current Position
 
-Phase: 6 of 7 (Webhooks + Status Sync) — ready to execute
-Plan: 0 of 4 in current phase
-Status: Phase 6 planned — 4 plans (Wave 0: stubs, Wave 1: controller+job, Wave 2: admin UI); Phase 6 execute next
+Phase: 7 of 7 (Notifications + Dashboard) — next
+Plan: 0 of ? in current phase
+Status: Phase 6 complete (verified 5/5) — Phase 7 ready to plan
 Last activity: 2026-05-12
 
-Progress: [███████░░░] 71%
+Progress: [████████░░] 86%
 
 ## Accumulated Context
 
@@ -55,6 +55,13 @@ Recent decisions affecting current work:
 - [Phase 05]: loadStripe() called in onMounted; StripeElements conditionally rendered after stripeLoaded=true (prevents window.Stripe undefined error)
 - [Phase 05]: getComputedStyle for --brand-primary must be called after layout root mounts (not in setup()); computed reads after mount resolves timing
 - [Phase 05]: Mockery-based StripeClient stub pattern used in tests — $this->app->bind(StripeClient::class, fn() => $mockService)
+- [Phase 06]: fakeStripeSignature() uses hash_hmac sha256 with t=,v1= format matching Stripe constructEvent requirement
+- [Phase 06]: phpunit.xml APP_BASE_PATH corrected to salmanabdul.ghani user path (pre-existing path mismatch fixed)
+- [Phase 06]: HTTP_STRIPE_SIGNATURE server var used in tests (not withHeaders()) — Laravel call() bypasses defaultHeaders; raw body must be preserved for Webhook::constructEvent()
+- [Phase 06]: HandleStripeWebhookJob stub created with typed constructor args — Wave 2 (06-02) implements handle()
+- [Phase 06]: eventData['id'] used for PI lookup in HandleStripeWebhookJob — controller passes toArray() of flat PaymentIntent, not nested wrapper
+- [Phase 06]: has_webhook_secret (bool) pattern — raw encrypted value never in Inertia response; webhook_secret excluded from fill() (T-06-03, T-06-11)
+- [Phase 06]: blank-means-preserve pattern applied to webhook_secret in update() — same as secret_key (D-04)
 
 ### Pending Todos
 
@@ -79,5 +86,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-12
-Stopped at: Phase 6 planned — 4 plans verified (WEBHOOK-01..06, SEC-03 covered); CSRF exclusion via preventRequestForgery() not VerifyCsrfToken (L13); custom StripeWebhookController; ready to execute
-Resume file: .planning/phases/06-webhooks-status-sync/06-00-PLAN.md
+Stopped at: Phase 6 — 06-03 complete (webhook_secret edit UI + D-03/D-04 GREEN); all 4 Phase 6 plans complete
+Resume file: None (Phase 6 complete — Phase 7 next)

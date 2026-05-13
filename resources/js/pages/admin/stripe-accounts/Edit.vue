@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Check, CheckCircle2, Loader2, XCircle, Zap } from 'lucide-vue-next';
+import { ArrowLeft, Check, CheckCircle2, Copy, Loader2, XCircle, Zap } from 'lucide-vue-next';
 import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,6 +20,8 @@ type StripeAccountProp = {
     account_name: string;
     publishable_key: string;
     is_active: boolean;
+    has_webhook_secret: boolean;        // boolean — never the raw secret value
+    webhook_endpoint_url: string;       // assembled server-side: config('app.url') + '/webhook/stripe/' + id
 };
 
 defineOptions({
@@ -38,10 +40,28 @@ const form = useForm({
     account_name:    props.stripeAccount.account_name,
     publishable_key: props.stripeAccount.publishable_key,
     secret_key:      '',
+    webhook_secret:  '',   // blank = preserve existing (D-04)
 });
 
 const testStatus = ref<'idle' | 'testing' | 'ok' | 'fail'>('idle');
 const testMessage = ref('');
+
+const copiedEndpoint = ref(false);
+
+async function copyEndpointUrl(): Promise<void> {
+    try {
+        await navigator.clipboard.writeText(props.stripeAccount.webhook_endpoint_url);
+    } catch {
+        const el = document.createElement('textarea');
+        el.value = props.stripeAccount.webhook_endpoint_url;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+    }
+    copiedEndpoint.value = true;
+    setTimeout(() => { copiedEndpoint.value = false; }, 2000);
+}
 
 function testConnection() {
     testStatus.value = 'testing';
@@ -49,7 +69,9 @@ function testConnection() {
     const url = form.secret_key
         ? '/admin/stripe-accounts/test-connection'
         : `/admin/stripe-accounts/${props.stripeAccount.id}/test-connection`;
-    const data = form.secret_key ? { secret_key: form.secret_key, publishable_key: form.publishable_key } : {};
+    const data = (form.secret_key || form.publishable_key !== props.stripeAccount.publishable_key)
+        ? { secret_key: form.secret_key || undefined, publishable_key: form.publishable_key }
+        : {};
     router.post(url, data, {
         preserveState: true,
         preserveScroll: true,
@@ -134,6 +156,44 @@ function submit() {
                             Leave blank to keep the current key. Paste a new value to replace it.
                         </p>
                         <InputError :message="form.errors.secret_key" />
+                    </div>
+
+                    <!-- Webhook Endpoint URL (read-only + copy) — D-02 -->
+                    <div class="grid gap-2">
+                        <Label>Webhook Endpoint URL</Label>
+                        <div class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3">
+                            <span class="flex-1 truncate select-all font-mono text-sm">{{ stripeAccount.webhook_endpoint_url }}</span>
+                            <Button type="button" variant="outline" size="sm" @click="copyEndpointUrl">
+                                <Check v-if="copiedEndpoint" class="mr-1 size-4 text-green-600" />
+                                <Copy v-else class="mr-1 size-4" />
+                                {{ copiedEndpoint ? 'Copied!' : 'Copy' }}
+                            </Button>
+                        </div>
+                        <p class="text-xs text-muted-foreground">
+                            Paste this URL into the Stripe dashboard when creating a webhook endpoint.
+                        </p>
+                    </div>
+
+                    <!-- Webhook signing secret (masked, blank = preserve) — D-03 + D-04 -->
+                    <div class="grid gap-2">
+                        <Label for="webhook_secret">Webhook signing secret</Label>
+                        <div
+                            v-if="stripeAccount.has_webhook_secret"
+                            class="flex h-9 items-center rounded-md border border-input bg-muted/30 px-3 font-mono text-sm tracking-widest text-muted-foreground"
+                        >
+                            ••••••••••••••••••••
+                        </div>
+                        <Input
+                            id="webhook_secret"
+                            v-model="form.webhook_secret"
+                            type="password"
+                            placeholder="Paste new webhook secret to replace"
+                            autocomplete="new-password"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            Leave blank to keep the current secret. Paste a new value (starts with whsec_) to replace it.
+                        </p>
+                        <InputError :message="form.errors.webhook_secret" />
                     </div>
 
                     <div

@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Brand + Stripe Account Management** - Brand CRUD, StripeAccount CRUD, key encryption, per-account StripeService, test/live key enforcement *(completed 2026-05-05)*
 - [x] **Phase 4: Payment Creation + Link Generation** - Payment form, UUID link generation, currency selection, payment history views *(completed 2026-05-09)*
 - [x] **Phase 5: Client Payment Page** - Branded unauthenticated payment page, Stripe Elements, 3DS handling, success/failure pages *(completed 2026-05-09)*
-- [ ] **Phase 6: Webhooks + Status Sync** - Per-account webhook endpoints, signature verification, queued fulfillment, authoritative status writes
+- [x] **Phase 6: Webhooks + Status Sync** - Per-account webhook endpoints, signature verification, queued fulfillment, authoritative status writes *(completed 2026-05-12)*
 - [ ] **Phase 7: Notifications + Dashboard** - Admin email notification, unified dashboard, filtering, user payment history
 
 ## Phase Details
@@ -122,10 +122,10 @@ Plans:
 **Plans**: 4 plans (Wave 0: test stubs, Wave 1: controller + job, Wave 2: admin UI)
 
 Plans:
-- [ ] 06-00-PLAN.md — Wave 0: StripeWebhookTest.php stubs (11 test cases, all RED) + fakeStripeSignature() helper
-- [ ] 06-01-PLAN.md — Wave 1a: StripeWebhookController + webhook route + CSRF exclusion (bootstrap/app.php)
-- [ ] 06-02-PLAN.md — Wave 1b: HandleStripeWebhookJob (status DB writes, idempotency gate 2)
-- [ ] 06-03-PLAN.md — Wave 2: StripeAccountController edit/update + UpdateStripeAccountRequest + Edit.vue webhook_secret fields
+- [x] 06-00-PLAN.md — Wave 0: StripeWebhookTest.php stubs (11 test cases, all RED) + fakeStripeSignature() helper
+- [x] 06-01-PLAN.md — Wave 1a: StripeWebhookController + webhook route + CSRF exclusion (bootstrap/app.php)
+- [x] 06-02-PLAN.md — Wave 1b: HandleStripeWebhookJob (status DB writes, idempotency gate 2)
+- [x] 06-03-PLAN.md — Wave 2: StripeAccountController edit/update + UpdateStripeAccountRequest + Edit.vue webhook_secret fields
 
 ### Phase 7: Notifications + Dashboard
 **Goal**: Admin receives an email notification when a payment succeeds, and can view a unified dashboard of all payments across all brands with filtering — while each User can view their own payment history.
@@ -151,5 +151,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Brand + Stripe Account Management | 5/5 | Complete | 2026-05-05 |
 | 4. Payment Creation + Link Generation | 3/3 | Complete | 2026-05-09 |
 | 5. Client Payment Page | 6/6 | Complete | 2026-05-09 |
-| 6. Webhooks + Status Sync | 0/4 | Ready to execute | - |
+| 6. Webhooks + Status Sync | 4/4 | Executing | - |
 | 7. Notifications + Dashboard | 0/TBD | Not started | - |
