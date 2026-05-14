@@ -39,12 +39,25 @@
       "Bash(curl *)",
       "Bash(python3 scripts/mcp-client.py call --url \"http://localhost:8808\" --tool \"browser_navigate\" --params '{\"url\":\"http://payhub.test/pay/74465715-05cb-41b0-a2f0-64772c4d0f69\"}')",
       "Bash(python3 -c ' *)",
-      "Skill(update-config)"
+      "Skill(update-config)",
+      "PowerShell(php artisan test --compact 2>&1 | Select-Object -Last 25)",
+      "PowerShell($v = Get-Item \"vendor\" -Force; Write-Output \"Exists: $\\($v.Exists\\)\"; Write-Output \"Attributes: $\\($v.Attributes\\)\"; Write-Output \"FullName: $\\($v.FullName\\)\"; $f = Get-Item \"vendor\\\\autoload.php\" -Force -ErrorAction SilentlyContinue; Write-Output \"autoload exists: $\\($f -ne $null\\)\")",
+      "Bash(grep -c 'Request $request' app/Http/Controllers/PaymentController.php)",
+      "Bash(php --version)",
+      "Read(//c/Users/salmanabdul.ghani/AppData/Local/Programs/Herd/**)",
+      "Bash(composer install *)",
+      "Bash(./vendor/bin/pest --compact)",
+      "Bash(vendor/bin/pest --compact)",
+      "Bash(vendor/bin/pest --compact --filter=\"NotificationTest|PaymentDashboardTest\")",
+      "Bash(Read C:\\\\Users\\\\SALMAN~1.GHA\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-salmanabdul-ghani-Herd-payhub\\\\f71aed45-6a95-4908-9cd1-e383ce38bfdd\\\\tasks\\\\bf1plumnl.output)",
+      "mcp__plugin_stripe_stripe__list_payment_intents",
+      "mcp__plugin_stripe_stripe__get_stripe_account_info",
+      "Skill(frontend-design)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "laravel-boost"
   ],
-  "showClearContextOnPlanAccept": true,
-  "enableAllProjectMcpServers": true
+  "showClearContextOnPlanAccept": true
 }
