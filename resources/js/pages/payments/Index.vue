@@ -1,9 +1,19 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { ref } from 'vue';
-import { Check, Copy, Eye, Plus } from 'lucide-vue-next';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, reactive, ref, watch } from 'vue';
+import { Check, Copy, Eye, Plus, X } from 'lucide-vue-next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { route } from 'ziggy-js';
 
 type PaymentRow = {
     id: number;
@@ -18,7 +28,21 @@ type PaymentRow = {
     client_name: string;
 };
 
-defineProps<{ payments: PaymentRow[] }>();
+type FilterState = {
+    brand_id: string;
+    stripe_account_id: string;
+    status: string;
+    from: string;
+    to: string;
+};
+
+const props = defineProps<{
+    payments: PaymentRow[];
+    filters: FilterState;
+    brands: { id: number; name: string }[];
+    accounts: { id: number; account_name: string }[];
+    isAdmin: boolean;
+}>();
 
 const copiedUuid = ref<string | null>(null);
 
@@ -29,6 +53,32 @@ defineOptions({
         ],
     },
 });
+
+const filters = reactive<FilterState>({ ...props.filters });
+
+const hasActiveFilters = computed(() =>
+    Object.values(filters).some((v) => v !== '')
+);
+
+watch(
+    filters,
+    (newFilters) => {
+        router.get(
+            route('payments.index'),
+            Object.fromEntries(Object.entries(newFilters).filter(([, v]) => v !== '')),
+            { preserveState: true, replace: true },
+        );
+    },
+    { deep: true },
+);
+
+function clearFilters(): void {
+    filters.brand_id = '';
+    filters.stripe_account_id = '';
+    filters.status = '';
+    filters.from = '';
+    filters.to = '';
+}
 
 function formatAmount(cents: number, currency: string): string {
     return new Intl.NumberFormat(
@@ -74,6 +124,91 @@ async function copyLink(uuid: string): Promise<void> {
                     New payment
                 </Link>
             </Button>
+        </div>
+
+        <!-- Filter bar — appears between page header and table card -->
+        <div class="flex items-center gap-3 flex-wrap mb-4">
+            <!-- Brand filter — admin only (D-05) -->
+            <div v-if="isAdmin" class="flex flex-col gap-1">
+                <Label class="text-xs text-muted-foreground">Brand</Label>
+                <Select v-model="filters.brand_id">
+                    <SelectTrigger class="w-40">
+                        <SelectValue placeholder="All brands" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="">All brands</SelectItem>
+                        <SelectItem
+                            v-for="brand in brands"
+                            :key="brand.id"
+                            :value="String(brand.id)"
+                        >
+                            {{ brand.name }}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <!-- Stripe account filter — admin only (D-05) -->
+            <div v-if="isAdmin" class="flex flex-col gap-1">
+                <Label class="text-xs text-muted-foreground">Account</Label>
+                <Select v-model="filters.stripe_account_id">
+                    <SelectTrigger class="w-44">
+                        <SelectValue placeholder="All accounts" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="">All accounts</SelectItem>
+                        <SelectItem
+                            v-for="account in accounts"
+                            :key="account.id"
+                            :value="String(account.id)"
+                        >
+                            {{ account.account_name }}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <!-- Status filter — all roles -->
+            <div class="flex flex-col gap-1">
+                <Label class="text-xs text-muted-foreground">Status</Label>
+                <Select v-model="filters.status">
+                    <SelectTrigger class="w-36">
+                        <SelectValue placeholder="All statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="">All statuses</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="failed">Failed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <!-- From date — all roles -->
+            <div class="flex flex-col gap-1">
+                <Label class="text-xs text-muted-foreground">From</Label>
+                <Input v-model="filters.from" type="date" class="w-36" />
+            </div>
+
+            <!-- To date — all roles -->
+            <div class="flex flex-col gap-1">
+                <Label class="text-xs text-muted-foreground">To</Label>
+                <Input v-model="filters.to" type="date" class="w-36" />
+            </div>
+
+            <!-- Clear filters — visible only when any filter active -->
+            <div v-if="hasActiveFilters" class="flex flex-col justify-end">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Clear all filters"
+                    @click="clearFilters"
+                >
+                    <X class="size-4 mr-1" />
+                    Clear filters
+                </Button>
+            </div>
         </div>
 
         <div class="rounded-lg border border-border bg-card overflow-hidden">
@@ -125,7 +260,13 @@ async function copyLink(uuid: string): Promise<void> {
                     </tr>
                     <tr v-if="payments.length === 0">
                         <td colspan="8" class="px-4 py-12 text-center text-muted-foreground text-sm">
-                            No payments yet. <Link href="/payments/create" class="underline">Create one.</Link>
+                            <template v-if="hasActiveFilters">
+                                No payments match your filters.
+                                <button class="underline" @click="clearFilters">Clear filters to see all.</button>
+                            </template>
+                            <template v-else>
+                                No payments yet. <Link href="/payments/create" class="underline">Create one.</Link>
+                            </template>
                         </td>
                     </tr>
                 </tbody>
