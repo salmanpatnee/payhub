@@ -736,7 +736,7 @@ it('user only sees own payments regardless of filter', function () {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Amount formatting in email subject line**
    - What we know: D-03 specifies "amount + currency (formatted)" in the email body and implicitly in the subject
