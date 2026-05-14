@@ -13,7 +13,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { route } from 'ziggy-js';
+import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentController';
 
 type PaymentRow = {
     id: number;
@@ -54,18 +54,33 @@ defineOptions({
     },
 });
 
-const filters = reactive<FilterState>({ ...props.filters });
+const UNSET = '__all';
+
+const filters = reactive<FilterState>({
+    brand_id: props.filters.brand_id || UNSET,
+    stripe_account_id: props.filters.stripe_account_id || UNSET,
+    status: props.filters.status || UNSET,
+    from: props.filters.from || '',
+    to: props.filters.to || '',
+});
 
 const hasActiveFilters = computed(() =>
-    Object.values(filters).some((v) => v !== '')
+    filters.brand_id !== UNSET ||
+    filters.stripe_account_id !== UNSET ||
+    filters.status !== UNSET ||
+    filters.from !== '' ||
+    filters.to !== ''
 );
 
 watch(
     filters,
     (newFilters) => {
+        const activeFilters = Object.fromEntries(
+            Object.entries(newFilters).filter(([, v]) => v !== '' && v !== UNSET)
+        );
         router.get(
-            route('payments.index'),
-            Object.fromEntries(Object.entries(newFilters).filter(([, v]) => v !== '')),
+            paymentsIndex.url({ query: activeFilters }),
+            {},
             { preserveState: true, replace: true },
         );
     },
@@ -73,9 +88,9 @@ watch(
 );
 
 function clearFilters(): void {
-    filters.brand_id = '';
-    filters.stripe_account_id = '';
-    filters.status = '';
+    filters.brand_id = UNSET;
+    filters.stripe_account_id = UNSET;
+    filters.status = UNSET;
     filters.from = '';
     filters.to = '';
 }
@@ -136,7 +151,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <SelectValue placeholder="All brands" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">All brands</SelectItem>
+                        <SelectItem value="__all">All brands</SelectItem>
                         <SelectItem
                             v-for="brand in brands"
                             :key="brand.id"
@@ -156,7 +171,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <SelectValue placeholder="All accounts" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">All accounts</SelectItem>
+                        <SelectItem value="__all">All accounts</SelectItem>
                         <SelectItem
                             v-for="account in accounts"
                             :key="account.id"
@@ -176,7 +191,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <SelectValue placeholder="All statuses" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">All statuses</SelectItem>
+                        <SelectItem value="__all">All statuses</SelectItem>
                         <SelectItem value="pending">Pending</SelectItem>
                         <SelectItem value="completed">Completed</SelectItem>
                         <SelectItem value="failed">Failed</SelectItem>
