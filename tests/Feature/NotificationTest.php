@@ -25,19 +25,21 @@ it('payment_intent.succeeded dispatches SendPaymentNotification job', function (
     Queue::fake();
 
     $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_test123']);
-    Payment::factory()->create([
+    $payment = Payment::factory()->create([
         'status' => 'pending',
         'stripe_payment_intent_id' => 'pi_notify_test',
         'stripe_account_id' => $account->id,
     ]);
 
-    $payload = json_encode([
-        'type' => 'payment_intent.succeeded',
-        'data' => ['object' => ['id' => 'pi_notify_test']],
-    ]);
-
-    stripePost("/webhook/stripe/{$account->id}", $payload, fakeStripeSignature($payload, 'whsec_test123'))
-        ->assertStatus(200);
+    // Run HandleStripeWebhookJob synchronously to test the dispatch chain.
+    // Queue::fake() intercepts HandleStripeWebhookJob from the HTTP layer, so we test
+    // the job's handle() method directly — this is the correct pattern for two-job chains.
+    $job = new \App\Jobs\HandleStripeWebhookJob(
+        $account->id,
+        'payment_intent.succeeded',
+        ['id' => 'pi_notify_test'],
+    );
+    $job->handle();
 
     Queue::assertPushed(SendPaymentNotification::class);
 });

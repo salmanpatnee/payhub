@@ -37,6 +37,18 @@ class HandleStripeWebhookJob implements ShouldQueue
                 'payment_intent.payment_failed' => ['status' => 'failed'],
                 default => [],
             });
+
+        // Dispatch email notification only for succeeded events where the DB write confirmed
+        // new state (idempotency: $updated === 0 means already terminal, skip notification).
+        if ($updated > 0 && $this->eventType === 'payment_intent.succeeded') {
+            $payment = Payment::with(['brand', 'stripeAccount'])
+                ->where('stripe_payment_intent_id', $piId)
+                ->first();
+
+            if ($payment) {
+                SendPaymentNotification::dispatch($payment);
+            }
+        }
     }
 
     public function failed(?\Throwable $exception): void
