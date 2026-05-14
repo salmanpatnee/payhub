@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Payment Creation + Link Generation** - Payment form, UUID link generation, currency selection, payment history views *(completed 2026-05-09)*
 - [x] **Phase 5: Client Payment Page** - Branded unauthenticated payment page, Stripe Elements, 3DS handling, success/failure pages *(completed 2026-05-09)*
 - [x] **Phase 6: Webhooks + Status Sync** - Per-account webhook endpoints, signature verification, queued fulfillment, authoritative status writes *(completed 2026-05-12)*
-- [ ] **Phase 7: Notifications + Dashboard** - Admin email notification, unified dashboard, filtering, user payment history
+- [x] **Phase 7: Notifications + Dashboard** - Admin email notification, unified dashboard, filtering, user payment history *(completed 2026-05-14)*
 
 ## Phase Details
 
@@ -139,10 +139,10 @@ Plans:
 **Plans**: 4 plans (Wave 0: test stubs, Wave 1: backend notification chain + controller filters, Wave 2: frontend filter bar)
 
 Plans:
-- [ ] 07-00-PLAN.md — Wave 0: NotificationTest.php + PaymentDashboardTest.php stubs (13 test cases, all RED)
-- [ ] 07-01-PLAN.md — Wave 1a: SendPaymentNotification job + PaymentSucceeded mailable + email template + HandleStripeWebhookJob dispatch hook
-- [ ] 07-02-PLAN.md — Wave 1b: PaymentController::index() filter scopes + filters/brands/accounts/isAdmin Inertia props
-- [ ] 07-03-PLAN.md — Wave 2: payments/Index.vue filter bar with auto-submit + checkpoint
+- [x] 07-00-PLAN.md — Wave 0: NotificationTest.php + PaymentDashboardTest.php stubs (13 test cases, all RED)
+- [x] 07-01-PLAN.md — Wave 1a: SendPaymentNotification job + PaymentSucceeded mailable + email template + HandleStripeWebhookJob dispatch hook
+- [x] 07-02-PLAN.md — Wave 1b: PaymentController::index() filter scopes + filters/brands/accounts/isAdmin Inertia props
+- [x] 07-03-PLAN.md — Wave 2: payments/Index.vue filter bar with auto-submit + checkpoint
 
 **UI hint**: yes
 
@@ -159,4 +159,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Payment Creation + Link Generation | 3/3 | Complete | 2026-05-09 |
 | 5. Client Payment Page | 6/6 | Complete | 2026-05-09 |
 | 6. Webhooks + Status Sync | 4/4 | Complete | 2026-05-13 |
-| 7. Notifications + Dashboard | 0/4 | Planned — ready to execute | - |
+| 7. Notifications + Dashboard | 4/4 | Complete | 2026-05-14 |
