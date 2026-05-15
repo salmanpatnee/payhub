@@ -87,6 +87,14 @@ class StripeAccountController extends Controller
             ->with('success', 'Account deactivated.');
     }
 
+    public function activate(StripeAccount $stripeAccount): RedirectResponse
+    {
+        $stripeAccount->update(['is_active' => true]);
+
+        return redirect()->route('admin.stripe-accounts.index')
+            ->with('success', 'Account activated.');
+    }
+
     public function destroy(StripeAccount $stripeAccount): RedirectResponse
     {
         if ($stripeAccount->payments()->exists()) {

@@ -6,12 +6,14 @@ use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StripeWebhookController;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
-use Laravel\Fortify\Features;
 
-Route::inertia('/', 'Welcome', [
-    'canRegister' => Features::enabled(Features::registration()),
-])->name('home');
+Route::get('/', function () {
+    return Auth::check()
+        ? redirect()->route('payments.index')
+        : redirect()->route('login');
+})->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
@@ -36,6 +38,11 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'stripe-accounts/{stripe_account}/deactivate',
             [StripeAccountController::class, 'deactivate']
         )->name('stripe-accounts.deactivate');
+
+        Route::patch(
+            'stripe-accounts/{stripe_account}/activate',
+            [StripeAccountController::class, 'activate']
+        )->name('stripe-accounts.activate');
 
         Route::post(
             'stripe-accounts/test-connection',

@@ -59,21 +59,21 @@ function executeDelete() {
     <div class="p-6 space-y-6">
         <!-- Page header -->
         <div class="flex items-center justify-between">
-            <h1 class="text-xl font-semibold">Team Members</h1>
+            <h1 class="text-2xl font-semibold tracking-tight">Team Members</h1>
             <Button as-child>
                 <Link href="/admin/users/create">Add user</Link>
             </Button>
         </div>
 
         <!-- User table -->
-        <div class="rounded-lg border border-border bg-card overflow-hidden">
+        <div class="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
             <table class="w-full text-sm">
                 <thead>
-                    <tr class="bg-muted/40 border-b border-border">
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</th>
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Email</th>
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Role</th>
-                        <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actions</th>
+                    <tr class="bg-[#F7F5F2] border-b border-border">
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Name</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Email</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Role</th>
+                        <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -81,16 +81,16 @@ function executeDelete() {
                         <tr
                             v-for="user in users"
                             :key="user.id"
-                            class="border-b border-border last:border-0 hover:bg-muted/50 transition-colors"
+                            class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                         >
-                            <td class="px-4 py-3">{{ user.name }}</td>
-                            <td class="px-4 py-3 text-muted-foreground">{{ user.email }}</td>
-                            <td class="px-4 py-3">
+                            <td class="px-5 py-3.5">{{ user.name }}</td>
+                            <td class="px-5 py-3.5 text-muted-foreground">{{ user.email }}</td>
+                            <td class="px-5 py-3.5">
                                 <Badge :variant="user.roles.includes('admin') ? 'secondary' : 'outline'">
                                     {{ user.roles[0] ?? 'user' }}
                                 </Badge>
                             </td>
-                            <td class="px-4 py-3 text-right">
+                            <td class="px-5 py-3.5 text-right">
                                 <div class="flex items-center justify-end gap-1">
                                     <Button variant="ghost" size="icon" as-child>
                                         <Link :href="`/admin/users/${user.id}/edit`" :aria-label="`Edit ${user.name}`">
@@ -112,7 +112,7 @@ function executeDelete() {
                     </template>
                     <template v-else>
                         <tr>
-                            <td colspan="4" class="px-4 py-12 text-center text-muted-foreground text-sm">
+                            <td colspan="4" class="px-5 py-16 text-center text-muted-foreground text-sm">
                                 No team members yet. Add the first user above.
                             </td>
                         </tr>

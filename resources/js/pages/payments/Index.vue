@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
-import { Check, Copy, Eye, Plus, X } from 'lucide-vue-next';
-import { Badge } from '@/components/ui/badge';
+import { Check, Copy, Eye, Filter, Plus, Search, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
+import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -30,17 +30,26 @@ type PaymentRow = {
 
 type FilterState = {
     brand_id: string;
-    stripe_account_id: string;
     status: string;
     from: string;
     to: string;
+    search: string;
+};
+
+type PaginatedPayments = {
+    data: PaymentRow[];
+    current_page: number;
+    last_page: number;
+    total: number;
+    per_page: number;
+    from: number | null;
+    to: number | null;
 };
 
 const props = defineProps<{
-    payments: PaymentRow[];
+    payments: PaginatedPayments;
     filters: FilterState;
     brands: { id: number; name: string }[];
-    accounts: { id: number; account_name: string }[];
     isAdmin: boolean;
 }>();
 
@@ -58,19 +67,43 @@ const UNSET = '__all';
 
 const filters = reactive<FilterState>({
     brand_id: props.filters.brand_id || UNSET,
-    stripe_account_id: props.filters.stripe_account_id || UNSET,
     status: props.filters.status || UNSET,
     from: props.filters.from || '',
     to: props.filters.to || '',
+    search: props.filters.search || '',
 });
 
 const hasActiveFilters = computed(() =>
     filters.brand_id !== UNSET ||
-    filters.stripe_account_id !== UNSET ||
     filters.status !== UNSET ||
     filters.from !== '' ||
-    filters.to !== ''
+    filters.to !== '' ||
+    filters.search !== ''
 );
+
+const activeFilterCount = computed(() =>
+    [
+        filters.brand_id !== UNSET,
+        filters.status !== UNSET,
+        filters.from !== '',
+        filters.to !== '',
+        filters.search !== '',
+    ].filter(Boolean).length
+);
+
+const pageItems = computed((): (number | '...')[] => {
+    const current = props.payments.current_page;
+    const last = props.payments.last_page;
+    if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+    const items: (number | '...')[] = [1];
+    if (current > 3) items.push('...');
+    const start = Math.max(2, current - 1);
+    const end = Math.min(last - 1, current + 1);
+    for (let i = start; i <= end; i++) items.push(i);
+    if (current < last - 2) items.push('...');
+    items.push(last);
+    return items;
+});
 
 watch(
     filters,
@@ -89,10 +122,10 @@ watch(
 
 function clearFilters(): void {
     filters.brand_id = UNSET;
-    filters.stripe_account_id = UNSET;
     filters.status = UNSET;
     filters.from = '';
     filters.to = '';
+    filters.search = '';
 }
 
 function formatAmount(cents: number, currency: string): string {
@@ -102,12 +135,24 @@ function formatAmount(cents: number, currency: string): string {
     ).format(cents / 100);
 }
 
-function statusClass(status: string): string {
-    if (status === 'completed')  return 'border-green-500 bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400';
-    if (status === 'pending')    return 'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400';
-    if (status === 'failed')     return 'border-red-500 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400';
-    if (status === 'cancelled')  return 'border-gray-400 bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400';
-    return '';
+
+function goToPage(page: number): void {
+    const activeFilters = Object.fromEntries(
+        Object.entries(filters).filter(([, v]) => v !== '' && v !== UNSET)
+    );
+    router.get(
+        paymentsIndex.url({ query: { ...activeFilters, page } }),
+        {},
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function formatDate(iso: string): string {
+    const d = new Date(iso);
+    const day = d.getDate();
+    const suffix = [, 'st', 'nd', 'rd'][day % 100 > 10 && day % 100 < 14 ? 0 : day % 10] ?? 'th';
+    const month = d.toLocaleDateString('en-GB', { month: 'short' });
+    return `${day}${suffix} ${month} ${d.getFullYear()}`;
 }
 
 async function copyLink(uuid: string): Promise<void> {
@@ -132,7 +177,7 @@ async function copyLink(uuid: string): Promise<void> {
 
     <div class="p-6 space-y-4">
         <div class="flex items-center justify-between">
-            <h1 class="text-xl font-semibold">Payments</h1>
+            <h1 class="text-2xl font-semibold tracking-tight">Payments</h1>
             <Button as-child>
                 <Link href="/payments/create">
                     <Plus class="size-4 mr-1" />
@@ -141,125 +186,119 @@ async function copyLink(uuid: string): Promise<void> {
             </Button>
         </div>
 
-        <!-- Filter bar — appears between page header and table card -->
-        <div class="flex items-center gap-3 flex-wrap mb-4">
-            <!-- Brand filter — admin only (D-05) -->
-            <div v-if="isAdmin" class="flex flex-col gap-1">
-                <Label class="text-xs text-muted-foreground">Brand</Label>
-                <Select v-model="filters.brand_id">
-                    <SelectTrigger class="w-40">
-                        <SelectValue placeholder="All brands" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="__all">All brands</SelectItem>
-                        <SelectItem
-                            v-for="brand in brands"
-                            :key="brand.id"
-                            :value="String(brand.id)"
-                        >
-                            {{ brand.name }}
-                        </SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-
-            <!-- Stripe account filter — admin only (D-05) -->
-            <div v-if="isAdmin" class="flex flex-col gap-1">
-                <Label class="text-xs text-muted-foreground">Account</Label>
-                <Select v-model="filters.stripe_account_id">
-                    <SelectTrigger class="w-44">
-                        <SelectValue placeholder="All accounts" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="__all">All accounts</SelectItem>
-                        <SelectItem
-                            v-for="account in accounts"
-                            :key="account.id"
-                            :value="String(account.id)"
-                        >
-                            {{ account.account_name }}
-                        </SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-
-            <!-- Status filter — all roles -->
-            <div class="flex flex-col gap-1">
-                <Label class="text-xs text-muted-foreground">Status</Label>
-                <Select v-model="filters.status">
-                    <SelectTrigger class="w-36">
-                        <SelectValue placeholder="All statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="__all">All statuses</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="failed">Failed</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-
-            <!-- From date — all roles -->
-            <div class="flex flex-col gap-1">
-                <Label class="text-xs text-muted-foreground">From</Label>
-                <Input v-model="filters.from" type="date" class="w-36" />
-            </div>
-
-            <!-- To date — all roles -->
-            <div class="flex flex-col gap-1">
-                <Label class="text-xs text-muted-foreground">To</Label>
-                <Input v-model="filters.to" type="date" class="w-36" />
-            </div>
-
-            <!-- Clear filters — visible only when any filter active -->
-            <div v-if="hasActiveFilters" class="flex flex-col justify-end">
+        <!-- Filter bar -->
+        <div class="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-3 border-b border-border/60 bg-[#F7F5F2]">
+                <div class="flex items-center gap-2">
+                    <Filter class="size-3.5 text-muted-foreground" />
+                    <span class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Filters</span>
+                    <span
+                        v-if="hasActiveFilters"
+                        class="inline-flex items-center justify-center size-4 rounded-full bg-foreground text-background text-[10px] font-bold leading-none"
+                    >{{ activeFilterCount }}</span>
+                </div>
                 <Button
+                    v-if="hasActiveFilters"
                     variant="ghost"
                     size="sm"
+                    class="h-7 px-2 text-xs gap-1"
                     aria-label="Clear all filters"
                     @click="clearFilters"
                 >
-                    <X class="size-4 mr-1" />
-                    Clear filters
+                    <X class="size-3" />
+                    Clear all
                 </Button>
+            </div>
+
+            <div class="flex gap-4 p-4">
+                <div class="flex flex-col gap-1.5 flex-[2] min-w-0">
+                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Search</Label>
+                    <div class="relative">
+                        <Search class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            v-model="filters.search"
+                            type="search"
+                            placeholder="Name, email or reference…"
+                            class="pl-8"
+                        />
+                    </div>
+                </div>
+
+                <div v-if="isAdmin" class="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</Label>
+                    <Select v-model="filters.brand_id">
+                        <SelectTrigger class="w-full">
+                            <SelectValue placeholder="All brands" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All brands</SelectItem>
+                            <SelectItem
+                                v-for="brand in brands"
+                                :key="brand.id"
+                                :value="String(brand.id)"
+                            >
+                                {{ brand.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</Label>
+                    <Select v-model="filters.status">
+                        <SelectTrigger class="w-full">
+                            <SelectValue placeholder="All statuses" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All statuses</SelectItem>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="failed">Failed</SelectItem>
+                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">From</Label>
+                    <Input v-model="filters.from" type="date" class="w-full" />
+                </div>
+
+                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">To</Label>
+                    <Input v-model="filters.to" type="date" class="w-full" />
+                </div>
             </div>
         </div>
 
-        <div class="rounded-lg border border-border bg-card overflow-hidden">
+        <div class="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
             <table class="w-full text-sm">
                 <thead>
-                    <tr class="bg-muted/40 border-b border-border">
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Client</th>
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Email</th>
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Amount</th>
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Brand</th>
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Account</th>
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</th>
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Created</th>
-                        <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actions</th>
+                    <tr class="bg-[#F7F5F2] border-b border-border">
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
+                        <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr
-                        v-for="payment in payments"
+                        v-for="payment in payments.data"
                         :key="payment.id"
-                        class="border-b border-border last:border-0 hover:bg-muted/50 transition-colors"
+                        class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                     >
-                        <td class="px-4 py-3 font-medium">{{ payment.client_name }}</td>
-                        <td class="px-4 py-3 text-muted-foreground">{{ payment.client_email }}</td>
-                        <td class="px-4 py-3 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
-                        <td class="px-4 py-3">{{ payment.brand_name }}</td>
-                        <td class="px-4 py-3 text-muted-foreground">{{ payment.account_name }}</td>
-                        <td class="px-4 py-3">
-                            <Badge variant="outline" :class="statusClass(payment.status)">
-                                {{ payment.status }}
-                            </Badge>
+                        <td class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
+                        <td class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
+                        <td class="px-5 py-3.5">{{ payment.brand_name }}</td>
+                        <td class="px-5 py-3.5">
+                            <PaymentStatusBadge :status="payment.status" />
                         </td>
-                        <td class="px-4 py-3 text-muted-foreground">
-                            {{ new Date(payment.created_at).toLocaleDateString() }}
+                        <td class="px-5 py-3.5 text-muted-foreground">
+                            {{ formatDate(payment.created_at) }}
                         </td>
-                        <td class="px-4 py-3 text-right">
+                        <td class="px-5 py-3.5 text-right">
                             <div class="flex items-center justify-end gap-1">
                                 <Button variant="ghost" size="sm" as-child title="View payment details">
                                     <Link :href="`/payments/${payment.uuid}`">
@@ -273,8 +312,8 @@ async function copyLink(uuid: string): Promise<void> {
                             </div>
                         </td>
                     </tr>
-                    <tr v-if="payments.length === 0">
-                        <td colspan="8" class="px-4 py-12 text-center text-muted-foreground text-sm">
+                    <tr v-if="payments.data.length === 0">
+                        <td colspan="6" class="px-5 py-16 text-center text-muted-foreground text-sm">
                             <template v-if="hasActiveFilters">
                                 No payments match your filters.
                                 <button class="underline" @click="clearFilters">Clear filters to see all.</button>
@@ -286,6 +325,59 @@ async function copyLink(uuid: string): Promise<void> {
                     </tr>
                 </tbody>
             </table>
+
+            <div v-if="payments.last_page > 1" class="flex items-center justify-center border-t border-border/50 px-5 py-3.5">
+                <!-- Centered page navigation -->
+                <nav class="flex items-center gap-0.5" aria-label="Pagination">
+                    <!-- First & Prev -->
+                    <button
+                        :disabled="payments.current_page === 1"
+                        class="flex h-8 w-7 items-center justify-center rounded text-base leading-none text-muted-foreground transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+                        title="First page"
+                        @click="goToPage(1)"
+                    >«</button>
+                    <button
+                        :disabled="payments.current_page === 1"
+                        class="flex h-8 w-7 items-center justify-center rounded text-base leading-none text-muted-foreground transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+                        title="Previous page"
+                        @click="goToPage(payments.current_page - 1)"
+                    >‹</button>
+
+                    <!-- Numbered pages + ellipsis -->
+                    <div class="mx-1 flex items-center gap-0.5">
+                        <template v-for="(item, i) in pageItems" :key="i">
+                            <span
+                                v-if="item === '...'"
+                                class="flex h-8 w-6 select-none items-end justify-center pb-1 text-[10px] tracking-widest text-muted-foreground/40"
+                            >···</span>
+                            <button
+                                v-else
+                                :class="[
+                                    'relative flex h-8 w-8 items-center justify-center rounded text-xs font-medium tabular-nums transition-all duration-150',
+                                    item === payments.current_page
+                                        ? 'bg-primary text-primary-foreground shadow-sm scale-105'
+                                        : 'text-foreground/60 hover:bg-muted hover:text-foreground',
+                                ]"
+                                @click="goToPage(item as number)"
+                            >{{ item }}</button>
+                        </template>
+                    </div>
+
+                    <!-- Next & Last -->
+                    <button
+                        :disabled="payments.current_page === payments.last_page"
+                        class="flex h-8 w-7 items-center justify-center rounded text-base leading-none text-muted-foreground transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+                        title="Next page"
+                        @click="goToPage(payments.current_page + 1)"
+                    >›</button>
+                    <button
+                        :disabled="payments.current_page === payments.last_page"
+                        class="flex h-8 w-7 items-center justify-center rounded text-base leading-none text-muted-foreground transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+                        title="Last page"
+                        @click="goToPage(payments.last_page)"
+                    >»</button>
+                </nav>
+            </div>
         </div>
     </div>
 </template>

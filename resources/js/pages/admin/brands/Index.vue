@@ -10,6 +10,7 @@ type BrandRow = {
     name: string;
     slug: string;
     website_url: string | null;
+    logo_url: string | null;
     primary_color: string;
     secondary_color: string;
 };
@@ -49,7 +50,7 @@ function executeDelete() {
 
     <div class="p-6 space-y-6">
         <div class="flex items-center justify-between">
-            <h1 class="text-xl font-semibold">Brands</h1>
+            <h1 class="text-2xl font-semibold tracking-tight">Brands</h1>
             <Button as-child>
                 <Link href="/admin/brands/create">
                     <Plus class="size-4 mr-1" />
@@ -58,27 +59,48 @@ function executeDelete() {
             </Button>
         </div>
 
-        <div class="rounded-lg border border-border bg-card overflow-hidden">
+        <div class="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
             <table class="w-full text-sm">
                 <thead>
-                    <tr class="bg-muted/40 border-b border-border">
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Brand</th>
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Website</th>
-                        <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Colors</th>
-                        <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actions</th>
+                    <tr class="bg-[#F7F5F2] border-b border-border">
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Logo</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Website</th>
+                        <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr
                         v-for="brand in brands"
                         :key="brand.id"
-                        class="border-b border-border last:border-0 hover:bg-muted/50 transition-colors"
+                        class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                     >
-                        <td class="px-4 py-3">
+                        <td class="px-5 py-3">
+                            <div
+                                class="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/60 shadow-xs"
+                                style="background-color:#fff;background-image:linear-gradient(45deg,#f1f1f1 25%,transparent 25%),linear-gradient(-45deg,#f1f1f1 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#f1f1f1 75%),linear-gradient(-45deg,transparent 75%,#f1f1f1 75%);background-size:8px 8px;background-position:0 0,0 4px,4px -4px,-4px 0"
+                            >
+                                <img
+                                    v-if="brand.logo_url"
+                                    :src="brand.logo_url"
+                                    :alt="brand.name"
+                                    class="h-full w-full object-contain p-1.5"
+                                />
+                                <span
+                                    v-else
+                                    class="text-[13px] font-semibold uppercase tracking-tight"
+                                    :style="{ color: brand.primary_color }"
+                                >
+                                    {{ brand.name.slice(0, 2) }}
+                                </span>
+                            </div>
+                        </td>
+
+                        <td class="px-5 py-3.5">
                             <span class="font-medium">{{ brand.name }}</span>
                         </td>
 
-                        <td class="px-4 py-3">
+                        <td class="px-5 py-3.5">
                             <a
                                 v-if="brand.website_url"
                                 :href="brand.website_url"
@@ -91,24 +113,7 @@ function executeDelete() {
                             <span v-else class="text-xs text-muted-foreground">—</span>
                         </td>
 
-                        <td class="px-4 py-3">
-                            <div class="flex items-center gap-2">
-                                <span
-                                    aria-hidden="true"
-                                    class="size-5 rounded-sm border border-border inline-block"
-                                    :style="{ backgroundColor: brand.primary_color }"
-                                    :title="`Primary: ${brand.primary_color}`"
-                                />
-                                <span
-                                    aria-hidden="true"
-                                    class="size-5 rounded-sm border border-border inline-block"
-                                    :style="{ backgroundColor: brand.secondary_color }"
-                                    :title="`Secondary: ${brand.secondary_color}`"
-                                />
-                            </div>
-                        </td>
-
-                        <td class="px-4 py-3 text-right">
+                        <td class="px-5 py-3.5 text-right">
                             <div class="flex items-center justify-end gap-1">
                                 <Button variant="ghost" size="icon" as-child>
                                     <Link
@@ -133,7 +138,7 @@ function executeDelete() {
                     </tr>
 
                     <tr v-if="brands.length === 0">
-                        <td colspan="4" class="px-4 py-12 text-center text-muted-foreground text-sm">
+                        <td colspan="4" class="px-5 py-16 text-center text-muted-foreground text-sm">
                             No brands yet. Add your first brand to get started.
                         </td>
                     </tr>

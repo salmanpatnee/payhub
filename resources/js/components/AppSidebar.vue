@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
-import { Building2, CreditCard, LayoutGrid, Settings, Users, Wallet } from 'lucide-vue-next';
+import { Building2, CreditCard, Settings, Users, Wallet } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -11,10 +11,8 @@ import {
     SidebarFooter,
     SidebarHeader,
     SidebarMenu,
-    SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
 const page = usePage();
@@ -23,7 +21,6 @@ const isAdmin = computed(() =>
 );
 
 const mainNavItems = computed((): NavItem[] => [
-    { title: 'Dashboard',       href: dashboard(),                icon: LayoutGrid },
     { title: 'Brands',          href: '/admin/brands',            icon: Building2 },
     { title: 'Stripe Accounts', href: '/admin/stripe-accounts',   icon: Wallet },
     { title: 'Payments',        href: '/payments',                icon: CreditCard },
@@ -37,11 +34,9 @@ const mainNavItems = computed((): NavItem[] => [
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" as-child>
-                        <a :href="dashboard()">
-                            <AppLogo />
-                        </a>
-                    </SidebarMenuButton>
+                    <a href="/payments" class="flex items-center px-2 py-1">
+                        <AppLogo />
+                    </a>
                 </SidebarMenuItem>
             </SidebarMenu>
         </SidebarHeader>

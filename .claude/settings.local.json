@@ -52,7 +52,15 @@
       "Bash(Read C:\\\\Users\\\\SALMAN~1.GHA\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-salmanabdul-ghani-Herd-payhub\\\\f71aed45-6a95-4908-9cd1-e383ce38bfdd\\\\tasks\\\\bf1plumnl.output)",
       "mcp__plugin_stripe_stripe__list_payment_intents",
       "mcp__plugin_stripe_stripe__get_stripe_account_info",
-      "Skill(frontend-design)"
+      "Skill(frontend-design)",
+      "Bash(Select-Object Name)",
+      "Bash(xargs grep -l \"table\\\\|Table\\\\|tbody\\\\|thead\")",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_fill_form",
+      "mcp__playwright__browser_click",
+      "Bash(vendor/bin/pint *)",
+      "Bash(grep -E \"^[A-Z].*\\\\.js$\")",
+      "Bash(grep -E \"\\\\.md$|CLAUDE\")"
     ]
   },
   "enableAllProjectMcpServers": true,

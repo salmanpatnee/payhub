@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Plus } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { ArrowLeft, Plus, Upload, X } from 'lucide-vue-next';
+import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -33,6 +33,7 @@ const form = useForm({
 });
 
 const logoPreviewUrl = ref<string | null>(null);
+const logoInputRef = ref<HTMLInputElement | null>(null);
 
 function handleLogoChange(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
@@ -43,10 +44,12 @@ function handleLogoChange(event: Event) {
     }
 }
 
-// Preview falls back to safe defaults if hex is incomplete/invalid
-const HEX_RE = /^#[0-9a-fA-F]{6}$/;
-const previewPrimary   = computed(() => HEX_RE.test(form.primary_color)   ? form.primary_color   : '#000000');
-const previewSecondary = computed(() => HEX_RE.test(form.secondary_color) ? form.secondary_color : '#cccccc');
+function removeLogo() {
+    form.logo = null;
+    if (logoInputRef.value) logoInputRef.value.value = '';
+    if (logoPreviewUrl.value) URL.revokeObjectURL(logoPreviewUrl.value);
+    logoPreviewUrl.value = null;
+}
 
 function submit() {
     // POST for create — no method spoofing needed
@@ -67,8 +70,7 @@ function submit() {
             </Button>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Left: form card -->
+        <div>
             <Card>
                 <CardHeader>
                     <CardTitle>Add brand</CardTitle>
@@ -78,80 +80,125 @@ function submit() {
                 </CardHeader>
                 <CardContent>
                     <form id="create-brand-form" class="space-y-4" @submit.prevent="submit">
-                        <!-- Brand name -->
-                        <div class="grid gap-2">
-                            <Label for="name">Brand name</Label>
-                            <Input id="name" v-model="form.name" type="text" required />
-                            <InputError :message="form.errors.name" />
-                        </div>
-
-                        <!-- Website URL -->
-                        <div class="grid gap-2">
-                            <Label for="website_url">Website URL</Label>
-                            <Input
-                                id="website_url"
-                                v-model="form.website_url"
-                                type="url"
-                                placeholder="https://example.com"
-                            />
-                            <InputError :message="form.errors.website_url" />
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="grid gap-2">
+                                <Label for="name">Brand name</Label>
+                                <Input id="name" v-model="form.name" type="text" required />
+                                <InputError :message="form.errors.name" />
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="website_url">Website URL</Label>
+                                <Input
+                                    id="website_url"
+                                    v-model="form.website_url"
+                                    type="url"
+                                    placeholder="https://example.com"
+                                />
+                                <InputError :message="form.errors.website_url" />
+                            </div>
                         </div>
 
                         <!-- Logo upload -->
                         <div class="grid gap-2">
-                            <Label for="logo">Logo</Label>
-                            <Input
+                            <Label>Logo</Label>
+
+                            <input
                                 id="logo"
+                                ref="logoInputRef"
                                 type="file"
+                                class="sr-only"
                                 accept="image/jpeg,image/png,image/webp,image/svg+xml"
                                 @change="handleLogoChange"
                             />
-                            <p class="text-xs text-muted-foreground">
-                                JPG, PNG, WebP, or SVG. Max 2 MB. Optional.
-                            </p>
+
+                            <!-- Preview state -->
+                            <div v-if="logoPreviewUrl" class="group relative">
+                                <div
+                                    class="flex h-36 items-center justify-center overflow-hidden rounded-lg border border-border"
+                                    :style="{ backgroundColor: form.primary_color }"
+                                >
+                                    <img
+                                        :src="logoPreviewUrl"
+                                        alt="Logo preview"
+                                        class="max-h-28 max-w-full object-contain p-2"
+                                    />
+                                </div>
+                                <div class="absolute inset-0 flex items-center justify-center gap-2 rounded-lg bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
+                                    <label
+                                        for="logo"
+                                        class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20"
+                                    >
+                                        <Upload class="size-3.5" />
+                                        Change
+                                    </label>
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-500/80"
+                                        @click="removeLogo"
+                                    >
+                                        <X class="size-3.5" />
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Empty state -->
+                            <label
+                                v-else
+                                for="logo"
+                                class="group flex h-36 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border transition-all hover:border-primary/40 hover:bg-muted/30"
+                            >
+                                <div class="flex size-10 items-center justify-center rounded-full bg-muted transition-colors group-hover:bg-muted/60">
+                                    <Upload class="size-4 text-muted-foreground" />
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-sm font-medium">Click to upload logo</p>
+                                    <p class="mt-0.5 text-xs text-muted-foreground">JPG, PNG, WebP, SVG · Max 2 MB</p>
+                                </div>
+                            </label>
+
                             <InputError :message="form.errors.logo" />
                         </div>
 
-                        <!-- Primary color -->
-                        <div class="grid gap-2">
-                            <Label>Primary color</Label>
-                            <div class="flex items-center gap-2">
-                                <input
-                                    type="color"
-                                    v-model="form.primary_color"
-                                    class="size-9 rounded border border-input cursor-pointer p-0.5 bg-background"
-                                    aria-label="Pick primary color"
-                                />
-                                <Input
-                                    v-model="form.primary_color"
-                                    type="text"
-                                    placeholder="#000000"
-                                    class="font-mono uppercase"
-                                    maxlength="7"
-                                />
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="grid gap-2">
+                                <Label>Primary color</Label>
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        v-model="form.primary_color"
+                                        class="size-9 rounded border border-input cursor-pointer p-0.5 bg-background"
+                                        aria-label="Pick primary color"
+                                    />
+                                    <Input
+                                        v-model="form.primary_color"
+                                        type="text"
+                                        placeholder="#000000"
+                                        class="font-mono uppercase"
+                                        maxlength="7"
+                                    />
+                                </div>
+                                <InputError :message="form.errors.primary_color" />
                             </div>
-                            <InputError :message="form.errors.primary_color" />
-                        </div>
-
-                        <!-- Secondary color -->
-                        <div class="grid gap-2">
-                            <Label>Secondary color</Label>
-                            <div class="flex items-center gap-2">
-                                <input
-                                    type="color"
-                                    v-model="form.secondary_color"
-                                    class="size-9 rounded border border-input cursor-pointer p-0.5 bg-background"
-                                    aria-label="Pick secondary color"
-                                />
-                                <Input
-                                    v-model="form.secondary_color"
-                                    type="text"
-                                    placeholder="#000000"
-                                    class="font-mono uppercase"
-                                    maxlength="7"
-                                />
+                            <div class="grid gap-2">
+                                <Label>Secondary color</Label>
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        v-model="form.secondary_color"
+                                        class="size-9 rounded border border-input cursor-pointer p-0.5 bg-background"
+                                        aria-label="Pick secondary color"
+                                    />
+                                    <Input
+                                        v-model="form.secondary_color"
+                                        type="text"
+                                        placeholder="#000000"
+                                        class="font-mono uppercase"
+                                        maxlength="7"
+                                    />
+                                </div>
+                                <InputError :message="form.errors.secondary_color" />
                             </div>
-                            <InputError :message="form.errors.secondary_color" />
                         </div>
                     </form>
                 </CardContent>
@@ -163,44 +210,6 @@ function submit() {
                 </CardFooter>
             </Card>
 
-            <!-- Right: live preview card — all colors via :style, NOT Tailwind dynamic classes -->
-            <div class="rounded-lg border border-border overflow-hidden bg-card" aria-hidden="true">
-                <!-- Primary color header strip -->
-                <div
-                    class="h-16 flex items-center px-4 gap-3"
-                    :style="{ backgroundColor: previewPrimary }"
-                >
-                    <div class="size-10 rounded bg-white/20 flex items-center justify-center overflow-hidden">
-                        <img
-                            v-if="logoPreviewUrl"
-                            :src="logoPreviewUrl"
-                            class="size-10 object-cover"
-                            alt=""
-                        />
-                        <span v-else class="text-white font-semibold text-sm">
-                            {{ (form.name || 'B').charAt(0).toUpperCase() }}
-                        </span>
-                    </div>
-                    <span class="text-white font-semibold text-sm truncate">
-                        {{ form.name || 'Brand name' }}
-                    </span>
-                </div>
-                <!-- Secondary color strip -->
-                <div class="h-3" :style="{ backgroundColor: previewSecondary }" />
-                <!-- Preview body -->
-                <div class="p-4 space-y-2">
-                    <p class="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Live preview</p>
-                    <p class="text-sm text-muted-foreground">
-                        This is how the brand header will appear on client payment pages.
-                    </p>
-                    <div class="flex gap-2 pt-2">
-                        <span class="text-xs text-muted-foreground">Primary:</span>
-                        <span class="text-xs font-mono">{{ form.primary_color || '—' }}</span>
-                        <span class="text-xs text-muted-foreground ml-2">Secondary:</span>
-                        <span class="text-xs font-mono">{{ form.secondary_color || '—' }}</span>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </template>

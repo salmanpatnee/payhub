@@ -69,7 +69,7 @@ function submit() {
             </Button>
         </div>
 
-        <Card class="max-w-lg">
+        <Card>
             <CardHeader>
                 <CardTitle>Add Stripe account</CardTitle>
                 <CardDescription>

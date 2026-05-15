@@ -2,8 +2,8 @@
 import { Head, Link } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { ArrowLeft, Check, Copy } from 'lucide-vue-next';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
 import {
     Card, CardContent, CardDescription,
     CardHeader, CardTitle,
@@ -65,13 +65,6 @@ function formatAmount(cents: number, currency: string): string {
     ).format(cents / 100);
 }
 
-function statusClass(status: string): string {
-    if (status === 'completed')  return 'border-green-500 bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400';
-    if (status === 'pending')    return 'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400';
-    if (status === 'failed')     return 'border-red-500 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400';
-    if (status === 'cancelled')  return 'border-gray-400 bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400';
-    return '';
-}
 
 function titleCase(str: string | null): string {
     if (!str) return '—';
@@ -108,7 +101,7 @@ const feeBreakdown = computed(() => {
                 <CardHeader>
                     <div class="flex items-center justify-between">
                         <CardTitle>Payment summary</CardTitle>
-                        <Badge variant="outline" :class="statusClass(payment.status)">{{ payment.status }}</Badge>
+                        <PaymentStatusBadge :status="payment.status" />
                     </div>
                 </CardHeader>
                 <CardContent>

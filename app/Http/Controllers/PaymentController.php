@@ -34,10 +34,15 @@ class PaymentController extends Controller
             ->when($request->stripe_account_id, fn ($q, $v) => $q->where('stripe_account_id', $v))
             ->when($request->status, fn ($q, $v) => $q->where('status', $v))
             ->when($request->from, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
-            ->when($request->to, fn ($q, $v) => $q->whereDate('created_at', '<=', $v));
+            ->when($request->to, fn ($q, $v) => $q->whereDate('created_at', '<=', $v))
+            ->when($request->search, fn ($q, $v) => $q->where(function ($inner) use ($v): void {
+                $inner->where('client_name', 'LIKE', "%{$v}%")
+                    ->orWhere('client_email', 'LIKE', "%{$v}%")
+                    ->orWhere('uuid', 'LIKE', strtolower($v).'%');
+            }));
 
         return Inertia::render('payments/Index', [
-            'payments' => $query->get()->map(fn (Payment $p) => [
+            'payments' => $query->paginate(20)->through(fn (Payment $p) => [
                 'id' => $p->id,
                 'uuid' => $p->uuid,
                 'amount' => $p->amount,
@@ -49,7 +54,7 @@ class PaymentController extends Controller
                 'client_email' => $p->client_email,
                 'client_name' => $p->client_name,
             ]),
-            'filters' => $request->only(['brand_id', 'stripe_account_id', 'status', 'from', 'to']),
+            'filters' => $request->only(['brand_id', 'stripe_account_id', 'status', 'from', 'to', 'search']),
             'brands' => $isAdmin
                 ? Brand::orderBy('name')->get(['id', 'name'])
                 : [],

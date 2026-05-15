@@ -20,11 +20,12 @@ class BrandController extends Controller
             'brands' => Brand::orderBy('name')
                 ->get()
                 ->map(fn (Brand $brand) => [
-                    'id'              => $brand->id,
-                    'name'            => $brand->name,
-                    'slug'            => $brand->slug,
-                    'website_url'     => $brand->website_url,
-                    'primary_color'   => $brand->primary_color,
+                    'id' => $brand->id,
+                    'name' => $brand->name,
+                    'slug' => $brand->slug,
+                    'website_url' => $brand->website_url,
+                    'logo_url' => $brand->logo_path ? '/storage/'.$brand->logo_path : null,
+                    'primary_color' => $brand->primary_color,
                     'secondary_color' => $brand->secondary_color,
                 ]),
         ]);
@@ -37,7 +38,7 @@ class BrandController extends Controller
 
     public function store(StoreBrandRequest $request): RedirectResponse
     {
-        $data         = $request->safe()->except('logo');
+        $data = $request->safe()->except('logo');
         $data['slug'] = $this->generateUniqueSlug($data['name']);
 
         if ($request->hasFile('logo')) {
@@ -54,11 +55,11 @@ class BrandController extends Controller
     {
         return Inertia::render('admin/brands/Edit', [
             'brand' => [
-                'id'              => $brand->id,
-                'name'            => $brand->name,
-                'website_url'     => $brand->website_url,
-                'logo_url'        => $brand->logo_path ? '/storage/' . $brand->logo_path : null,
-                'primary_color'   => $brand->primary_color,
+                'id' => $brand->id,
+                'name' => $brand->name,
+                'website_url' => $brand->website_url,
+                'logo_url' => $brand->logo_path ? '/storage/'.$brand->logo_path : null,
+                'primary_color' => $brand->primary_color,
                 'secondary_color' => $brand->secondary_color,
             ],
         ]);
@@ -102,7 +103,7 @@ class BrandController extends Controller
     {
         $base = Str::slug($name);
         $slug = $base;
-        $i    = 1;
+        $i = 1;
 
         while (Brand::where('slug', $slug)->exists()) {
             $slug = "{$base}-{$i}";
