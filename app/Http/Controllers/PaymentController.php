@@ -42,12 +42,18 @@ class PaymentController extends Controller
                 $inner->where('client_name', 'LIKE', "%{$v}%")
                     ->orWhere('client_email', 'LIKE', "%{$v}%")
                     ->orWhere('uuid', 'LIKE', strtolower($v).'%');
+
+                $refSearch = ltrim(ltrim(trim($v), '#'), '0');
+                if ($refSearch !== '' && ctype_digit($refSearch)) {
+                    $inner->orWhere('reference_code', (int) $refSearch);
+                }
             }));
 
         return Inertia::render('payments/Index', [
             'payments' => $query->paginate(20)->through(fn (Payment $p) => [
                 'id' => $p->id,
                 'uuid' => $p->uuid,
+                'reference_code' => $p->reference_code,
                 'amount' => $p->amount,
                 'currency' => $p->currency,
                 'brand_name' => $p->brand->name,
