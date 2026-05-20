@@ -32,6 +32,19 @@ Two roles exist: `admin` and `agent`. There is no `user` role.
 
 ---
 
+## Reference / Order Code Format
+
+Payments have a `reference_code` integer column (auto-incremented, stored as integer cents, nullable).
+
+**Display format everywhere:** `#` prefix + 6-digit zero-padded integer.
+
+- PHP: `'#' . str_pad((string) $code, 6, '0', STR_PAD_LEFT)` — see `ClientPaymentController::formatReferenceCode()`
+- Vue/JS: `'#' + String(payment.reference_code).padStart(6, '0')`
+- Examples: `#000001`, `#000042`, `#001337`
+- Null guard: show `—` (em dash) when `reference_code` is `null`
+
+---
+
 ## Local E2E Testing — Notifications + Webhooks
 
 **Prerequisites:** Mailtrap SMTP credentials in `.env` (`MAIL_MAILER=smtp`, `MAIL_HOST=sandbox.smtp.mailtrap.io`).

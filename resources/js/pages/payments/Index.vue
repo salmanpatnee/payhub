@@ -18,6 +18,7 @@ import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentCo
 type PaymentRow = {
     id: number;
     uuid: string;
+    reference_code: number | null;
     amount: number;
     currency: string;
     brand_name: string;
@@ -300,6 +301,8 @@ async function copyLink(uuid: string): Promise<void> {
             <table class="w-full text-sm">
                 <thead>
                     <tr class="bg-[#F7F5F2] border-b border-border">
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">#</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Reference Code</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
@@ -310,10 +313,12 @@ async function copyLink(uuid: string): Promise<void> {
                 </thead>
                 <tbody>
                     <tr
-                        v-for="payment in payments.data"
+                        v-for="(payment, index) in payments.data"
                         :key="payment.id"
                         class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                     >
+                        <td class="px-5 py-3.5 text-muted-foreground tabular-nums">{{ (payments.from ?? 1) + index }}</td>
+                        <td class="px-5 py-3.5 font-mono text-muted-foreground">{{ payment.reference_code != null ? '#' + String(payment.reference_code).padStart(6, '0') : '—' }}</td>
                         <td class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
                         <td class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
                         <td class="px-5 py-3.5">{{ payment.brand_name }}</td>
@@ -338,7 +343,7 @@ async function copyLink(uuid: string): Promise<void> {
                         </td>
                     </tr>
                     <tr v-if="payments.data.length === 0">
-                        <td colspan="6" class="px-5 py-16 text-center text-muted-foreground text-sm">
+                        <td colspan="8" class="px-5 py-16 text-center text-muted-foreground text-sm">
                             <template v-if="hasActiveFilters">
                                 No payments match your filters.
                                 <button class="underline" @click="clearFilters">Clear filters to see all.</button>
