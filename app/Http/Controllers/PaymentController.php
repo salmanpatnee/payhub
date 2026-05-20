@@ -6,6 +6,7 @@ use App\Http\Requests\StorePaymentRequest;
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\StripeAccount;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -65,24 +66,50 @@ class PaymentController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(): Response|RedirectResponse
     {
+        /** @var User $user */
+        $user = auth()->user();
+
+        if ($user->hasRole('agent')) {
+            if (! $user->stripe_account_id) {
+                Inertia::flash('toast', ['type' => 'error', 'message' => 'No Stripe account assigned. Contact an admin.']);
+
+                return redirect()->route('payments.index');
+            }
+
+            $stripeAccounts = StripeAccount::where('id', $user->stripe_account_id)->get(['id', 'account_name']);
+            $isStripeAccountLocked = true;
+        } else {
+            $stripeAccounts = StripeAccount::where('is_active', true)
+                ->orderBy('account_name')
+                ->get(['id', 'account_name']);
+            $isStripeAccountLocked = false;
+        }
+
         return Inertia::render('payments/Create', [
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
-            'stripeAccounts' => StripeAccount::where('is_active', true)
-                ->orderBy('account_name')
-                ->get(['id', 'account_name']),
+            'stripeAccounts' => $stripeAccounts,
+            'isStripeAccountLocked' => $isStripeAccountLocked,
         ]);
     }
 
     public function store(StorePaymentRequest $request): RedirectResponse
     {
-        // $request->validated() contains amount already converted to integer cents
-        // by StorePaymentRequest::passedValidation() — SEC-02 guarantee.
+        // SEC-02: amount is integer cents from StorePaymentRequest::validated().
         // user_id and status are NEVER from the request.
+        $data = $request->validated();
+
+        /** @var User $user */
+        $user = auth()->user();
+
+        if ($user->hasRole('agent')) {
+            $data['stripe_account_id'] = $user->stripe_account_id;
+        }
+
         $payment = Payment::create([
-            ...$request->validated(),
-            'user_id' => auth()->id(),
+            ...$data,
+            'user_id' => $user->id,
             'status' => 'pending',
             'expires_at' => null,
         ]);

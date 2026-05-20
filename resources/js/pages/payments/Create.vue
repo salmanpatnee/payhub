@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { ArrowLeft, Plus } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +22,7 @@ type AccountOption = { id: number; account_name: string };
 const props = defineProps<{
     brands: BrandOption[];
     stripeAccounts: AccountOption[];
+    isStripeAccountLocked: boolean;
 }>();
 
 defineOptions({
@@ -43,6 +44,12 @@ const form = useForm({
     service:           '',
     package:           '',
     note:              '',
+});
+
+onMounted(() => {
+    if (props.isStripeAccountLocked && props.stripeAccounts.length > 0) {
+        form.stripe_account_id = String(props.stripeAccounts[0].id);
+    }
 });
 
 // D-14: Fee breakdown — client-side only, no server round-trip
@@ -106,7 +113,7 @@ function submit() {
                     <!-- Stripe Account -->
                     <div class="grid gap-2">
                         <Label for="stripe_account_id">Stripe Account</Label>
-                        <Select v-model="form.stripe_account_id">
+                        <Select v-model="form.stripe_account_id" :disabled="isStripeAccountLocked">
                             <SelectTrigger id="stripe_account_id" class="w-full">
                                 <SelectValue placeholder="Select a Stripe account" />
                             </SelectTrigger>
