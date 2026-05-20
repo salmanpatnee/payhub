@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { ArrowLeft, Check, Copy } from 'lucide-vue-next';
+import {
+    ArrowLeft, Banknote, Briefcase, Building2, Calendar,
+    CalendarCheck, CalendarX, Check, Copy, CreditCard,
+    FileText, Hash, Handshake, Mail, Package, User,
+} from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
 import {
@@ -21,6 +25,7 @@ type PaymentDetail = {
     note: string | null;
     brand_name: string;
     account_name: string;
+    relationship_manager_name: string | null;
     created_at: string;
     stripe_payment_intent_id: string | null;
     paid_at: string | null;
@@ -107,51 +112,81 @@ const feeBreakdown = computed(() => {
                 <CardContent>
                     <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                         <div>
-                            <dt class="text-muted-foreground">Client</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <User class="size-3.5 shrink-0" />Client
+                            </dt>
                             <dd class="font-medium">{{ payment.client_name }}</dd>
                         </div>
                         <div>
-                            <dt class="text-muted-foreground">Email</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <Mail class="size-3.5 shrink-0" />Email
+                            </dt>
                             <dd>{{ payment.client_email }}</dd>
                         </div>
                         <div>
-                            <dt class="text-muted-foreground">Amount</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <Banknote class="size-3.5 shrink-0" />Amount
+                            </dt>
                             <dd class="font-mono font-semibold">{{ formatAmount(payment.amount, payment.currency) }}</dd>
                         </div>
                         <div>
-                            <dt class="text-muted-foreground">Brand</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <Building2 class="size-3.5 shrink-0" />Brand
+                            </dt>
                             <dd>{{ payment.brand_name }}</dd>
                         </div>
                         <div>
-                            <dt class="text-muted-foreground">Stripe Account</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <CreditCard class="size-3.5 shrink-0" />Stripe Account
+                            </dt>
                             <dd>{{ payment.account_name }}</dd>
                         </div>
                         <div>
-                            <dt class="text-muted-foreground">Service</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <Handshake class="size-3.5 shrink-0" />Relationship Manager
+                            </dt>
+                            <dd>{{ payment.relationship_manager_name ?? '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <Briefcase class="size-3.5 shrink-0" />Service
+                            </dt>
                             <dd>{{ payment.service ?? '—' }}</dd>
                         </div>
                         <div>
-                            <dt class="text-muted-foreground">Package</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <Package class="size-3.5 shrink-0" />Package
+                            </dt>
                             <dd>{{ titleCase(payment.package) }}</dd>
                         </div>
                         <div v-if="payment.note" class="col-span-2">
-                            <dt class="text-muted-foreground">Note</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <FileText class="size-3.5 shrink-0" />Note
+                            </dt>
                             <dd class="mt-1 text-muted-foreground italic">{{ payment.note }}</dd>
                         </div>
                         <div>
-                            <dt class="text-muted-foreground">Created</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <Calendar class="size-3.5 shrink-0" />Created
+                            </dt>
                             <dd>{{ new Date(payment.created_at).toLocaleDateString() }}</dd>
                         </div>
                         <div v-if="payment.paid_at">
-                            <dt class="text-muted-foreground">Paid at</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <CalendarCheck class="size-3.5 shrink-0" />Paid at
+                            </dt>
                             <dd>{{ new Date(payment.paid_at).toLocaleString() }}</dd>
                         </div>
                         <div v-if="payment.expires_at">
-                            <dt class="text-muted-foreground">Expires</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <CalendarX class="size-3.5 shrink-0" />Expires
+                            </dt>
                             <dd>{{ new Date(payment.expires_at).toLocaleString() }}</dd>
                         </div>
                         <div v-if="payment.stripe_payment_intent_id" class="col-span-2">
-                            <dt class="text-muted-foreground">Stripe PI</dt>
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <Hash class="size-3.5 shrink-0" />Stripe PI
+                            </dt>
                             <dd class="font-mono text-xs truncate">{{ payment.stripe_payment_intent_id }}</dd>
                         </div>
                     </dl>

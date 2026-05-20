@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StorePaymentRequest;
 use App\Models\Brand;
 use App\Models\Payment;
+use App\Models\RelationshipManager;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -91,6 +92,7 @@ class PaymentController extends Controller
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
             'stripeAccounts' => $stripeAccounts,
             'isStripeAccountLocked' => $isStripeAccountLocked,
+            'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -119,7 +121,7 @@ class PaymentController extends Controller
 
     public function show(Payment $payment): Response
     {
-        $payment->loadMissing(['brand', 'stripeAccount']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'relationshipManager']);
 
         return Inertia::render('payments/Show', [
             'payment' => [
@@ -134,6 +136,7 @@ class PaymentController extends Controller
                 'note' => $payment->note,
                 'brand_name' => $payment->brand->name,
                 'account_name' => $payment->stripeAccount->account_name,
+                'relationship_manager_name' => $payment->relationshipManager?->name,
                 'created_at' => $payment->created_at->toISOString(),
                 'stripe_payment_intent_id' => $payment->stripe_payment_intent_id,
                 'paid_at' => $payment->paid_at?->toISOString(),

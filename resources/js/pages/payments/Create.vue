@@ -18,11 +18,13 @@ import { Textarea } from '@/components/ui/textarea';
 
 type BrandOption = { id: number; name: string };
 type AccountOption = { id: number; account_name: string };
+type RmOption = { id: number; name: string };
 
 const props = defineProps<{
     brands: BrandOption[];
     stripeAccounts: AccountOption[];
     isStripeAccountLocked: boolean;
+    relationshipManagers: RmOption[];
 }>();
 
 defineOptions({
@@ -35,15 +37,16 @@ defineOptions({
 });
 
 const form = useForm({
-    brand_id:          '',
-    stripe_account_id: '',
-    currency:          'usd',
-    amount:            '',
-    client_name:       '',
-    client_email:      '',
-    service:           '',
-    package:           '',
-    note:              '',
+    brand_id:                  '',
+    stripe_account_id:         '',
+    relationship_manager_id:   '',
+    currency:                  'usd',
+    amount:                    '',
+    client_name:               '',
+    client_email:              '',
+    service:                   '',
+    package:                   '',
+    note:                      '',
 });
 
 onMounted(() => {
@@ -126,6 +129,24 @@ function submit() {
                             </SelectContent>
                         </Select>
                         <InputError class="mt-1" :message="form.errors.stripe_account_id" />
+                    </div>
+
+                    <!-- Relationship Manager -->
+                    <div class="grid gap-2">
+                        <Label for="relationship_manager_id">Relationship Manager</Label>
+                        <Select v-model="form.relationship_manager_id">
+                            <SelectTrigger id="relationship_manager_id" class="w-full">
+                                <SelectValue placeholder="Select a relationship manager" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="rm in props.relationshipManagers"
+                                    :key="rm.id"
+                                    :value="String(rm.id)"
+                                >{{ rm.name }}</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError class="mt-1" :message="form.errors.relationship_manager_id" />
                     </div>
 
                     <!-- Currency -->
