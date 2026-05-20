@@ -49,7 +49,7 @@ const form = useForm({
     name:     props.user.name,
     email:    props.user.email,
     password: '',
-    role:     props.user.roles[0] ?? 'user',
+    role:     props.user.roles[0] ?? 'agent',
 });
 
 const deleteForm = useForm({});
@@ -132,7 +132,7 @@ function executeDelete() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="user">User</SelectItem>
+                                <SelectItem value="agent">Agent</SelectItem>
                             </SelectContent>
                         </Select>
                         <InputError class="mt-2" :message="form.errors.role" />

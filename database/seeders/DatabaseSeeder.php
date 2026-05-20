@@ -16,7 +16,7 @@ class DatabaseSeeder extends Seeder
     {
         // Seed roles first — assignRole() requires these to exist
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'user', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
 
         $brand = Brand::firstOrCreate(
             ['slug' => 'demo-brand'],
@@ -55,7 +55,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('password'),
             ]
         );
-        $user->syncRoles(['user']);
+        $user->syncRoles(['agent']);
 
         Payment::create([
             'brand_id'          => $brand->id,

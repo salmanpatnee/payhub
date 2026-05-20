@@ -86,8 +86,8 @@ function executeDelete() {
                             <td class="px-5 py-3.5">{{ user.name }}</td>
                             <td class="px-5 py-3.5 text-muted-foreground">{{ user.email }}</td>
                             <td class="px-5 py-3.5">
-                                <Badge :variant="user.roles.includes('admin') ? 'secondary' : 'outline'">
-                                    {{ user.roles[0] ?? 'user' }}
+                                <Badge :variant="user.roles.includes('admin') ? 'secondary' : 'outline'" class="capitalize">
+                                    {{ user.roles[0] ?? 'agent' }}
                                 </Badge>
                             </td>
                             <td class="px-5 py-3.5 text-right">
