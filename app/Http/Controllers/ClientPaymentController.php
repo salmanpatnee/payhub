@@ -42,6 +42,10 @@ class ClientPaymentController extends Controller
                     'amount' => $payment->amount,
                     'currency' => $payment->currency,
                     'automatic_payment_methods' => ['enabled' => true],
+                    'metadata' => [
+                        'reference_code' => $this->formatReferenceCode($payment->reference_code),
+                        'payment_uuid' => $payment->uuid,
+                    ],
                 ]);
                 $payment->update(['stripe_payment_intent_id' => $pi->id]);
             }
@@ -52,6 +56,10 @@ class ClientPaymentController extends Controller
                 'amount' => $payment->amount,   // integer cents from DB — SEC-02
                 'currency' => $payment->currency, // 'usd' or 'gbp'
                 'automatic_payment_methods' => ['enabled' => true], // handles 3DS automatically — CLIENT-05
+                'metadata' => [
+                    'reference_code' => $this->formatReferenceCode($payment->reference_code),
+                    'payment_uuid' => $payment->uuid,
+                ],
             ]);
             // D-02: Store PI ID so Phase 6 webhook handler can look up the Payment
             $payment->update(['stripe_payment_intent_id' => $pi->id]);
@@ -106,6 +114,11 @@ class ClientPaymentController extends Controller
         ]);
     }
 
+    private function formatReferenceCode(?int $code): string
+    {
+        return '#'.str_pad((string) ($code ?? 0), 6, '0', STR_PAD_LEFT);
+    }
+
     private function brandProps(Brand $brand): array
     {
         return [
@@ -121,6 +134,7 @@ class ClientPaymentController extends Controller
     {
         return [
             'uuid' => $payment->uuid,
+            'reference_code' => $payment->reference_code,
             'amount' => $payment->amount,   // integer cents
             'currency' => $payment->currency, // 'usd' or 'gbp'
             'service' => $payment->service,  // nullable

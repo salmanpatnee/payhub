@@ -5,6 +5,7 @@ import PaymentLayout from '@/layouts/PaymentLayout.vue'
 const props = defineProps<{
     payment: {
         uuid: string
+        reference_code: number | null
         amount: number
         currency: string
         service: string | null
@@ -37,6 +38,7 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
         :brand="props.brand"
         :payment="{
             uuid: payment.uuid,
+            reference_code: payment.reference_code,
             amount: payment.amount,
             currency: payment.currency,
             service: payment.service,
@@ -74,6 +76,15 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
                 </p>
             </div>
 
+            <!-- Reference hero — the one thing the client needs to note -->
+            <div v-if="payment.reference_code !== null" class="ref-hero" aria-label="Your order code">
+                <span class="ref-hero-label">Your Order Code</span>
+                <div class="ref-hero-value">
+                    <span class="ref-hero-hash">#</span><span class="ref-hero-number">{{ String(payment.reference_code).padStart(6, '0') }}</span>
+                </div>
+                <span class="ref-hero-hint">Keep this number for your records</span>
+            </div>
+
             <!-- Receipt details -->
             <dl class="receipt-card">
                 <div class="receipt-row">
@@ -92,10 +103,6 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
                 <div v-if="payment.package" class="receipt-row">
                     <dt>Package</dt>
                     <dd>{{ payment.package }}</dd>
-                </div>
-                <div class="receipt-row">
-                    <dt>Reference</dt>
-                    <dd><span class="ref-chip">{{ payment.uuid.slice(0, 8).toUpperCase() }}</span></dd>
                 </div>
             </dl>
 
@@ -300,18 +307,63 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
     50%       { opacity: 0.5; transform: scale(0.75); }
 }
 
-/* ─── Reference chip ─────────────────────────────────── */
-.ref-chip {
+/* ─── Reference hero ─────────────────────────────────── */
+.ref-hero {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    border: 2px dashed #94a3b8;
+    border-radius: 10px;
+    padding: 22px 24px 20px;
+    margin-bottom: 1.25rem;
+    background:
+        radial-gradient(circle, #d1d5db 1px, transparent 1px) 0 0 / 20px 20px,
+        linear-gradient(160deg, #f8fafc 0%, #eef2f7 100%);
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.04);
+    animation: riseIn 0.48s ease-out 0.44s both;
+}
+
+.ref-hero-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.ref-hero-value {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    line-height: 1;
+}
+
+.ref-hero-hash {
     font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
-    font-size: 11.5px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    color: #475569;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    padding: 3px 8px;
-    border-radius: 6px;
-    display: inline-block;
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: #16a34a;
+    margin-right: 3px;
+    opacity: 0.9;
+}
+
+.ref-hero-number {
+    font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: #0f172a;
+    line-height: 1;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.ref-hero-hint {
+    font-size: 10px;
+    color: #94a3b8;
+    letter-spacing: 0.03em;
+    margin-top: 3px;
 }
 
 /* ─── Footer ─────────────────────────────────────────── */

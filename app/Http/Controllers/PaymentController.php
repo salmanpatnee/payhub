@@ -128,6 +128,7 @@ class PaymentController extends Controller
         return Inertia::render('payments/Show', [
             'payment' => [
                 'uuid' => $payment->uuid,
+                'reference_code' => $payment->reference_code,
                 'amount' => $payment->amount,
                 'currency' => $payment->currency,
                 'status' => $payment->status,

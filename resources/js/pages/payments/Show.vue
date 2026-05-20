@@ -15,6 +15,7 @@ import {
 
 type PaymentDetail = {
     uuid: string;
+    reference_code: number | null;
     amount: number;
     currency: string;
     status: string;
@@ -111,6 +112,12 @@ const feeBreakdown = computed(() => {
                 </CardHeader>
                 <CardContent>
                     <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                        <div v-if="payment.reference_code" class="col-span-2">
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <Hash class="size-3.5 shrink-0" />Reference
+                            </dt>
+                            <dd class="font-mono font-semibold">{{ String(payment.reference_code).padStart(6, '0') }}</dd>
+                        </div>
                         <div>
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
                                 <User class="size-3.5 shrink-0" />Client
