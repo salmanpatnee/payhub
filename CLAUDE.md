@@ -4,7 +4,7 @@
 
 Centralized multi-brand payment hub for an agency. Laravel 13 + Inertia.js v3 + Vue 3 + Tailwind CSS 4 + shadcn-vue + Stripe Elements. Replaces fragmented WooCommerce/Stripe setup with one app powering multiple brands.
 
-See `.planning/PROJECT.md` for full context.
+See `.planning/PROJECT.md` for full context. See `docs/agent.md` for RBAC rules, nav access matrix, and E2E testing runbook.
 
 ## GSD Workflow
 
@@ -15,19 +15,7 @@ This project uses the Get-Shit-Done (GSD) planning workflow.
 - **State**: `.planning/STATE.md` — current phase and progress
 - **Research**: `.planning/research/` — stack, features, architecture, pitfalls, summary
 
-### Current status
-
-Phase 1 is next. Run `/gsd-discuss-phase 1` or `/gsd-plan-phase 1` to start.
-
-### Phase order
-
-1. Foundation (Laravel install + Inertia + schema + encryption)
-2. Auth + User Management
-3. Brand + Stripe Account Management
-4. Payment Creation + Link Generation
-5. Client Payment Page
-6. Webhooks + Status Sync
-7. Notifications + Dashboard
+Phase 1 is next. Run `/gsd-discuss-phase 1` or `/gsd-plan-phase 1` to start. See `.planning/ROADMAP.md` for phase order.
 
 ## Stack
 
@@ -35,7 +23,7 @@ Phase 1 is next. Run `/gsd-discuss-phase 1` or `/gsd-plan-phase 1` to start.
 - **Frontend**: Vue 3 (Composition API + `<script setup>`), Inertia.js v3
 - **Styling**: Tailwind CSS 4, shadcn-vue 2.6 (Reka UI primitives)
 - **Auth**: Laravel Fortify — invite-only, no public registration
-- **RBAC**: spatie/laravel-permission v7 (Admin / User roles)
+- **RBAC**: spatie/laravel-permission v7 (Admin / Agent roles)
 - **Payments**: Stripe Elements, stripe/stripe-php v20, vue-stripe-js v2
 - **Webhooks**: spatie/laravel-stripe-webhooks v3.11
 - **Queues**: Laravel Queues (database driver for dev, Redis for prod)
@@ -44,6 +32,10 @@ Phase 1 is next. Run `/gsd-discuss-phase 1` or `/gsd-plan-phase 1` to start.
 
 - **Always** create a new branch before starting a new phase: `git checkout -b phase-{N}-{short-description}`
 - Merge to `master` only after phase is complete and tests pass
+
+## RBAC
+
+Two roles: `admin` and `agent`. See `docs/agent.md` for nav access matrix, implementation rules, and seeded users.
 
 ## Critical rules
 
@@ -65,44 +57,6 @@ php artisan migrate:fresh --seed   # Reset DB with seed data
 php artisan test           # Run Pest test suite
 stripe listen --forward-to localhost:8000/webhook/stripe/{accountId}  # Test webhooks
 ```
-
-## Local E2E Testing — Notifications + Webhooks
-
-**Prerequisites:** Mailtrap SMTP credentials in `.env` (`MAIL_MAILER=smtp`, `MAIL_HOST=sandbox.smtp.mailtrap.io`).
-
-**Step 1 — Terminal 1: start queue worker**
-```bash
-php artisan queue:work --verbose
-```
-
-**Step 2 — Terminal 2: start Stripe CLI listener**
-```bash
-stripe listen --forward-to localhost:8000/webhook/stripe/1
-```
-Copy the `whsec_...` signing secret printed at startup.
-
-**Step 3 — Set webhook secret on the Stripe account**
-
-Go to `http://payhub.test/admin/stripe-accounts/1/edit` and paste the `whsec_...` into the Webhook secret field, then save.
-
-Or via tinker (one-off):
-```bash
-php artisan tinker --execute 'App\Models\StripeAccount::find(1)->update(["webhook_secret" => "whsec_..."]);'
-```
-
-**Step 4 — Create a payment and pay it**
-
-1. Go to `http://payhub.test/payments/create` and create a payment
-2. Open the `/pay/{uuid}` link
-3. Submit test card `4242 4242 4242 4242`, any expiry/CVC
-
-Stripe fires `payment_intent.succeeded` → CLI forwards to the webhook endpoint → `HandleStripeWebhookJob` updates payment to `completed` → `SendPaymentNotification` dispatched → `PaymentSucceeded` mailable sent to all admin users → appears in Mailtrap inbox.
-
-**Verification**
-- Terminal 2 shows `<-- 200 POST /webhook/stripe/1`
-- Terminal 1 shows `HandleStripeWebhookJob` and `SendPaymentNotification` processed
-- Mailtrap inbox receives email with subject `Payment received — {client_name} (...)`
-- DB: `payments` row has `status = completed`, `paid_at` set
 
 ===
 
