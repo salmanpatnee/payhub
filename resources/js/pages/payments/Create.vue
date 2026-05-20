@@ -200,18 +200,6 @@ function submit() {
                         <InputError class="mt-1" :message="form.errors.client_email" />
                     </div>
 
-                    <!-- Service -->
-                    <div class="grid gap-2">
-                        <Label for="service">Service</Label>
-                        <Input
-                            id="service"
-                            v-model="form.service"
-                            type="text"
-                            placeholder="e.g. Web Design"
-                        />
-                        <InputError class="mt-1" :message="form.errors.service" />
-                    </div>
-
                     <!-- Package -->
                     <div class="grid gap-2">
                         <Label for="package">Package</Label>
