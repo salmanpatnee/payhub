@@ -18,6 +18,7 @@ type UserRow = {
     name: string;
     email: string;
     roles: string[];
+    stripe_account_name: string | null;
 };
 
 defineProps<{ users: UserRow[] }>();
@@ -73,6 +74,7 @@ function executeDelete() {
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Name</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Email</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Role</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Stripe Account</th>
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
@@ -89,6 +91,9 @@ function executeDelete() {
                                 <Badge :variant="user.roles.includes('admin') ? 'secondary' : 'outline'" class="capitalize">
                                     {{ user.roles[0] ?? 'agent' }}
                                 </Badge>
+                            </td>
+                            <td class="px-5 py-3.5 text-muted-foreground">
+                                {{ user.stripe_account_name ?? '—' }}
                             </td>
                             <td class="px-5 py-3.5 text-right">
                                 <div class="flex items-center justify-end gap-1">
@@ -112,7 +117,7 @@ function executeDelete() {
                     </template>
                     <template v-else>
                         <tr>
-                            <td colspan="4" class="px-5 py-16 text-center text-muted-foreground text-sm">
+                            <td colspan="5" class="px-5 py-16 text-center text-muted-foreground text-sm">
                                 No team members yet. Add the first user above.
                             </td>
                         </tr>
