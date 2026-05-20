@@ -21,11 +21,13 @@ const isAdmin = computed(() =>
 );
 
 const mainNavItems = computed((): NavItem[] => [
-    { title: 'Brands',          href: '/admin/brands',            icon: Building2 },
-    { title: 'Stripe Accounts', href: '/admin/stripe-accounts',   icon: Wallet },
-    { title: 'Payments',        href: '/payments',                icon: CreditCard },
-    ...(isAdmin.value ? [{ title: 'Users', href: '/admin/users', icon: Users } as NavItem] : []),
-    { title: 'Settings',        href: '/settings/profile',        icon: Settings },
+    ...(isAdmin.value ? [
+        { title: 'Brands',          href: '/admin/brands',          icon: Building2 } as NavItem,
+        { title: 'Stripe Accounts', href: '/admin/stripe-accounts', icon: Wallet    } as NavItem,
+        { title: 'Users',           href: '/admin/users',           icon: Users     } as NavItem,
+    ] : []),
+    { title: 'Payments', href: '/payments',         icon: CreditCard },
+    { title: 'Settings', href: '/settings/profile', icon: Settings   },
 ]);
 </script>
 
