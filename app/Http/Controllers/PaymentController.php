@@ -20,7 +20,7 @@ class PaymentController extends Controller
         $user = auth()->user();
         $isAdmin = $user->hasRole('admin');
 
-        $query = Payment::with(['brand', 'stripeAccount', 'user'])
+        $query = Payment::with(['brand', 'stripeAccount', 'user', 'relationshipManager'])
             ->orderByDesc('created_at');
 
         if (! $isAdmin) {
@@ -34,6 +34,7 @@ class PaymentController extends Controller
         $query
             ->when($request->brand_id, fn ($q, $v) => $q->where('brand_id', $v))
             ->when($request->stripe_account_id, fn ($q, $v) => $q->where('stripe_account_id', $v))
+            ->when($request->relationship_manager_id, fn ($q, $v) => $q->where('relationship_manager_id', $v))
             ->when($request->status, fn ($q, $v) => $q->where('status', $v))
             ->when($request->from, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
             ->when($request->to, fn ($q, $v) => $q->whereDate('created_at', '<=', $v))
@@ -56,7 +57,7 @@ class PaymentController extends Controller
                 'client_email' => $p->client_email,
                 'client_name' => $p->client_name,
             ]),
-            'filters' => $request->only(['brand_id', 'stripe_account_id', 'status', 'from', 'to', 'search']),
+            'filters' => $request->only(['brand_id', 'stripe_account_id', 'relationship_manager_id', 'status', 'from', 'to', 'search']),
             'brands' => $isAdmin
                 ? Brand::orderBy('name')->get(['id', 'name'])
                 : [],
@@ -64,6 +65,7 @@ class PaymentController extends Controller
                 ? StripeAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
                 : [],
             'isAdmin' => $isAdmin,
+            'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
         ]);
     }
 

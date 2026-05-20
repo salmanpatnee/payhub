@@ -30,6 +30,7 @@ type PaymentRow = {
 
 type FilterState = {
     brand_id: string;
+    relationship_manager_id: string;
     status: string;
     from: string;
     to: string;
@@ -51,6 +52,7 @@ const props = defineProps<{
     filters: FilterState;
     brands: { id: number; name: string }[];
     isAdmin: boolean;
+    relationshipManagers: { id: number; name: string }[];
 }>();
 
 const copiedUuid = ref<string | null>(null);
@@ -67,6 +69,7 @@ const UNSET = '__all';
 
 const filters = reactive<FilterState>({
     brand_id: props.filters.brand_id || UNSET,
+    relationship_manager_id: props.filters.relationship_manager_id || UNSET,
     status: props.filters.status || UNSET,
     from: props.filters.from || '',
     to: props.filters.to || '',
@@ -75,6 +78,7 @@ const filters = reactive<FilterState>({
 
 const hasActiveFilters = computed(() =>
     filters.brand_id !== UNSET ||
+    filters.relationship_manager_id !== UNSET ||
     filters.status !== UNSET ||
     filters.from !== '' ||
     filters.to !== '' ||
@@ -84,6 +88,7 @@ const hasActiveFilters = computed(() =>
 const activeFilterCount = computed(() =>
     [
         filters.brand_id !== UNSET,
+        filters.relationship_manager_id !== UNSET,
         filters.status !== UNSET,
         filters.from !== '',
         filters.to !== '',
@@ -122,6 +127,7 @@ watch(
 
 function clearFilters(): void {
     filters.brand_id = UNSET;
+    filters.relationship_manager_id = UNSET;
     filters.status = UNSET;
     filters.from = '';
     filters.to = '';
@@ -231,7 +237,7 @@ async function copyLink(uuid: string): Promise<void> {
                             <SelectValue placeholder="All brands" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="__all">All brands</SelectItem>
+                            <SelectItem value="__all">All Brands</SelectItem>
                             <SelectItem
                                 v-for="brand in brands"
                                 :key="brand.id"
@@ -244,13 +250,32 @@ async function copyLink(uuid: string): Promise<void> {
                 </div>
 
                 <div class="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</Label>
+                    <Select v-model="filters.relationship_manager_id">
+                        <SelectTrigger class="w-full">
+                            <SelectValue placeholder="All RMs" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All RMs</SelectItem>
+                            <SelectItem
+                                v-for="rm in relationshipManagers"
+                                :key="rm.id"
+                                :value="String(rm.id)"
+                            >
+                                {{ rm.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
                     <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</Label>
                     <Select v-model="filters.status">
                         <SelectTrigger class="w-full">
                             <SelectValue placeholder="All statuses" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="__all">All statuses</SelectItem>
+                            <SelectItem value="__all">All Statuses</SelectItem>
                             <SelectItem value="pending">Pending</SelectItem>
                             <SelectItem value="completed">Completed</SelectItem>
                             <SelectItem value="failed">Failed</SelectItem>
