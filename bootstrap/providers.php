@@ -2,10 +2,14 @@
 
 use App\Providers\AppServiceProvider;
 use App\Providers\FortifyServiceProvider;
-use App\Providers\TelescopeServiceProvider;
 
-return [
+$providers = [
     AppServiceProvider::class,
     FortifyServiceProvider::class,
-    TelescopeServiceProvider::class,
 ];
+
+if (class_exists(\Laravel\Telescope\TelescopeApplicationServiceProvider::class)) {
+    $providers[] = App\Providers\TelescopeServiceProvider::class;
+}
+
+return $providers;
