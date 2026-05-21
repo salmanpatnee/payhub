@@ -39,8 +39,9 @@ class StripeWebhookController extends Controller
         $piId = $event->data->object->id ?? null;
         $payment = $piId ? Payment::where('stripe_payment_intent_id', $piId)->first() : null;
 
-        // Idempotency gate 1: skip if already in terminal state
-        if ($payment && in_array($payment->status, ['completed', 'failed'])) {
+        // Idempotency gate: skip only if already completed — failed can still transition
+        // to completed on a successful retry, so it must be allowed through.
+        if ($payment && $payment->status === 'completed') {
             return response('', 200);
         }
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\BrandController;
+use App\Http\Controllers\Admin\RelationshipManagerController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ClientPaymentController;
@@ -32,6 +33,9 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             ->except(['show']);
 
         Route::resource('stripe-accounts', StripeAccountController::class)
+            ->except(['show']);
+
+        Route::resource('relationship-managers', RelationshipManagerController::class)
             ->except(['show']);
 
         Route::patch(

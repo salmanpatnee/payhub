@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class Payment extends Model
@@ -12,7 +13,7 @@ class Payment extends Model
     use HasFactory;
 
     protected $fillable = [
-        'uuid', 'brand_id', 'stripe_account_id', 'user_id',
+        'uuid', 'reference_code', 'brand_id', 'stripe_account_id', 'user_id', 'relationship_manager_id',
         'amount', 'currency', 'status',
         'client_email', 'client_name',
         'service', 'package', 'note',
@@ -27,6 +28,13 @@ class Payment extends Model
             if (empty($payment->uuid)) {
                 $payment->uuid = (string) Str::uuid();
             }
+            if (empty($payment->reference_code)) {
+                $payment->reference_code = DB::transaction(function () {
+                    $max = Payment::lockForUpdate()->max('reference_code') ?? 0;
+
+                    return $max + 1;
+                });
+            }
         });
     }
 
@@ -38,10 +46,11 @@ class Payment extends Model
     protected function casts(): array
     {
         return [
-            'uuid'       => 'string',
-            'amount'     => 'integer',
+            'uuid' => 'string',
+            'reference_code' => 'integer',
+            'amount' => 'integer',
             'expires_at' => 'datetime',
-            'paid_at'    => 'datetime',
+            'paid_at' => 'datetime',
         ];
     }
 
@@ -58,5 +67,10 @@ class Payment extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function relationshipManager(): BelongsTo
+    {
+        return $this->belongsTo(RelationshipManager::class);
     }
 }

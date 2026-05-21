@@ -16,14 +16,14 @@ class DatabaseSeeder extends Seeder
     {
         // Seed roles first — assignRole() requires these to exist
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'user', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
 
         $brand = Brand::firstOrCreate(
             ['slug' => 'demo-brand'],
             [
-                'name'            => 'Demo Brand',
-                'logo_path'       => null,
-                'primary_color'   => '#3B82F6',
+                'name' => 'Demo Brand',
+                'logo_path' => null,
+                'primary_color' => '#3B82F6',
                 'secondary_color' => '#EFF6FF',
             ]
         );
@@ -32,16 +32,16 @@ class DatabaseSeeder extends Seeder
             ['account_name' => 'Leo\'s Stripe Account'],
             [
                 'publishable_key' => env('STRIPE_PUBLISHABLE_KEY', 'pk_test_replace_me'),
-                'secret_key'      => env('STRIPE_SECRET_KEY', 'sk_test_replace_me'),
-                'webhook_secret'  => 'whsec_placeholder_for_dev_only',
-                'is_active'       => true,
+                'secret_key' => env('STRIPE_SECRET_KEY', 'sk_test_replace_me'),
+                'webhook_secret' => 'whsec_placeholder_for_dev_only',
+                'is_active' => true,
             ]
         );
 
         $admin = User::firstOrCreate(
             ['email' => 'admin@payhub.test'],
             [
-                'name'     => 'PayHub Admin',
+                'name' => 'PayHub Admin',
                 'password' => Hash::make('password'),
             ]
         );
@@ -49,27 +49,30 @@ class DatabaseSeeder extends Seeder
         $admin->syncRoles(['admin']);
 
         $user = User::firstOrCreate(
-            ['email' => 'user@payhub.test'],
+            ['email' => 'agent@payhub.test'],
             [
-                'name'     => 'PayHub User',
+                'name' => 'Agent User',
                 'password' => Hash::make('password'),
+                'stripe_account_id' => $stripeAccount->id,
             ]
         );
-        $user->syncRoles(['user']);
+        $user->stripe_account_id = $stripeAccount->id;
+        $user->save();
+        $user->syncRoles(['agent']);
 
         Payment::create([
-            'brand_id'          => $brand->id,
+            'brand_id' => $brand->id,
             'stripe_account_id' => $stripeAccount->id,
-            'user_id'           => $admin->id,
-            'amount'            => 2500,
-            'currency'          => 'usd',
-            'client_name'       => 'Alice Smith',
-            'client_email'      => 'alice@example.com',
-            'service'           => 'Web Design',
-            'package'           => 'standard',
-            'note'              => 'Demo payment for dev testing',
-            'status'            => 'pending',
-            'expires_at'        => null,
+            'user_id' => $admin->id,
+            'amount' => 2500,
+            'currency' => 'usd',
+            'client_name' => 'Alice Smith',
+            'client_email' => 'alice@example.com',
+            'service' => 'Web Design',
+            'package' => 'standard',
+            'note' => 'Demo payment for dev testing',
+            'status' => 'pending',
+            'expires_at' => null,
         ]);
     }
 }

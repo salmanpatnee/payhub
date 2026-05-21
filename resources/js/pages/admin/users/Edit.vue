@@ -23,14 +23,17 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 
+type AccountOption = { id: number; account_name: string };
+
 type UserProp = {
     id: number;
     name: string;
     email: string;
     roles: string[];
+    stripe_account_id: number | null;
 };
 
-const props = defineProps<{ user: UserProp; roles: string[] }>();
+const props = defineProps<{ user: UserProp; roles: string[]; stripeAccounts: AccountOption[] }>();
 
 defineOptions({
     layout: {
@@ -46,10 +49,11 @@ const isSelf   = computed(() => page.props.auth.user?.id === props.user.id);
 const deleteOpen = ref(false);
 
 const form = useForm({
-    name:     props.user.name,
-    email:    props.user.email,
-    password: '',
-    role:     props.user.roles[0] ?? 'user',
+    name:               props.user.name,
+    email:              props.user.email,
+    password:           '',
+    role:               props.user.roles[0] ?? 'agent',
+    stripe_account_id:  props.user.stripe_account_id ? String(props.user.stripe_account_id) : '',
 });
 
 const deleteForm = useForm({});
@@ -132,10 +136,27 @@ function executeDelete() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="user">User</SelectItem>
+                                <SelectItem value="agent">Agent</SelectItem>
                             </SelectContent>
                         </Select>
                         <InputError class="mt-2" :message="form.errors.role" />
+                    </div>
+
+                    <div v-if="form.role === 'agent'" class="grid gap-2">
+                        <Label for="stripe_account_id">Stripe Account</Label>
+                        <Select v-model="form.stripe_account_id">
+                            <SelectTrigger id="stripe_account_id" class="w-full">
+                                <SelectValue placeholder="Select a Stripe account" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="account in stripeAccounts"
+                                    :key="account.id"
+                                    :value="String(account.id)"
+                                >{{ account.account_name }}</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError class="mt-2" :message="form.errors.stripe_account_id" />
                     </div>
                 </form>
             </CardContent>

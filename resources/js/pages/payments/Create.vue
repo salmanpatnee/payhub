@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { ArrowLeft, Plus } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,10 +18,13 @@ import { Textarea } from '@/components/ui/textarea';
 
 type BrandOption = { id: number; name: string };
 type AccountOption = { id: number; account_name: string };
+type RmOption = { id: number; name: string };
 
 const props = defineProps<{
     brands: BrandOption[];
     stripeAccounts: AccountOption[];
+    isStripeAccountLocked: boolean;
+    relationshipManagers: RmOption[];
 }>();
 
 defineOptions({
@@ -34,15 +37,22 @@ defineOptions({
 });
 
 const form = useForm({
-    brand_id:          '',
-    stripe_account_id: '',
-    currency:          'usd',
-    amount:            '',
-    client_name:       '',
-    client_email:      '',
-    service:           '',
-    package:           '',
-    note:              '',
+    brand_id:                  '',
+    stripe_account_id:         '',
+    relationship_manager_id:   '',
+    currency:                  'usd',
+    amount:                    '',
+    client_name:               '',
+    client_email:              '',
+    service:                   '',
+    package:                   '',
+    note:                      '',
+});
+
+onMounted(() => {
+    if (props.isStripeAccountLocked && props.stripeAccounts.length > 0) {
+        form.stripe_account_id = String(props.stripeAccounts[0].id);
+    }
 });
 
 // D-14: Fee breakdown — client-side only, no server round-trip
@@ -106,7 +116,7 @@ function submit() {
                     <!-- Stripe Account -->
                     <div class="grid gap-2">
                         <Label for="stripe_account_id">Stripe Account</Label>
-                        <Select v-model="form.stripe_account_id">
+                        <Select v-model="form.stripe_account_id" :disabled="isStripeAccountLocked">
                             <SelectTrigger id="stripe_account_id" class="w-full">
                                 <SelectValue placeholder="Select a Stripe account" />
                             </SelectTrigger>
@@ -119,6 +129,24 @@ function submit() {
                             </SelectContent>
                         </Select>
                         <InputError class="mt-1" :message="form.errors.stripe_account_id" />
+                    </div>
+
+                    <!-- Relationship Manager -->
+                    <div class="grid gap-2">
+                        <Label for="relationship_manager_id">Relationship Manager</Label>
+                        <Select v-model="form.relationship_manager_id">
+                            <SelectTrigger id="relationship_manager_id" class="w-full">
+                                <SelectValue placeholder="Select a relationship manager" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="rm in props.relationshipManagers"
+                                    :key="rm.id"
+                                    :value="String(rm.id)"
+                                >{{ rm.name }}</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError class="mt-1" :message="form.errors.relationship_manager_id" />
                     </div>
 
                     <!-- Currency -->
@@ -191,18 +219,6 @@ function submit() {
                             placeholder="jane@example.com"
                         />
                         <InputError class="mt-1" :message="form.errors.client_email" />
-                    </div>
-
-                    <!-- Service -->
-                    <div class="grid gap-2">
-                        <Label for="service">Service</Label>
-                        <Input
-                            id="service"
-                            v-model="form.service"
-                            type="text"
-                            placeholder="e.g. Web Design"
-                        />
-                        <InputError class="mt-1" :message="form.errors.service" />
                     </div>
 
                     <!-- Package -->

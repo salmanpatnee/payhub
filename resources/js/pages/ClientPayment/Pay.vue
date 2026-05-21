@@ -12,6 +12,7 @@ import { Spinner } from '@/components/ui/spinner'
 const props = defineProps<{
     payment: {
         uuid: string
+        reference_code: number | null
         amount: number
         currency: string
         service: string | null
@@ -118,6 +119,7 @@ async function submit(instance: any, elements: any): Promise<void> {
         :brand="props.brand"
         :payment="{
             uuid: payment.uuid,
+            reference_code: payment.reference_code,
             amount: payment.amount,
             currency: payment.currency,
             service: payment.service,

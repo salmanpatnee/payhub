@@ -12,6 +12,7 @@ const props = defineProps<{
     }
     payment?: {
         uuid?: string
+        reference_code?: number | null
         amount?: number
         currency?: string
         service?: string | null
@@ -88,10 +89,13 @@ const statusConfig = computed(() => {
                             </span>
                         </div>
 
-                        <!-- Reference -->
-                        <div v-if="payment.uuid">
-                            <p class="field-label">Reference</p>
-                            <p class="field-value mt-1">{{ payment.uuid.slice(0, 8).toUpperCase() }}</p>
+                        <!-- Order code -->
+                        <div v-if="payment.reference_code != null || payment.uuid">
+                            <p class="field-label">Order Code</p>
+                            <p class="field-value ref-code mt-1">
+                                <template v-if="payment.reference_code != null">#{{ String(payment.reference_code).padStart(6, '0') }}</template>
+                                <template v-else>{{ payment.uuid!.slice(0, 8).toUpperCase() }}</template>
+                            </p>
                         </div>
 
                         <!-- Service -->
@@ -232,6 +236,14 @@ const statusConfig = computed(() => {
     color: rgba(255, 255, 255, 0.92);
     line-height: 1.45;
     text-transform: capitalize;
+}
+
+.field-value.ref-code {
+    font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: none;
 }
 
 .amount-hero {

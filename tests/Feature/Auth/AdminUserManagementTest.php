@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
@@ -16,7 +17,7 @@ class AdminUserManagementTest extends TestCase
         parent::setUp();
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'user',  'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
     }
 
     private function adminUser(): User
@@ -37,12 +38,15 @@ class AdminUserManagementTest extends TestCase
     {
         $admin = $this->adminUser();
 
+        $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+
         $this->actingAs($admin)
             ->post(route('admin.users.store'), [
-                'name'     => 'Test User',
-                'email'    => 'testuser@example.com',
-                'password' => 'Password1!',
-                'role'     => 'user',
+                'name'              => 'Test User',
+                'email'             => 'testuser@example.com',
+                'password'          => 'Password1!',
+                'role'              => 'agent',
+                'stripe_account_id' => $stripeAccount->id,
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.users.index'));
@@ -54,7 +58,7 @@ class AdminUserManagementTest extends TestCase
     {
         $admin  = $this->adminUser();
         $target = User::factory()->create(['email_verified_at' => now()]);
-        $target->syncRoles(['user']);
+        $target->syncRoles(['agent']);
 
         $this->actingAs($admin)
             ->patch(route('admin.users.update', $target), [
@@ -72,7 +76,7 @@ class AdminUserManagementTest extends TestCase
     {
         $admin  = $this->adminUser();
         $target = User::factory()->create(['email_verified_at' => now()]);
-        $target->syncRoles(['user']);
+        $target->syncRoles(['agent']);
 
         $this->actingAs($admin)
             ->delete(route('admin.users.destroy', $target))
