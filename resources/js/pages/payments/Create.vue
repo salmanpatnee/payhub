@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, onMounted } from 'vue';
+import { onMounted } from 'vue';
 import { ArrowLeft, Plus } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import {
@@ -55,21 +55,6 @@ onMounted(() => {
     }
 });
 
-// D-14: Fee breakdown — client-side only, no server round-trip
-// USD: 2.9% + $0.30 | GBP: 1.5% + £0.20
-const feeBreakdown = computed(() => {
-    const amt = parseFloat(form.amount as string);
-    if (!amt || amt <= 0) return null;
-
-    const fee     = form.currency === 'gbp' ? amt * 0.015 + 0.20 : amt * 0.029 + 0.30;
-    const receive = amt - fee;
-    const locale  = form.currency === 'gbp' ? 'en-GB' : 'en-US';
-    const curr    = form.currency.toUpperCase();
-    const fmt     = (n: number) =>
-        new Intl.NumberFormat(locale, { style: 'currency', currency: curr }).format(n);
-
-    return { charge: fmt(amt), fee: fmt(fee), receive: fmt(receive) };
-});
 
 function submit() {
     form.post('/payments');
@@ -176,25 +161,6 @@ function submit() {
                             placeholder="0.00"
                         />
                         <InputError class="mt-1" :message="form.errors.amount" />
-                    </div>
-
-                    <!-- Fee Breakdown (D-14) — spans full width, only when amount > 0 -->
-                    <div v-if="feeBreakdown" class="col-span-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                            Estimated — based on standard Stripe rates
-                        </p>
-                        <div class="flex justify-between py-1">
-                            <span class="text-muted-foreground">Charge amount</span>
-                            <span class="font-medium">{{ feeBreakdown.charge }}</span>
-                        </div>
-                        <div class="flex justify-between py-1">
-                            <span class="text-muted-foreground">Stripe fee</span>
-                            <span class="text-destructive">− {{ feeBreakdown.fee }}</span>
-                        </div>
-                        <div class="flex justify-between py-1 border-t border-border mt-1 pt-2">
-                            <span class="font-semibold">You receive</span>
-                            <span class="font-semibold text-green-600">{{ feeBreakdown.receive }}</span>
-                        </div>
                     </div>
 
                     <!-- Client Name -->
