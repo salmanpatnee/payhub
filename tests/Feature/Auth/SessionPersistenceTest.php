@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class SessionPersistenceTest extends TestCase
@@ -14,7 +15,7 @@ class SessionPersistenceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'user',  'guard_name' => 'web']);
     }
@@ -24,10 +25,10 @@ class SessionPersistenceTest extends TestCase
         $user = User::factory()->create(['email_verified_at' => now()]);
 
         $this->post(route('login.store'), [
-            'email'    => $user->email,
+            'email' => $user->email,
             'password' => 'password',
             'remember' => true,
-        ])->assertRedirect(route('dashboard', absolute: false));
+        ])->assertRedirect(route('payments.index', absolute: false));
 
         $this->assertAuthenticated();
         $this->assertNotNull($user->fresh()->remember_token);

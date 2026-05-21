@@ -33,7 +33,7 @@ it('admin can view all payments across all brands', function () {
     $this->actingAs($admin)
         ->get(route('payments.index'))
         ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->has('payments', 2));
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('payments.data', 2));
 });
 
 // DASH-04: Payment list includes required columns
@@ -58,13 +58,13 @@ it('payment list includes required columns', function () {
         ->get(route('payments.index'))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->has('payments', 1)
-            ->where('payments.0.amount', 5000)
-            ->where('payments.0.currency', 'usd')
-            ->where('payments.0.brand_name', 'Test Brand')
-            ->where('payments.0.status', 'pending')
-            ->where('payments.0.client_email', 'client@example.com')
-            ->has('payments.0.created_at')
+            ->has('payments.data', 1)
+            ->where('payments.data.0.amount', 5000)
+            ->where('payments.data.0.currency', 'usd')
+            ->where('payments.data.0.brand_name', 'Test Brand')
+            ->where('payments.data.0.status', 'pending')
+            ->where('payments.data.0.client_email', 'client@example.com')
+            ->has('payments.data.0.created_at')
         );
 });
 
@@ -83,8 +83,8 @@ it('admin can filter payments by status', function () {
         ->get(route('payments.index', ['status' => 'completed']))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->has('payments', 1)
-            ->where('payments.0.status', 'completed')
+            ->has('payments.data', 1)
+            ->where('payments.data.0.status', 'completed')
         );
 });
 
@@ -104,8 +104,8 @@ it('admin can filter payments by brand', function () {
         ->get(route('payments.index', ['brand_id' => $brand1->id]))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->has('payments', 1)
-            ->where('payments.0.brand_name', $brand1->name)
+            ->has('payments.data', 1)
+            ->where('payments.data.0.brand_name', $brand1->name)
         );
 });
 
@@ -125,7 +125,7 @@ it('admin can filter payments by date range', function () {
     $this->actingAs($admin)
         ->get(route('payments.index', ['from' => $yesterday]))
         ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->has('payments', 1));
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('payments.data', 1));
 });
 
 // DASH-02: Admin sees brands and accounts props for filter dropdowns
@@ -169,7 +169,7 @@ it('user only sees own payments regardless of status filter', function () {
     $this->actingAs($user1)
         ->get(route('payments.index', ['status' => 'completed']))
         ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->has('payments', 1));
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('payments.data', 1));
 });
 
 // DASH-03: User does not receive brands or accounts props
