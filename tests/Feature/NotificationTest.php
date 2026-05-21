@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\HandleStripeWebhookJob;
 use App\Jobs\SendPaymentNotification;
 use App\Mail\PaymentSucceeded;
 use App\Models\Brand;
@@ -34,7 +35,7 @@ it('payment_intent.succeeded dispatches SendPaymentNotification job', function (
     // Run HandleStripeWebhookJob synchronously to test the dispatch chain.
     // Queue::fake() intercepts HandleStripeWebhookJob from the HTTP layer, so we test
     // the job's handle() method directly — this is the correct pattern for two-job chains.
-    $job = new \App\Jobs\HandleStripeWebhookJob(
+    $job = new HandleStripeWebhookJob(
         $account->id,
         'payment_intent.succeeded',
         ['id' => 'pi_notify_test'],
@@ -56,6 +57,7 @@ it('payment_intent.payment_failed does NOT dispatch SendPaymentNotification', fu
     ]);
 
     $payload = json_encode([
+        'id' => 'evt_test_notify_failed',
         'type' => 'payment_intent.payment_failed',
         'data' => ['object' => ['id' => 'pi_notify_failed']],
     ]);

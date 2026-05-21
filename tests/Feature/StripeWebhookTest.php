@@ -79,6 +79,7 @@ it('returns 400 for tampered signature', function () {
 it('valid signature with handled event returns 200', function () {
     $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_test123']);
     $payload = json_encode([
+        'id' => 'evt_test_valid_sig',
         'type' => 'payment_intent.succeeded',
         'data' => ['object' => ['id' => 'pi_test_abc']],
     ]);
@@ -100,6 +101,7 @@ it('payment_intent.succeeded dispatches job and returns 200', function () {
     ]);
 
     $payload = json_encode([
+        'id' => 'evt_test_dispatch_job',
         'type' => 'payment_intent.succeeded',
         'data' => ['object' => ['id' => 'pi_test_abc']],
     ]);
@@ -122,6 +124,7 @@ it('payment_intent.succeeded sets status to completed and paid_at', function () 
     ]);
 
     $payload = json_encode([
+        'id' => 'evt_test_succeeded',
         'type' => 'payment_intent.succeeded',
         'data' => ['object' => ['id' => 'pi_test_succeeded']],
     ]);
@@ -146,6 +149,7 @@ it('payment_intent.payment_failed sets status to failed', function () {
     ]);
 
     $payload = json_encode([
+        'id' => 'evt_test_failed',
         'type' => 'payment_intent.payment_failed',
         'data' => ['object' => ['id' => 'pi_test_failed']],
     ]);
@@ -171,6 +175,7 @@ it('already completed payment is not re-processed', function () {
     ]);
 
     $payload = json_encode([
+        'id' => 'evt_test_already_done',
         'type' => 'payment_intent.succeeded',
         'data' => ['object' => ['id' => 'pi_test_already_done']],
     ]);
@@ -189,6 +194,7 @@ it('already completed payment is not re-processed', function () {
 it('webhook route has no csrf protection', function () {
     $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_test123']);
     $payload = json_encode([
+        'id' => 'evt_test_csrf',
         'type' => 'payment_intent.succeeded',
         'data' => ['object' => ['id' => 'pi_test_abc']],
     ]);
@@ -265,6 +271,7 @@ it('payment_intent.succeeded with failed status completes payment', function () 
     ]);
 
     $payload = json_encode([
+        'id' => 'evt_test_retry',
         'type' => 'payment_intent.succeeded',
         'data' => ['object' => ['id' => 'pi_test_retry']],
     ]);
@@ -289,6 +296,7 @@ it('payment_intent.payment_failed with already-failed payment is a no-op', funct
     ]);
 
     $payload = json_encode([
+        'id' => 'evt_test_double_fail',
         'type' => 'payment_intent.payment_failed',
         'data' => ['object' => ['id' => 'pi_test_double_fail']],
     ]);

@@ -48,7 +48,7 @@ class ClientPaymentController extends Controller
                         'reference_code' => $this->formatReferenceCode($payment->reference_code),
                         'payment_uuid' => $payment->uuid,
                     ],
-                ]);
+                ], ['idempotency_key' => 'pi-recreate-'.$payment->uuid.'-'.substr(md5($payment->stripe_payment_intent_id ?? ''), 0, 8)]);
                 $payment->update(['stripe_payment_intent_id' => $pi->id]);
             }
             // else: reuse the existing confirmable PI — do NOT update stripe_payment_intent_id
@@ -62,7 +62,7 @@ class ClientPaymentController extends Controller
                     'reference_code' => $this->formatReferenceCode($payment->reference_code),
                     'payment_uuid' => $payment->uuid,
                 ],
-            ]);
+            ], ['idempotency_key' => 'pi-create-'.$payment->uuid]);
             // D-02: Store PI ID so Phase 6 webhook handler can look up the Payment
             $payment->update(['stripe_payment_intent_id' => $pi->id]);
         }

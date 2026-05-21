@@ -7,7 +7,7 @@ withDefaults(
         canRegister: boolean;
     }>(),
     {
-        canRegister: true,
+        canRegister: false,
     },
 );
 </script>
