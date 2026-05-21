@@ -26,17 +26,21 @@ class HandleStripeWebhookJob implements ShouldQueue
         // eventData is $event->data->object->toArray() — a flat PaymentIntent array
         $piId = $this->eventData['id'] ?? null;
 
-        // Atomic update: WHERE status = 'pending' acts as an idempotency guard.
-        // Adding stripe_account_id scopes the update to the correct account.
-        // If $updated === 0, the payment is already in a terminal state (or not found) — no-op.
-        $updated = Payment::where('stripe_payment_intent_id', $piId)
-            ->where('stripe_account_id', $this->stripeAccountId)
-            ->where('status', 'pending')
-            ->update(match ($this->eventType) {
-                'payment_intent.succeeded' => ['status' => 'completed', 'paid_at' => now()],
-                'payment_intent.payment_failed' => ['status' => 'failed'],
-                default => [],
-            });
+        // Each event type has its own status guard for idempotency and retry support.
+        // succeeded: allows pending→completed (first payment) and failed→completed (retry after decline).
+        // payment_failed: only pending→failed; already-failed is a no-op to prevent double-updates.
+        // completed is excluded from both guards — it is always terminal.
+        $updated = match ($this->eventType) {
+            'payment_intent.succeeded' => Payment::where('stripe_payment_intent_id', $piId)
+                ->where('stripe_account_id', $this->stripeAccountId)
+                ->whereIn('status', ['pending', 'failed'])
+                ->update(['status' => 'completed', 'paid_at' => now()]),
+            'payment_intent.payment_failed' => Payment::where('stripe_payment_intent_id', $piId)
+                ->where('stripe_account_id', $this->stripeAccountId)
+                ->where('status', 'pending')
+                ->update(['status' => 'failed']),
+            default => 0,
+        };
 
         // Dispatch email notification only for succeeded events where the DB write confirmed
         // new state (idempotency: $updated === 0 means already terminal, skip notification).

@@ -15,8 +15,10 @@ class ClientPaymentController extends Controller
     {
         $payment->loadMissing(['brand', 'stripeAccount']);
 
-        // D-03 + D-12: Guard check BEFORE any StripeClient call
-        if ($payment->status !== 'pending') {
+        // D-03 + D-12: Guard check BEFORE any StripeClient call.
+        // failed is allowed through so a declined card can be retried — the existing PI reuse
+        // logic below handles confirmable (requires_payment_method) vs terminal PI states.
+        if (! in_array($payment->status, ['pending', 'failed'])) {
             return Inertia::render('ClientPayment/Unavailable', [
                 'status' => $payment->status,
                 'brand' => $this->brandProps($payment->brand),
@@ -84,10 +86,10 @@ class ClientPaymentController extends Controller
 
         $payment->loadMissing('brand');
 
-        // CR-02 fix: server-side status guard — prevent success page spoofing via crafted URLs
-        // Even if redirect_status=succeeded is present in the URL, a known-failed or cancelled
-        // payment must NOT display a success confirmation (no money changed hands).
-        if (in_array($payment->status, ['failed', 'cancelled'])) {
+        // CR-02 fix: block cancelled payments from showing success via crafted URLs.
+        // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,
+        // so status is still 'failed' at this instant — the webhook sets it to 'completed' shortly after.
+        if ($payment->status === 'cancelled') {
             return Inertia::render('ClientPayment/Unavailable', [
                 'status' => $payment->status,
                 'brand' => $this->brandProps($payment->brand),

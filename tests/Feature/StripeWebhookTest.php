@@ -254,6 +254,54 @@ it('webhook_secret not starting with whsec_ is rejected with validation error', 
         ->assertSessionHasErrors(['webhook_secret']);
 });
 
+// Retry: payment_intent.succeeded on a failed payment completes it (failed→completed transition)
+it('payment_intent.succeeded with failed status completes payment', function () {
+    $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_test123']);
+    $payment = Payment::factory()->create([
+        'status' => 'failed',
+        'stripe_payment_intent_id' => 'pi_test_retry',
+        'stripe_account_id' => $account->id,
+        'paid_at' => null,
+    ]);
+
+    $payload = json_encode([
+        'type' => 'payment_intent.succeeded',
+        'data' => ['object' => ['id' => 'pi_test_retry']],
+    ]);
+    $sig = fakeStripeSignature($payload, 'whsec_test123');
+
+    stripePost("/webhook/stripe/{$account->id}", $payload, $sig)
+        ->assertStatus(200);
+
+    $payment->refresh();
+    expect($payment->status)->toBe('completed');
+    expect($payment->paid_at)->not->toBeNull();
+});
+
+// Idempotency: second decline does not re-update an already-failed payment
+it('payment_intent.payment_failed with already-failed payment is a no-op', function () {
+    $account = StripeAccount::factory()->create(['webhook_secret' => 'whsec_test123']);
+    $payment = Payment::factory()->create([
+        'status' => 'failed',
+        'stripe_payment_intent_id' => 'pi_test_double_fail',
+        'stripe_account_id' => $account->id,
+        'paid_at' => null,
+    ]);
+
+    $payload = json_encode([
+        'type' => 'payment_intent.payment_failed',
+        'data' => ['object' => ['id' => 'pi_test_double_fail']],
+    ]);
+    $sig = fakeStripeSignature($payload, 'whsec_test123');
+
+    stripePost("/webhook/stripe/{$account->id}", $payload, $sig)
+        ->assertStatus(200);
+
+    $payment->refresh();
+    expect($payment->status)->toBe('failed');
+    expect($payment->paid_at)->toBeNull();
+});
+
 // update() writes a new whsec_ value when provided
 it('providing a valid whsec_ value updates webhook_secret', function () {
     $admin = User::factory()->create(['email_verified_at' => now()]);
