@@ -21,13 +21,13 @@ class StorePaymentRequest extends FormRequest
                 Rule::exists('stripe_accounts', 'id')
                     ->where('is_active', true)],
             'currency' => ['required', 'string', 'in:usd,gbp'],
-            'amount' => ['required', 'numeric', 'min:0.01'],
+            'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
             'client_name' => ['required', 'string', 'max:255'],
             'client_email' => ['required', 'email', 'max:255'],
             'service' => ['nullable', 'string', 'max:255'],
             'package' => ['nullable', 'string',
                 'in:basic,standard,premium,platinum,diamond'],
-            'note' => ['nullable', 'string'],
+            'note' => ['nullable', 'string', 'max:2000'],
         ];
     }
 

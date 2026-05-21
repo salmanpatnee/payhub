@@ -19,7 +19,10 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
     Route::resource('payments', PaymentController::class)
-        ->only(['index', 'create', 'store', 'show']);
+        ->only(['index', 'create', 'show']);
+    Route::post('payments', [PaymentController::class, 'store'])
+        ->name('payments.store')
+        ->middleware('throttle:30,1');
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])
@@ -68,6 +71,7 @@ Route::get('/pay/{payment}/failed', [ClientPaymentController::class, 'failed'])-
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)
 Route::post('/webhook/stripe/{stripeAccount}', [StripeWebhookController::class, 'handle'])
-    ->name('webhook.stripe');
+    ->name('webhook.stripe')
+    ->middleware('throttle:120,1');
 
 require __DIR__.'/settings.php';

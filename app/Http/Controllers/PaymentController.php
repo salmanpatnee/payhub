@@ -10,6 +10,7 @@ use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -129,6 +130,7 @@ class PaymentController extends Controller
 
     public function show(Payment $payment): Response
     {
+        Gate::authorize('view', $payment);
         $payment->loadMissing(['brand', 'stripeAccount', 'relationshipManager']);
 
         return Inertia::render('payments/Show', [

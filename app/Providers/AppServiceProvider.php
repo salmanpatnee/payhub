@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\Payment;
+use App\Policies\PaymentPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -24,6 +27,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        Gate::policy(Payment::class, PaymentPolicy::class);
     }
 
     /**
