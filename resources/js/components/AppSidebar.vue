@@ -27,8 +27,10 @@ const mainNavItems = computed((): NavItem[] => [
         { title: 'Users',           href: '/admin/users',                   icon: Users      } as NavItem,
         { title: 'RMs',             href: '/admin/relationship-managers',   icon: UserCheck2 } as NavItem,
     ] : []),
-    { title: 'Payments', href: '/payments',         icon: CreditCard },
-    { title: 'Settings', href: '/settings/profile', icon: Settings   },
+    { title: 'Payments', href: '/payments', icon: CreditCard },
+    ...(isAdmin.value ? [
+        { title: 'Settings', href: '/settings/profile', icon: Settings } as NavItem,
+    ] : []),
 ]);
 </script>
 

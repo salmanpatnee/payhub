@@ -7,11 +7,29 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Fortify\Features;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class SecurityTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
+    }
+
+    private function adminUser(): User
+    {
+        $user = User::factory()->create();
+        $user->syncRoles(['admin']);
+
+        return $user;
+    }
 
     public function test_security_page_is_displayed()
     {
@@ -22,7 +40,7 @@ class SecurityTest extends TestCase
             'confirmPassword' => true,
         ]);
 
-        $user = User::factory()->create();
+        $user = $this->adminUser();
 
         $this->actingAs($user)
             ->withSession(['auth.password_confirmed_at' => time()])
@@ -38,7 +56,7 @@ class SecurityTest extends TestCase
     {
         $this->skipUnlessFortifyHas(Features::twoFactorAuthentication());
 
-        $user = User::factory()->create();
+        $user = $this->adminUser();
 
         Features::twoFactorAuthentication([
             'confirm' => true,
@@ -55,7 +73,7 @@ class SecurityTest extends TestCase
     {
         $this->skipUnlessFortifyHas(Features::twoFactorAuthentication());
 
-        $user = User::factory()->create();
+        $user = $this->adminUser();
 
         Features::twoFactorAuthentication([
             'confirm' => true,
@@ -76,7 +94,7 @@ class SecurityTest extends TestCase
 
         config(['fortify.features' => []]);
 
-        $user = User::factory()->create();
+        $user = $this->adminUser();
 
         $this->actingAs($user)
             ->get(route('security.edit'))
@@ -91,7 +109,7 @@ class SecurityTest extends TestCase
 
     public function test_password_can_be_updated()
     {
-        $user = User::factory()->create();
+        $user = $this->adminUser();
 
         $response = $this
             ->actingAs($user)
@@ -111,7 +129,7 @@ class SecurityTest extends TestCase
 
     public function test_correct_password_must_be_provided_to_update_password()
     {
-        $user = User::factory()->create();
+        $user = $this->adminUser();
 
         $response = $this
             ->actingAs($user)
