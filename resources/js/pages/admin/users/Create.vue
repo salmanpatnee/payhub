@@ -82,7 +82,6 @@ function submit() {
                             v-model="form.email"
                             type="email"
                             autocomplete="email"
-                            required
                         />
                         <InputError class="mt-2" :message="form.errors.email" />
                     </div>

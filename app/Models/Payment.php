@@ -30,7 +30,7 @@ class Payment extends Model
             }
             if (empty($payment->reference_code)) {
                 $payment->reference_code = DB::transaction(function () {
-                    $max = Payment::lockForUpdate()->max('reference_code') ?? 0;
+                    $max = max(Payment::lockForUpdate()->max('reference_code') ?? 0, 1000);
 
                     return $max + 1;
                 });
