@@ -19,7 +19,7 @@ class UpdateUserRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', "unique:users,email,{$userId}"],
+            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
             'password' => ['nullable', 'string', Password::default()],
             'role' => ['required', 'string', 'in:admin,agent'],
             'stripe_account_id' => [
