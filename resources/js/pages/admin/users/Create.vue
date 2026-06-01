@@ -29,7 +29,7 @@ defineOptions({
 
 const form = useForm({
     name:               '',
-    email:              '',
+    username:           '',
     password:           '',
     role:               'agent',
     stripe_account_id:  '',
@@ -76,14 +76,15 @@ function submit() {
                     </div>
 
                     <div class="grid gap-2">
-                        <Label for="email">Email</Label>
+                        <Label for="username">Username</Label>
                         <Input
-                            id="email"
-                            v-model="form.email"
-                            type="email"
-                            autocomplete="email"
+                            id="username"
+                            v-model="form.username"
+                            type="text"
+                            autocomplete="username"
+                            required
                         />
-                        <InputError class="mt-2" :message="form.errors.email" />
+                        <InputError class="mt-2" :message="form.errors.username" />
                     </div>
 
                     <div class="grid gap-2">

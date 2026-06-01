@@ -18,7 +18,7 @@ defineOptions({
 
 const form = useForm({
     name: '',
-    email: '',
+    username: '',
     password: '',
     password_confirmation: '',
 });
@@ -53,17 +53,17 @@ function submit() {
             </div>
 
             <div class="grid gap-2">
-                <Label for="email">Email address</Label>
+                <Label for="username">Username</Label>
                 <Input
-                    id="email"
-                    type="email"
+                    id="username"
+                    type="text"
                     required
                     :tabindex="2"
-                    autocomplete="email"
-                    v-model="form.email"
-                    placeholder="email@example.com"
+                    autocomplete="username"
+                    v-model="form.username"
+                    placeholder="username"
                 />
-                <InputError :message="form.errors.email" />
+                <InputError :message="form.errors.username" />
             </div>
 
             <div class="grid gap-2">

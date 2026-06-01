@@ -24,7 +24,7 @@ class UserController extends Controller
                 ->map(fn (User $user) => [
                     'id' => $user->id,
                     'name' => $user->name,
-                    'email' => $user->email,
+                    'username' => $user->username,
                     'roles' => $user->getRoleNames(),
                     'stripe_account_name' => $user->stripeAccount?->account_name,
                 ]),
@@ -43,7 +43,7 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): RedirectResponse
     {
-        $data = $request->safe()->only('name', 'email', 'password');
+        $data = $request->safe()->only('name', 'username', 'password');
         $data['stripe_account_id'] = $request->validated('role') === 'agent'
             ? $request->validated('stripe_account_id')
             : null;
@@ -59,7 +59,7 @@ class UserController extends Controller
     {
         return Inertia::render('admin/users/Edit', [
             'user' => array_merge(
-                $user->only('id', 'name', 'email', 'stripe_account_id'),
+                $user->only('id', 'name', 'username', 'stripe_account_id'),
                 ['roles' => $user->getRoleNames()]
             ),
             'roles' => Role::pluck('name'),
@@ -71,7 +71,7 @@ class UserController extends Controller
 
     public function update(UpdateUserRequest $request, User $user): RedirectResponse
     {
-        $data = $request->safe()->only('name', 'email');
+        $data = $request->safe()->only('name', 'username');
 
         if ($request->filled('password')) {
             $data['password'] = $request->validated('password');

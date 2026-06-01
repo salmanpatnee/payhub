@@ -6,6 +6,7 @@ use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class AdminUserManagementTest extends TestCase
@@ -15,7 +16,7 @@ class AdminUserManagementTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
     }
@@ -24,6 +25,7 @@ class AdminUserManagementTest extends TestCase
     {
         $admin = User::factory()->create(['email_verified_at' => now()]);
         $admin->syncRoles(['admin']);
+
         return $admin;
     }
 
@@ -42,29 +44,29 @@ class AdminUserManagementTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('admin.users.store'), [
-                'name'              => 'Test User',
-                'email'             => 'testuser@example.com',
-                'password'          => 'Password1!',
-                'role'              => 'agent',
+                'name' => 'Test User',
+                'username' => 'testuser',
+                'password' => 'Password1!',
+                'role' => 'agent',
                 'stripe_account_id' => $stripeAccount->id,
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.users.index'));
 
-        $this->assertDatabaseHas('users', ['email' => 'testuser@example.com']);
+        $this->assertDatabaseHas('users', ['username' => 'testuser']);
     }
 
     public function test_admin_can_update_user_role(): void
     {
-        $admin  = $this->adminUser();
+        $admin = $this->adminUser();
         $target = User::factory()->create(['email_verified_at' => now()]);
         $target->syncRoles(['agent']);
 
         $this->actingAs($admin)
             ->patch(route('admin.users.update', $target), [
-                'name'  => $target->name,
-                'email' => $target->email,
-                'role'  => 'admin',
+                'name' => $target->name,
+                'username' => $target->username,
+                'role' => 'admin',
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.users.index'));
@@ -74,7 +76,7 @@ class AdminUserManagementTest extends TestCase
 
     public function test_admin_can_delete_user(): void
     {
-        $admin  = $this->adminUser();
+        $admin = $this->adminUser();
         $target = User::factory()->create(['email_verified_at' => now()]);
         $target->syncRoles(['agent']);
 

@@ -25,7 +25,7 @@ class SessionPersistenceTest extends TestCase
         $user = User::factory()->create(['email_verified_at' => now()]);
 
         $this->post(route('login.store'), [
-            'email' => $user->email,
+            'username' => $user->username,
             'password' => 'password',
             'remember' => true,
         ])->assertRedirect(route('payments.index', absolute: false));

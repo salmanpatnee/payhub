@@ -39,9 +39,10 @@ class DatabaseSeeder extends Seeder
         );
 
         $admin = User::firstOrCreate(
-            ['email' => 'admin@payhub.test'],
+            ['username' => 'admin'],
             [
                 'name' => 'PayHub Admin',
+                'email' => 'admin@payhub.test',
                 'password' => Hash::make('password'),
             ]
         );
@@ -49,9 +50,10 @@ class DatabaseSeeder extends Seeder
         $admin->syncRoles(['admin']);
 
         $user = User::firstOrCreate(
-            ['email' => 'agent@payhub.test'],
+            ['username' => 'agent'],
             [
                 'name' => 'Agent User',
+                'email' => 'agent@payhub.test',
                 'password' => Hash::make('password'),
                 'stripe_account_id' => $stripeAccount->id,
             ]

@@ -28,7 +28,7 @@ type AccountOption = { id: number; account_name: string };
 type UserProp = {
     id: number;
     name: string;
-    email: string;
+    username: string;
     roles: string[];
     stripe_account_id: number | null;
 };
@@ -50,7 +50,7 @@ const deleteOpen = ref(false);
 
 const form = useForm({
     name:               props.user.name,
-    email:              props.user.email,
+    username:           props.user.username,
     password:           '',
     role:               props.user.roles[0] ?? 'agent',
     stripe_account_id:  props.user.stripe_account_id ? String(props.user.stripe_account_id) : '',
@@ -87,7 +87,7 @@ function executeDelete() {
             <CardHeader>
                 <CardTitle>Edit team member</CardTitle>
                 <CardDescription>
-                    Update name, email, role, or password for this account.
+                    Update name, username, role, or password for this account.
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -105,14 +105,15 @@ function executeDelete() {
                     </div>
 
                     <div class="grid gap-2">
-                        <Label for="email">Email</Label>
+                        <Label for="username">Username</Label>
                         <Input
-                            id="email"
-                            v-model="form.email"
-                            type="email"
-                            autocomplete="email"
+                            id="username"
+                            v-model="form.username"
+                            type="text"
+                            autocomplete="username"
+                            required
                         />
-                        <InputError class="mt-2" :message="form.errors.email" />
+                        <InputError class="mt-2" :message="form.errors.username" />
                     </div>
 
                     <div class="grid gap-2">
