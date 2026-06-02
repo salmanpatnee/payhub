@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import InputError from '@/components/InputError.vue';
 import { Label } from '@/components/ui/label';
+import MultiSelectCombobox from '@/components/MultiSelectCombobox.vue';
 import {
     Select,
     SelectContent,
@@ -15,8 +16,14 @@ import {
 } from '@/components/ui/select';
 
 type AccountOption = { id: number; account_name: string };
+type NamedOption = { id: number; name: string };
 
-defineProps<{ roles: string[]; stripeAccounts: AccountOption[] }>();
+defineProps<{
+    roles: string[];
+    stripeAccounts: AccountOption[];
+    brands: NamedOption[];
+    relationshipManagers: NamedOption[];
+}>();
 
 defineOptions({
     layout: {
@@ -28,11 +35,13 @@ defineOptions({
 });
 
 const form = useForm({
-    name:               '',
-    email:              '',
-    password:           '',
-    role:               'agent',
-    stripe_account_id:  '',
+    name:                       '',
+    username:                   '',
+    password:                   '',
+    role:                       'agent',
+    stripe_account_id:          '',
+    brand_ids:                  [] as number[],
+    relationship_manager_ids:   [] as number[],
 });
 
 function submit() {
@@ -76,14 +85,15 @@ function submit() {
                     </div>
 
                     <div class="grid gap-2">
-                        <Label for="email">Email</Label>
+                        <Label for="username">Username</Label>
                         <Input
-                            id="email"
-                            v-model="form.email"
-                            type="email"
-                            autocomplete="email"
+                            id="username"
+                            v-model="form.username"
+                            type="text"
+                            autocomplete="username"
+                            required
                         />
-                        <InputError class="mt-2" :message="form.errors.email" />
+                        <InputError class="mt-2" :message="form.errors.username" />
                     </div>
 
                     <div class="grid gap-2">
@@ -127,6 +137,30 @@ function submit() {
                             </SelectContent>
                         </Select>
                         <InputError class="mt-2" :message="form.errors.stripe_account_id" />
+                    </div>
+
+                    <div v-if="form.role === 'agent'" class="grid gap-2">
+                        <Label>Brands</Label>
+                        <MultiSelectCombobox
+                            v-model="form.brand_ids"
+                            :options="brands"
+                            placeholder="Select brands"
+                            search-placeholder="Search brands…"
+                            empty-text="No brands found."
+                        />
+                        <InputError class="mt-2" :message="form.errors.brand_ids" />
+                    </div>
+
+                    <div v-if="form.role === 'agent'" class="grid gap-2">
+                        <Label>Relationship Managers</Label>
+                        <MultiSelectCombobox
+                            v-model="form.relationship_manager_ids"
+                            :options="relationshipManagers"
+                            placeholder="Select relationship managers"
+                            search-placeholder="Search relationship managers…"
+                            empty-text="No relationship managers found."
+                        />
+                        <InputError class="mt-2" :message="form.errors.relationship_manager_ids" />
                     </div>
                 </form>
             </CardContent>

@@ -19,7 +19,7 @@ class UpdateUserRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
+            'username' => ['required', 'string', 'max:255', Rule::unique('users', 'username')->ignore($userId)],
             'password' => ['nullable', 'string', Password::default()],
             'role' => ['required', 'string', 'in:admin,agent'],
             'stripe_account_id' => [
@@ -28,6 +28,18 @@ class UpdateUserRequest extends FormRequest
                 'integer',
                 Rule::exists('stripe_accounts', 'id')->where('is_active', true),
             ],
+            'brand_ids' => [
+                Rule::requiredIf(fn () => $this->input('role') === 'agent'),
+                'array',
+                Rule::when($this->input('role') === 'agent', ['min:1']),
+            ],
+            'brand_ids.*' => ['integer', 'exists:brands,id'],
+            'relationship_manager_ids' => [
+                Rule::requiredIf(fn () => $this->input('role') === 'agent'),
+                'array',
+                Rule::when($this->input('role') === 'agent', ['min:1']),
+            ],
+            'relationship_manager_ids.*' => ['integer', 'exists:relationship_managers,id'],
         ];
     }
 }

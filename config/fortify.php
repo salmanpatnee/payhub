@@ -45,7 +45,7 @@ return [
     |
     */
 
-    'username' => 'email',
+    'username' => 'username',
 
     'email' => 'email',
 
@@ -60,7 +60,7 @@ return [
     |
     */
 
-    'lowercase_usernames' => true,
+    'lowercase_usernames' => false,
 
     /*
     |--------------------------------------------------------------------------
@@ -145,7 +145,7 @@ return [
 
     'features' => [
         // Features::registration(),   // REMOVED — invite-only; no public sign-up (D-01)
-        Features::resetPasswords(),
+        // Features::resetPasswords(),  // REMOVED — login by username; admins reset passwords manually
         // Features::emailVerification(), // REMOVED — internal tool; simplifies test setup
         Features::twoFactorAuthentication([
             'confirm' => true,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { home } from '@/routes';
+import { CreditCard } from 'lucide-vue-next';
 
 defineProps<{
     title?: string;
@@ -15,7 +16,10 @@ defineProps<{
 
         <div class="auth-wrap">
             <Link :href="home()" class="auth-logo-link">
-                <img src="/images/logo.png" alt="PayHub" class="auth-logo" />
+                <CreditCard class="auth-logo-icon" />
+                <span class="auth-logo-text">
+                    <span class="auth-logo-pay">Pay</span><span class="auth-logo-hub">Hub</span>
+                </span>
             </Link>
 
             <div class="auth-card">
@@ -76,12 +80,31 @@ defineProps<{
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 0.5rem;
+    text-decoration: none;
     animation: fadeDown 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.auth-logo {
-    height: 2.5rem;
-    width: auto;
+.auth-logo-icon {
+    height: 1.75rem;
+    width: 1.75rem;
+    color: #f26522;
+    flex-shrink: 0;
+}
+
+.auth-logo-text {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.auth-logo-pay {
+    color: #0f172a;
+}
+
+.auth-logo-hub {
+    color: #94a3b8;
+    font-weight: 300;
 }
 
 .auth-card {
@@ -100,7 +123,7 @@ defineProps<{
 
 
 .auth-card-body {
-    padding: 2rem 2rem 2rem;
+    padding: 2rem 1.5rem 2rem;
     display: flex;
     flex-direction: column;
     gap: 1.75rem;

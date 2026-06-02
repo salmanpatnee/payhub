@@ -16,6 +16,7 @@ beforeEach(function () {
 
     Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
     Role::firstOrCreate(['name' => 'user',  'guard_name' => 'web']);
+    Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
 });
 
 function validPaymentPayload(Brand $brand, StripeAccount $account): array
@@ -193,6 +194,109 @@ it('admin sees all payments on index and user sees only own', function () {
     $this->actingAs($user)->get('/payments')
         ->assertStatus(200)
         ->assertInertia(fn ($page) => $page->has('payments.data', 1));
+});
+
+// Agent sees only their mapped brands and relationship managers on the create page
+it('agent create page shows only mapped brands and relationship managers', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $account = StripeAccount::factory()->create(['is_active' => true]);
+    $agent->stripe_account_id = $account->id;
+    $agent->save();
+
+    $mappedBrand = Brand::factory()->create();
+    $otherBrand = Brand::factory()->create();
+    $mappedRm = RelationshipManager::factory()->create();
+    RelationshipManager::factory()->create();
+
+    $agent->brands()->sync([$mappedBrand->id]);
+    $agent->relationshipManagers()->sync([$mappedRm->id]);
+
+    $this->actingAs($agent)->get('/payments/create')
+        ->assertStatus(200)
+        ->assertInertia(fn ($page) => $page
+            ->has('brands', 1)
+            ->has('relationshipManagers', 1)
+            ->where('brands.0.id', $mappedBrand->id)
+            ->where('relationshipManagers.0.id', $mappedRm->id)
+        );
+});
+
+// Agent cannot create a payment against a brand outside their mapping (SEC: horizontal escalation)
+it('agent cannot create a payment with an unmapped brand', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $account = StripeAccount::factory()->create(['is_active' => true]);
+    $agent->stripe_account_id = $account->id;
+    $agent->save();
+
+    $mappedBrand = Brand::factory()->create();
+    $unmappedBrand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+
+    $agent->brands()->sync([$mappedBrand->id]);
+    $agent->relationshipManagers()->sync([$rm->id]);
+
+    $payload = validPaymentPayload($unmappedBrand, $account);
+    $payload['relationship_manager_id'] = $rm->id;
+
+    $this->actingAs($agent)->post('/payments', $payload)
+        ->assertSessionHasErrors('brand_id');
+
+    expect(Payment::count())->toBe(0);
+});
+
+// Agent cannot create a payment against a relationship manager outside their mapping
+it('agent cannot create a payment with an unmapped relationship manager', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $account = StripeAccount::factory()->create(['is_active' => true]);
+    $agent->stripe_account_id = $account->id;
+    $agent->save();
+
+    $brand = Brand::factory()->create();
+    $mappedRm = RelationshipManager::factory()->create();
+    $unmappedRm = RelationshipManager::factory()->create();
+
+    $agent->brands()->sync([$brand->id]);
+    $agent->relationshipManagers()->sync([$mappedRm->id]);
+
+    $payload = validPaymentPayload($brand, $account);
+    $payload['relationship_manager_id'] = $unmappedRm->id;
+
+    $this->actingAs($agent)->post('/payments', $payload)
+        ->assertSessionHasErrors('relationship_manager_id');
+
+    expect(Payment::count())->toBe(0);
+});
+
+// Agent can create a payment against a mapped brand and relationship manager
+it('agent can create a payment with mapped brand and relationship manager', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $account = StripeAccount::factory()->create(['is_active' => true]);
+    $agent->stripe_account_id = $account->id;
+    $agent->save();
+
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+
+    $agent->brands()->sync([$brand->id]);
+    $agent->relationshipManagers()->sync([$rm->id]);
+
+    $payload = validPaymentPayload($brand, $account);
+    $payload['relationship_manager_id'] = $rm->id;
+
+    $this->actingAs($agent)->post('/payments', $payload)
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect(Payment::count())->toBe(1);
+    expect(Payment::first()->brand_id)->toBe($brand->id);
 });
 
 // SEC-02: Amount in database matches round of submitted decimal times 100

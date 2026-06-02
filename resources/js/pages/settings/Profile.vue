@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form, Head, Link, usePage } from '@inertiajs/vue3';
+import { Form, Head, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import DeleteUser from '@/components/DeleteUser.vue';
@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/profile';
 
 type Props = {
-    mustVerifyEmail: boolean;
     status?: string;
 };
 
@@ -41,7 +40,7 @@ const user = computed(() => page.props.auth.user);
         <Heading
             variant="small"
             title="Profile information"
-            description="Update your name and email address"
+            description="Update your name and username"
         />
 
         <Form
@@ -64,38 +63,18 @@ const user = computed(() => page.props.auth.user);
             </div>
 
             <div class="grid gap-2">
-                <Label for="email">Email address</Label>
+                <Label for="username">Username</Label>
                 <Input
-                    id="email"
-                    type="email"
+                    id="username"
+                    type="text"
                     class="mt-1 block w-full"
-                    name="email"
-                    :default-value="user.email"
+                    name="username"
+                    :default-value="user.username"
                     required
                     autocomplete="username"
-                    placeholder="Email address"
+                    placeholder="Username"
                 />
-                <InputError class="mt-2" :message="errors.email" />
-            </div>
-
-            <div v-if="mustVerifyEmail && !user.email_verified_at">
-                <p class="-mt-4 text-sm text-muted-foreground">
-                    Your email address is unverified.
-                    <Link
-                        href="/email/verification-notification"
-                        as="button"
-                        class="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
-                    >
-                        Click here to resend the verification email.
-                    </Link>
-                </p>
-
-                <div
-                    v-if="status === 'verification-link-sent'"
-                    class="mt-2 text-sm font-medium text-green-600"
-                >
-                    A new verification link has been sent to your email address.
-                </div>
+                <InputError class="mt-2" :message="errors.username" />
             </div>
 
             <div class="flex items-center gap-4">

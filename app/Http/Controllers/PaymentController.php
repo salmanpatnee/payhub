@@ -88,6 +88,15 @@ class PaymentController extends Controller
                 return redirect()->route('payments.index');
             }
 
+            $brands = $user->brands()->orderBy('name')->get(['brands.id', 'name']);
+            $relationshipManagers = $user->relationshipManagers()->orderBy('name')->get(['relationship_managers.id', 'name']);
+
+            if ($brands->isEmpty() || $relationshipManagers->isEmpty()) {
+                Inertia::flash('toast', ['type' => 'error', 'message' => 'No brands or relationship managers assigned. Contact an admin.']);
+
+                return redirect()->route('payments.index');
+            }
+
             $stripeAccounts = StripeAccount::where('id', $user->stripe_account_id)->get(['id', 'account_name']);
             $isStripeAccountLocked = true;
         } else {
@@ -95,13 +104,15 @@ class PaymentController extends Controller
                 ->orderBy('account_name')
                 ->get(['id', 'account_name']);
             $isStripeAccountLocked = false;
+            $brands = Brand::orderBy('name')->get(['id', 'name']);
+            $relationshipManagers = RelationshipManager::orderBy('name')->get(['id', 'name']);
         }
 
         return Inertia::render('payments/Create', [
-            'brands' => Brand::orderBy('name')->get(['id', 'name']),
+            'brands' => $brands,
             'stripeAccounts' => $stripeAccounts,
             'isStripeAccountLocked' => $isStripeAccountLocked,
-            'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
+            'relationshipManagers' => $relationshipManagers,
         ]);
     }
 

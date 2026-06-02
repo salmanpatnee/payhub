@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Brand;
 use App\Models\Payment;
+use App\Models\RelationshipManager;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -39,9 +40,10 @@ class DatabaseSeeder extends Seeder
         );
 
         $admin = User::firstOrCreate(
-            ['email' => 'admin@payhub.test'],
+            ['username' => 'admin'],
             [
                 'name' => 'PayHub Admin',
+                'email' => 'admin@payhub.test',
                 'password' => Hash::make('password'),
             ]
         );
@@ -49,9 +51,10 @@ class DatabaseSeeder extends Seeder
         $admin->syncRoles(['admin']);
 
         $user = User::firstOrCreate(
-            ['email' => 'agent@payhub.test'],
+            ['username' => 'agent'],
             [
                 'name' => 'Agent User',
+                'email' => 'agent@payhub.test',
                 'password' => Hash::make('password'),
                 'stripe_account_id' => $stripeAccount->id,
             ]
@@ -59,6 +62,11 @@ class DatabaseSeeder extends Seeder
         $user->stripe_account_id = $stripeAccount->id;
         $user->save();
         $user->syncRoles(['agent']);
+
+        $relationshipManager = RelationshipManager::firstOrCreate(['name' => 'Demo RM']);
+
+        $user->brands()->sync([$brand->id]);
+        $user->relationshipManagers()->sync([$relationshipManager->id]);
 
         Payment::create([
             'brand_id' => $brand->id,
