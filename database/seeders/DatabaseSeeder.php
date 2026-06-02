@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Brand;
 use App\Models\Payment;
+use App\Models\RelationshipManager;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -61,6 +62,11 @@ class DatabaseSeeder extends Seeder
         $user->stripe_account_id = $stripeAccount->id;
         $user->save();
         $user->syncRoles(['agent']);
+
+        $relationshipManager = RelationshipManager::firstOrCreate(['name' => 'Demo RM']);
+
+        $user->brands()->sync([$brand->id]);
+        $user->relationshipManagers()->sync([$relationshipManager->id]);
 
         Payment::create([
             'brand_id' => $brand->id,

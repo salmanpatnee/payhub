@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import InputError from '@/components/InputError.vue';
 import { Label } from '@/components/ui/label';
+import MultiSelectCombobox from '@/components/MultiSelectCombobox.vue';
 import {
     Select,
     SelectContent,
@@ -24,6 +25,7 @@ import {
 } from '@/components/ui/select';
 
 type AccountOption = { id: number; account_name: string };
+type NamedOption = { id: number; name: string };
 
 type UserProp = {
     id: number;
@@ -31,9 +33,17 @@ type UserProp = {
     username: string;
     roles: string[];
     stripe_account_id: number | null;
+    brand_ids: number[];
+    relationship_manager_ids: number[];
 };
 
-const props = defineProps<{ user: UserProp; roles: string[]; stripeAccounts: AccountOption[] }>();
+const props = defineProps<{
+    user: UserProp;
+    roles: string[];
+    stripeAccounts: AccountOption[];
+    brands: NamedOption[];
+    relationshipManagers: NamedOption[];
+}>();
 
 defineOptions({
     layout: {
@@ -49,11 +59,13 @@ const isSelf   = computed(() => page.props.auth.user?.id === props.user.id);
 const deleteOpen = ref(false);
 
 const form = useForm({
-    name:               props.user.name,
-    username:           props.user.username,
-    password:           '',
-    role:               props.user.roles[0] ?? 'agent',
-    stripe_account_id:  props.user.stripe_account_id ? String(props.user.stripe_account_id) : '',
+    name:                       props.user.name,
+    username:                   props.user.username,
+    password:                   '',
+    role:                       props.user.roles[0] ?? 'agent',
+    stripe_account_id:          props.user.stripe_account_id ? String(props.user.stripe_account_id) : '',
+    brand_ids:                  [...props.user.brand_ids],
+    relationship_manager_ids:   [...props.user.relationship_manager_ids],
 });
 
 const deleteForm = useForm({});
@@ -157,6 +169,30 @@ function executeDelete() {
                             </SelectContent>
                         </Select>
                         <InputError class="mt-2" :message="form.errors.stripe_account_id" />
+                    </div>
+
+                    <div v-if="form.role === 'agent'" class="grid gap-2">
+                        <Label>Brands</Label>
+                        <MultiSelectCombobox
+                            v-model="form.brand_ids"
+                            :options="brands"
+                            placeholder="Select brands"
+                            search-placeholder="Search brands…"
+                            empty-text="No brands found."
+                        />
+                        <InputError class="mt-2" :message="form.errors.brand_ids" />
+                    </div>
+
+                    <div v-if="form.role === 'agent'" class="grid gap-2">
+                        <Label>Relationship Managers</Label>
+                        <MultiSelectCombobox
+                            v-model="form.relationship_manager_ids"
+                            :options="relationshipManagers"
+                            placeholder="Select relationship managers"
+                            search-placeholder="Search relationship managers…"
+                            empty-text="No relationship managers found."
+                        />
+                        <InputError class="mt-2" :message="form.errors.relationship_manager_ids" />
                     </div>
                 </form>
             </CardContent>

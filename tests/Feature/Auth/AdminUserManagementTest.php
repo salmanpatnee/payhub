@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\Brand;
+use App\Models\RelationshipManager;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,6 +43,8 @@ class AdminUserManagementTest extends TestCase
         $admin = $this->adminUser();
 
         $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+        $brand = Brand::factory()->create();
+        $rm = RelationshipManager::factory()->create();
 
         $this->actingAs($admin)
             ->post(route('admin.users.store'), [
@@ -49,11 +53,35 @@ class AdminUserManagementTest extends TestCase
                 'password' => 'Password1!',
                 'role' => 'agent',
                 'stripe_account_id' => $stripeAccount->id,
+                'brand_ids' => [$brand->id],
+                'relationship_manager_ids' => [$rm->id],
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.users.index'));
 
         $this->assertDatabaseHas('users', ['username' => 'testuser']);
+
+        $user = User::where('username', 'testuser')->firstOrFail();
+        $this->assertDatabaseHas('brand_user', ['brand_id' => $brand->id, 'user_id' => $user->id]);
+        $this->assertDatabaseHas('relationship_manager_user', ['relationship_manager_id' => $rm->id, 'user_id' => $user->id]);
+    }
+
+    public function test_creating_agent_requires_at_least_one_brand_and_rm(): void
+    {
+        $admin = $this->adminUser();
+        $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'No Mappings',
+                'username' => 'nomappings',
+                'password' => 'Password1!',
+                'role' => 'agent',
+                'stripe_account_id' => $stripeAccount->id,
+            ])
+            ->assertSessionHasErrors(['brand_ids', 'relationship_manager_ids']);
+
+        $this->assertDatabaseMissing('users', ['username' => 'nomappings']);
     }
 
     public function test_admin_can_update_user_role(): void

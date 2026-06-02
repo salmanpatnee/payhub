@@ -14,9 +14,18 @@ class StorePaymentRequest extends FormRequest
 
     public function rules(): array
     {
+        $user = $this->user();
+        $isAgent = $user !== null && $user->hasRole('agent');
+
         return [
-            'brand_id' => ['required', 'integer', 'exists:brands,id'],
-            'relationship_manager_id' => ['required', 'integer', 'exists:relationship_managers,id'],
+            // Agents may only reference brands/RMs mapped to them (prevents
+            // horizontal escalation via a crafted request body).
+            'brand_id' => ['required', 'integer', $isAgent
+                ? Rule::exists('brand_user', 'brand_id')->where('user_id', $user->id)
+                : 'exists:brands,id'],
+            'relationship_manager_id' => ['required', 'integer', $isAgent
+                ? Rule::exists('relationship_manager_user', 'relationship_manager_id')->where('user_id', $user->id)
+                : 'exists:relationship_managers,id'],
             'stripe_account_id' => ['required', 'integer',
                 Rule::exists('stripe_accounts', 'id')
                     ->where('is_active', true)],
