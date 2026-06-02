@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
-import { Check, Copy, Eye, Filter, Plus, Search, X } from 'lucide-vue-next';
+import { useLocalStorage } from '@vueuse/core';
+import { Check, Columns, Copy, Eye, Filter, Plus, Search, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentController';
 
 type PaymentRow = {
@@ -57,6 +66,27 @@ const props = defineProps<{
 }>();
 
 const copiedUuid = ref<string | null>(null);
+
+const COLUMN_DEFS = [
+    { key: 'reference_code', label: 'Reference Code' },
+    { key: 'client', label: 'Client' },
+    { key: 'amount', label: 'Amount' },
+    { key: 'brand', label: 'Brand' },
+    { key: 'account_name', label: 'Stripe Account' },
+    { key: 'status', label: 'Status' },
+    { key: 'created', label: 'Created' },
+] as const;
+
+const visibleColumns = useLocalStorage<Record<string, boolean>>(
+    'payments.columns',
+    Object.fromEntries(COLUMN_DEFS.map((c) => [c.key, true])),
+    { mergeDefaults: true },
+);
+
+// # + Actions columns are always visible.
+const visibleColumnCount = computed(
+    () => 2 + COLUMN_DEFS.filter((c) => visibleColumns.value[c.key]).length,
+);
 
 defineOptions({
     layout: {
@@ -156,10 +186,8 @@ function goToPage(page: number): void {
 
 function formatDate(iso: string): string {
     const d = new Date(iso);
-    const day = d.getDate();
-    const suffix = [, 'st', 'nd', 'rd'][day % 100 > 10 && day % 100 < 14 ? 0 : day % 10] ?? 'th';
     const month = d.toLocaleDateString('en-GB', { month: 'short' });
-    return `${day}${suffix} ${month} ${d.getFullYear()}`;
+    return `${d.getDate()}-${month}-${d.getFullYear()}`;
 }
 
 async function copyLink(uuid: string): Promise<void> {
@@ -298,16 +326,41 @@ async function copyLink(uuid: string): Promise<void> {
         </div>
 
         <div class="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-3 border-b border-border/60 bg-[#F7F5F2]">
+                <span class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{{ payments.total }} payments</span>
+                <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                        <Button variant="outline" size="sm" class="h-7 px-2 text-xs gap-1">
+                            <Columns class="size-3.5" />
+                            Columns
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem
+                            v-for="col in COLUMN_DEFS"
+                            :key="col.key"
+                            :model-value="visibleColumns[col.key]"
+                            @update:model-value="(v: boolean) => (visibleColumns[col.key] = v)"
+                            @select.prevent
+                        >
+                            {{ col.label }}
+                        </DropdownMenuCheckboxItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
             <table class="w-full text-sm">
                 <thead>
                     <tr class="bg-[#F7F5F2] border-b border-border">
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">#</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Reference Code</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
+                        <th v-if="visibleColumns.reference_code" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Reference Code</th>
+                        <th v-if="visibleColumns.client" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client</th>
+                        <th v-if="visibleColumns.amount" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
+                        <th v-if="visibleColumns.brand" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
+                        <th v-if="visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Stripe Account</th>
+                        <th v-if="visibleColumns.status" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
+                        <th v-if="visibleColumns.created" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
@@ -318,14 +371,15 @@ async function copyLink(uuid: string): Promise<void> {
                         class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                     >
                         <td class="px-5 py-3.5 text-muted-foreground tabular-nums">{{ (payments.from ?? 1) + index }}</td>
-                        <td class="px-5 py-3.5 font-mono text-muted-foreground">{{ payment.reference_code != null ? '#' + String(payment.reference_code).padStart(6, '0') : '—' }}</td>
-                        <td class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
-                        <td class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
-                        <td class="px-5 py-3.5">{{ payment.brand_name }}</td>
-                        <td class="px-5 py-3.5">
+                        <td v-if="visibleColumns.reference_code" class="px-5 py-3.5 font-mono text-muted-foreground">{{ payment.reference_code != null ? '#' + String(payment.reference_code).padStart(6, '0') : '—' }}</td>
+                        <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
+                        <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
+                        <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
+                        <td v-if="visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name }}</td>
+                        <td v-if="visibleColumns.status" class="px-5 py-3.5">
                             <PaymentStatusBadge :status="payment.status" />
                         </td>
-                        <td class="px-5 py-3.5 text-muted-foreground">
+                        <td v-if="visibleColumns.created" class="px-5 py-3.5 text-muted-foreground">
                             {{ formatDate(payment.created_at) }}
                         </td>
                         <td class="px-5 py-3.5 text-right">
@@ -343,7 +397,7 @@ async function copyLink(uuid: string): Promise<void> {
                         </td>
                     </tr>
                     <tr v-if="payments.data.length === 0">
-                        <td colspan="8" class="px-5 py-16 text-center text-muted-foreground text-sm">
+                        <td :colspan="visibleColumnCount" class="px-5 py-16 text-center text-muted-foreground text-sm">
                             <template v-if="hasActiveFilters">
                                 No payments match your filters.
                                 <button class="underline" @click="clearFilters">Clear filters to see all.</button>
