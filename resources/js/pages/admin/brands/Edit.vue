@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Check, Upload, X } from 'lucide-vue-next';
+import { ArrowLeft, Check, Eye, Upload, X } from 'lucide-vue-next';
 import { ref } from 'vue';
+import BrandPaymentPreview from '@/components/BrandPaymentPreview.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -46,6 +47,7 @@ const form = useForm({
 
 const logoPreviewUrl = ref<string | null>(props.brand.logo_url);
 const logoInputRef = ref<HTMLInputElement | null>(null);
+const previewOpen = ref(false);
 
 function handleLogoChange(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
@@ -213,7 +215,15 @@ function submit() {
                         </div>
                     </form>
                 </CardContent>
-                <CardFooter class="flex justify-end">
+                <CardFooter class="flex justify-end gap-3">
+                    <Button
+                        type="button"
+                        class="bg-black text-white hover:bg-black/90"
+                        @click="previewOpen = true"
+                    >
+                        <Eye class="size-4 mr-1.5" />
+                        Preview payment page
+                    </Button>
                     <Button type="submit" form="edit-brand-form" :disabled="form.processing">
                         <Check class="size-4 mr-1" />
                         Save changes
@@ -222,5 +232,13 @@ function submit() {
             </Card>
 
         </div>
+
+        <BrandPaymentPreview
+            v-model:open="previewOpen"
+            :name="form.name"
+            :primary-color="form.primary_color"
+            :secondary-color="form.secondary_color"
+            :logo-url="logoPreviewUrl"
+        />
     </div>
 </template>

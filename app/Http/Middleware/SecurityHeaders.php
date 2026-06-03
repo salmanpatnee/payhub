@@ -30,7 +30,7 @@ class SecurityHeaders
             "script-src 'self' https://js.stripe.com{$vite}{$scriptInline}; ".
             'frame-src https://js.stripe.com; '.
             "connect-src 'self' https://api.stripe.com{$vite}{$viteWs}; ".
-            "img-src 'self' data: https:; ".
+            "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$vite}; ".
             "font-src 'self'{$vite};"
         );
