@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StorePaymentRequest;
+use App\Http\Requests\UpdatePaymentRequest;
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
@@ -58,7 +59,7 @@ class PaymentController extends Controller
                 'amount' => $p->amount,
                 'currency' => $p->currency,
                 'brand_name' => $p->brand->name,
-                'account_name' => $p->stripeAccount->account_name,
+                'account_name' => $p->stripeAccount?->account_name,
                 'status' => $p->status,
                 'created_at' => $p->created_at->toISOString(),
                 'client_email' => $p->client_email,
@@ -81,6 +82,24 @@ class PaymentController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
+        $options = $this->formOptions($user);
+
+        if ($options instanceof RedirectResponse) {
+            return $options;
+        }
+
+        return Inertia::render('payments/Create', $options);
+    }
+
+    /**
+     * Load the brand / Stripe account / relationship manager options for the
+     * create and edit forms. Agents are restricted to their assigned resources;
+     * returns a RedirectResponse if the agent has no Stripe account, brands, or RMs.
+     *
+     * @return array{brands: mixed, stripeAccounts: mixed, isStripeAccountLocked: bool, relationshipManagers: mixed}|RedirectResponse
+     */
+    private function formOptions(User $user): array|RedirectResponse
+    {
         if ($user->hasRole('agent')) {
             if (! $user->stripe_account_id) {
                 Inertia::flash('toast', ['type' => 'error', 'message' => 'No Stripe account assigned. Contact an admin.']);
@@ -108,12 +127,12 @@ class PaymentController extends Controller
             $relationshipManagers = RelationshipManager::orderBy('name')->get(['id', 'name']);
         }
 
-        return Inertia::render('payments/Create', [
+        return [
             'brands' => $brands,
             'stripeAccounts' => $stripeAccounts,
             'isStripeAccountLocked' => $isStripeAccountLocked,
             'relationshipManagers' => $relationshipManagers,
-        ]);
+        ];
     }
 
     public function store(StorePaymentRequest $request): RedirectResponse
@@ -139,12 +158,79 @@ class PaymentController extends Controller
         return redirect()->route('payments.show', $payment);
     }
 
+    public function edit(Payment $payment): Response|RedirectResponse
+    {
+        Gate::authorize('update', $payment);
+
+        /** @var User $user */
+        $user = auth()->user();
+
+        $options = $this->formOptions($user);
+
+        if ($options instanceof RedirectResponse) {
+            return $options;
+        }
+
+        return Inertia::render('payments/Edit', [
+            ...$options,
+            'payment' => [
+                'uuid' => $payment->uuid,
+                'brand_id' => $payment->brand_id,
+                'stripe_account_id' => $payment->stripe_account_id,
+                'relationship_manager_id' => $payment->relationship_manager_id,
+                'currency' => $payment->currency,
+                // Cents → decimal string for the amount input.
+                'amount' => number_format($payment->amount / 100, 2, '.', ''),
+                'client_name' => $payment->client_name,
+                'client_email' => $payment->client_email,
+                'service' => $payment->service,
+                'package' => $payment->package,
+                'note' => $payment->note,
+            ],
+        ]);
+    }
+
+    public function update(UpdatePaymentRequest $request, Payment $payment): RedirectResponse
+    {
+        // PaymentPolicy::update gates this to admin|creator AND status='pending'.
+        Gate::authorize('update', $payment);
+
+        // SEC-02: amount is integer cents from UpdatePaymentRequest::validated().
+        $data = $request->validated();
+
+        /** @var User $user */
+        $user = auth()->user();
+
+        if ($user->hasRole('agent')) {
+            $data['stripe_account_id'] = $user->stripe_account_id;
+        }
+
+        // status, user_id, and stripe_payment_intent_id are never updated here.
+        $payment->update($data);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Payment updated.']);
+
+        return redirect()->route('payments.show', $payment);
+    }
+
+    public function destroy(Payment $payment): RedirectResponse
+    {
+        Gate::authorize('delete', $payment);
+
+        $payment->delete();
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Payment deleted.']);
+
+        return redirect()->route('payments.index');
+    }
+
     public function show(Payment $payment): Response
     {
         Gate::authorize('view', $payment);
         $payment->loadMissing(['brand', 'stripeAccount', 'relationshipManager']);
 
         return Inertia::render('payments/Show', [
+            'isAdmin' => auth()->user()->hasRole('admin'),
             'payment' => [
                 'uuid' => $payment->uuid,
                 'reference_code' => $payment->reference_code,
