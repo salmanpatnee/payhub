@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import {
     ArrowLeft, Banknote, Briefcase, Building2, Calendar,
     CalendarCheck, CalendarX, Check, Copy, CreditCard,
-    FileText, Hash, Handshake, Mail, Package, User,
+    FileText, Hash, Handshake, Mail, Package, Pencil, Trash2, User,
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
 import {
     Card, CardContent, CardDescription,
@@ -33,7 +34,16 @@ type PaymentDetail = {
     expires_at: string | null;
 };
 
-const props = defineProps<{ payment: PaymentDetail }>();
+const props = defineProps<{ payment: PaymentDetail; isAdmin: boolean }>();
+
+const deleteOpen = ref(false);
+const deleteForm = useForm({});
+
+function executeDelete() {
+    deleteForm.delete(`/payments/${props.payment.uuid}`, {
+        onSuccess: () => { deleteOpen.value = false; },
+    });
+}
 
 defineOptions({
     layout: {
@@ -94,12 +104,33 @@ const feeBreakdown = computed(() => {
     <Head title="Payment Link" />
 
     <div class="p-6 max-w-5xl space-y-4">
-        <Button variant="ghost" size="sm" as-child class="-ml-2">
-            <Link href="/payments">
-                <ArrowLeft class="size-4 mr-1" />
-                Back to payments
-            </Link>
-        </Button>
+        <div class="flex items-center justify-between">
+            <Button variant="ghost" size="sm" as-child class="-ml-2">
+                <Link href="/payments">
+                    <ArrowLeft class="size-4 mr-1" />
+                    Back to payments
+                </Link>
+            </Button>
+            <div class="flex items-center gap-2">
+                <Button v-if="payment.status === 'pending'" variant="outline" size="sm" as-child>
+                    <Link :href="`/payments/${payment.uuid}/edit`">
+                        <Pencil class="size-4 mr-1" />
+                        Edit
+                    </Link>
+                </Button>
+                <Button
+                    v-if="isAdmin"
+                    variant="outline"
+                    size="sm"
+                    class="text-destructive hover:text-destructive"
+                    :disabled="deleteForm.processing"
+                    @click="deleteOpen = true"
+                >
+                    <Trash2 class="size-4 mr-1" />
+                    Delete
+                </Button>
+            </div>
+        </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
             <!-- Left: Payment Summary -->
@@ -244,4 +275,12 @@ const feeBreakdown = computed(() => {
             </div>
         </div>
     </div>
+
+    <ConfirmDeleteDialog
+        v-model:open="deleteOpen"
+        :title="`Delete payment ${payment.reference_code != null ? '#' + String(payment.reference_code).padStart(6, '0') : ''}?`"
+        description="This will remove the payment from the list. The payment link will no longer be accessible."
+        :processing="deleteForm.processing"
+        @confirm="executeDelete"
+    />
 </template>

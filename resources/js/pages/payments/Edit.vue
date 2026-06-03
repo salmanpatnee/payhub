@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { onMounted } from 'vue';
-import { ArrowLeft, Plus } from 'lucide-vue-next';
+import { ArrowLeft, Save } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import {
     Card, CardContent, CardDescription,
@@ -19,34 +19,48 @@ import { Textarea } from '@/components/ui/textarea';
 type BrandOption = { id: number; name: string };
 type AccountOption = { id: number; account_name: string };
 type RmOption = { id: number; name: string };
+type PaymentData = {
+    uuid: string;
+    brand_id: number;
+    stripe_account_id: number;
+    relationship_manager_id: number | null;
+    currency: string;
+    amount: string;
+    client_name: string | null;
+    client_email: string | null;
+    service: string | null;
+    package: string | null;
+    note: string | null;
+};
 
 const props = defineProps<{
     brands: BrandOption[];
     stripeAccounts: AccountOption[];
     isStripeAccountLocked: boolean;
     relationshipManagers: RmOption[];
+    payment: PaymentData;
 }>();
 
 defineOptions({
     layout: {
         breadcrumbs: [
             { title: 'Payments', href: '/payments' },
-            { title: 'New payment', href: '/payments/create' },
+            { title: 'Edit payment', href: '#' },
         ],
     },
 });
 
 const form = useForm({
-    brand_id:                  '',
-    stripe_account_id:         '',
-    relationship_manager_id:   '',
-    currency:                  '',
-    amount:                    '',
-    client_name:               '',
-    client_email:              '',
-    service:                   '',
-    package:                   '',
-    note:                      '',
+    brand_id:                  String(props.payment.brand_id),
+    stripe_account_id:         String(props.payment.stripe_account_id),
+    relationship_manager_id:   props.payment.relationship_manager_id != null ? String(props.payment.relationship_manager_id) : '',
+    currency:                  props.payment.currency,
+    amount:                    props.payment.amount,
+    client_name:               props.payment.client_name ?? '',
+    client_email:              props.payment.client_email ?? '',
+    service:                   props.payment.service ?? '',
+    package:                   props.payment.package ?? '',
+    note:                      props.payment.note ?? '',
 });
 
 onMounted(() => {
@@ -57,12 +71,12 @@ onMounted(() => {
 
 
 function submit() {
-    form.post('/payments');
+    form.patch(`/payments/${props.payment.uuid}`);
 }
 </script>
 
 <template>
-    <Head title="New Payment" />
+    <Head title="Edit Payment" />
 
     <div class="p-6 space-y-4">
         <Button variant="ghost" size="sm" as-child class="-ml-2">
@@ -74,11 +88,11 @@ function submit() {
 
         <Card>
             <CardHeader>
-                <CardTitle>New payment</CardTitle>
-                <CardDescription>Create a payment link to send to your client.</CardDescription>
+                <CardTitle>Edit payment</CardTitle>
+                <CardDescription>Update the details of this pending payment link.</CardDescription>
             </CardHeader>
             <CardContent>
-                <form id="create-payment-form" class="grid grid-cols-2 gap-4" @submit.prevent="submit">
+                <form id="edit-payment-form" class="grid grid-cols-2 gap-4" @submit.prevent="submit">
 
                     <!-- Brand -->
                     <div class="grid gap-2">
@@ -220,9 +234,9 @@ function submit() {
                 </form>
             </CardContent>
             <CardFooter class="flex justify-end">
-                <Button type="submit" form="create-payment-form" :disabled="form.processing">
-                    <Plus class="size-4 mr-1" />
-                    Create payment
+                <Button type="submit" form="edit-payment-form" :disabled="form.processing">
+                    <Save class="size-4 mr-1" />
+                    Save changes
                 </Button>
             </CardFooter>
         </Card>

@@ -23,6 +23,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('payments', [PaymentController::class, 'store'])
         ->name('payments.store')
         ->middleware('throttle:30,1');
+    Route::get('payments/{payment}/edit', [PaymentController::class, 'edit'])
+        ->name('payments.edit');
+    Route::patch('payments/{payment}', [PaymentController::class, 'update'])
+        ->name('payments.update')
+        ->middleware('throttle:30,1');
+    Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])
+        ->name('payments.destroy');
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])

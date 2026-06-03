@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
-import { Check, Columns, Copy, Eye, Filter, Plus, Search, X } from 'lucide-vue-next';
+import { Check, Columns, Copy, Eye, Filter, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -66,6 +67,26 @@ const props = defineProps<{
 }>();
 
 const copiedUuid = ref<string | null>(null);
+
+const deleteTarget = ref<PaymentRow | null>(null);
+const deleteOpen   = ref(false);
+const deleteForm   = useForm({});
+
+function confirmDelete(payment: PaymentRow) {
+    deleteTarget.value = payment;
+    deleteOpen.value   = true;
+}
+
+function executeDelete() {
+    if (!deleteTarget.value) return;
+    deleteForm.delete(`/payments/${deleteTarget.value.uuid}`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            deleteOpen.value   = false;
+            deleteTarget.value = null;
+        },
+    });
+}
 
 const COLUMN_DEFS = [
     { key: 'reference_code', label: 'Reference Code' },
@@ -393,6 +414,28 @@ async function copyLink(uuid: string): Promise<void> {
                                     <Check v-if="copiedUuid === payment.uuid" class="size-4 text-green-600" />
                                     <Copy v-else class="size-4" />
                                 </Button>
+                                <Button
+                                    v-if="payment.status === 'pending'"
+                                    variant="ghost"
+                                    size="sm"
+                                    as-child
+                                    title="Edit payment"
+                                >
+                                    <Link :href="`/payments/${payment.uuid}/edit`">
+                                        <Pencil class="size-4" />
+                                    </Link>
+                                </Button>
+                                <Button
+                                    v-if="isAdmin"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="cursor-pointer"
+                                    title="Delete payment"
+                                    :disabled="deleteForm.processing && deleteTarget?.uuid === payment.uuid"
+                                    @click="confirmDelete(payment)"
+                                >
+                                    <Trash2 class="size-4 text-destructive" />
+                                </Button>
                             </div>
                         </td>
                     </tr>
@@ -464,4 +507,12 @@ async function copyLink(uuid: string): Promise<void> {
             </div>
         </div>
     </div>
+
+    <ConfirmDeleteDialog
+        v-model:open="deleteOpen"
+        :title="`Delete payment ${deleteTarget?.reference_code != null ? '#' + String(deleteTarget.reference_code).padStart(6, '0') : ''}?`"
+        description="This will remove the payment from the list. The payment link will no longer be accessible."
+        :processing="deleteForm.processing"
+        @confirm="executeDelete"
+    />
 </template>
