@@ -22,6 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->preventRequestForgery(except: [
             'webhook/stripe/*',
+            'webhook/square/*',
+            'pay/*/square',
         ]);
 
         $middleware->web(append: [

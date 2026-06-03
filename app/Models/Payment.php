@@ -14,10 +14,11 @@ class Payment extends Model
 
     protected $fillable = [
         'uuid', 'reference_code', 'brand_id', 'stripe_account_id', 'user_id', 'relationship_manager_id',
+        'provider', 'square_account_id',
         'amount', 'currency', 'status',
         'client_email', 'client_name',
         'service', 'package', 'note',
-        'stripe_payment_intent_id', 'expires_at', 'paid_at',
+        'stripe_payment_intent_id', 'square_payment_id', 'expires_at', 'paid_at',
     ];
 
     protected static function boot(): void
@@ -62,6 +63,21 @@ class Payment extends Model
     public function stripeAccount(): BelongsTo
     {
         return $this->belongsTo(StripeAccount::class);
+    }
+
+    public function squareAccount(): BelongsTo
+    {
+        return $this->belongsTo(SquareAccount::class);
+    }
+
+    /**
+     * Unified account name for cross-provider reporting.
+     */
+    public function getAccountNameAttribute(): ?string
+    {
+        return $this->provider === 'square'
+            ? $this->squareAccount?->account_name
+            : $this->stripeAccount?->account_name;
     }
 
     public function user(): BelongsTo

@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\Brand;
 use App\Models\RelationshipManager;
+use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -20,7 +21,7 @@ class UserController extends Controller
     public function index(): Response
     {
         return Inertia::render('admin/users/Index', [
-            'users' => User::with(['roles', 'stripeAccount'])
+            'users' => User::with(['roles', 'stripeAccount', 'squareAccount'])
                 ->orderBy('name')
                 ->get()
                 ->map(fn (User $user) => [
@@ -28,7 +29,8 @@ class UserController extends Controller
                     'name' => $user->name,
                     'username' => $user->username,
                     'roles' => $user->getRoleNames(),
-                    'stripe_account_name' => $user->stripeAccount?->account_name,
+                    'payment_account_name' => $user->stripeAccount?->account_name
+                        ?? $user->squareAccount?->account_name,
                 ]),
         ]);
     }
@@ -37,9 +39,7 @@ class UserController extends Controller
     {
         return Inertia::render('admin/users/Create', [
             'roles' => Role::pluck('name'),
-            'stripeAccounts' => StripeAccount::where('is_active', true)
-                ->orderBy('account_name')
-                ->get(['id', 'account_name']),
+            'paymentAccounts' => $this->paymentAccountOptions(),
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
             'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
         ]);
@@ -48,9 +48,9 @@ class UserController extends Controller
     public function store(StoreUserRequest $request): RedirectResponse
     {
         $data = $request->safe()->only('name', 'username', 'password');
-        $data['stripe_account_id'] = $request->validated('role') === 'agent'
-            ? $request->validated('stripe_account_id')
-            : null;
+        $isAgent = $request->validated('role') === 'agent';
+        $data['stripe_account_id'] = $isAgent ? $request->validated('stripe_account_id') : null;
+        $data['square_account_id'] = $isAgent ? $request->validated('square_account_id') : null;
 
         $user = User::create($data);
         $user->syncRoles([$request->validated('role')]);
@@ -62,19 +62,22 @@ class UserController extends Controller
 
     public function edit(User $user): Response
     {
+        $paymentAccount = $user->stripe_account_id
+            ? 'stripe:'.$user->stripe_account_id
+            : ($user->square_account_id ? 'square:'.$user->square_account_id : '');
+
         return Inertia::render('admin/users/Edit', [
             'user' => array_merge(
-                $user->only('id', 'name', 'username', 'stripe_account_id'),
+                $user->only('id', 'name', 'username'),
                 [
+                    'payment_account' => $paymentAccount,
                     'roles' => $user->getRoleNames(),
                     'brand_ids' => $user->brands()->pluck('brands.id'),
                     'relationship_manager_ids' => $user->relationshipManagers()->pluck('relationship_managers.id'),
                 ]
             ),
             'roles' => Role::pluck('name'),
-            'stripeAccounts' => StripeAccount::where('is_active', true)
-                ->orderBy('account_name')
-                ->get(['id', 'account_name']),
+            'paymentAccounts' => $this->paymentAccountOptions(),
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
             'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
         ]);
@@ -88,9 +91,9 @@ class UserController extends Controller
             $data['password'] = $request->validated('password');
         }
 
-        $data['stripe_account_id'] = $request->validated('role') === 'agent'
-            ? $request->validated('stripe_account_id')
-            : null;
+        $isAgent = $request->validated('role') === 'agent';
+        $data['stripe_account_id'] = $isAgent ? $request->validated('stripe_account_id') : null;
+        $data['square_account_id'] = $isAgent ? $request->validated('square_account_id') : null;
 
         $user->update($data);
         $user->syncRoles([$request->validated('role')]);
@@ -101,8 +104,34 @@ class UserController extends Controller
     }
 
     /**
+     * Merged account options for agent assignment: active Stripe + active Square, provider-labeled.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function paymentAccountOptions(): array
+    {
+        $stripe = StripeAccount::where('is_active', true)
+            ->orderBy('account_name')
+            ->get(['id', 'account_name'])
+            ->map(fn (StripeAccount $a) => [
+                'value' => 'stripe:'.$a->id,
+                'label' => $a->account_name.' (Stripe)',
+            ]);
+
+        $square = SquareAccount::where('is_active', true)
+            ->orderBy('account_name')
+            ->get(['id', 'account_name'])
+            ->map(fn (SquareAccount $a) => [
+                'value' => 'square:'.$a->id,
+                'label' => $a->account_name.' (Square)',
+            ]);
+
+        return $stripe->concat($square)->values()->all();
+    }
+
+    /**
      * Sync an agent's brand and relationship-manager mappings.
-     * Mappings are cleared for non-agent roles, mirroring stripe_account_id.
+     * Mappings are cleared for non-agent roles, mirroring the account assignment.
      */
     private function syncMappings(User $user, StoreUserRequest|UpdateUserRequest $request): void
     {

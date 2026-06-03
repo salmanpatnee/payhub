@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\RelationshipManagerController;
+use App\Http\Controllers\Admin\SquareAccountController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\SquareWebhookController;
 use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -60,6 +62,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'stripe-accounts/{stripe_account}/test-connection',
             [StripeAccountController::class, 'testStoredConnection']
         )->name('stripe-accounts.test-stored-connection');
+
+        Route::resource('square-accounts', SquareAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'square-accounts/{square_account}/deactivate',
+            [SquareAccountController::class, 'deactivate']
+        )->name('square-accounts.deactivate');
+
+        Route::patch(
+            'square-accounts/{square_account}/activate',
+            [SquareAccountController::class, 'activate']
+        )->name('square-accounts.activate');
+
+        Route::post(
+            'square-accounts/test-connection',
+            [SquareAccountController::class, 'testKeyConnection']
+        )->name('square-accounts.test-connection');
+
+        Route::post(
+            'square-accounts/{square_account}/test-connection',
+            [SquareAccountController::class, 'testStoredConnection']
+        )->name('square-accounts.test-stored-connection');
     });
 
 // Public payment routes — no auth middleware (CLIENT-01)
@@ -68,10 +93,21 @@ Route::get('/pay/{payment}', [ClientPaymentController::class, 'show'])->name('pa
 Route::get('/pay/{payment}/success', [ClientPaymentController::class, 'success'])->name('pay.success');
 Route::get('/pay/{payment}/failed', [ClientPaymentController::class, 'failed'])->name('pay.failed');
 
+// Square embedded charge endpoint — public, no auth, CSRF-excluded, throttled.
+// Authoritative status still comes from the payment.updated webhook (CLAUDE.md rule).
+Route::post('/pay/{payment}/square', [ClientPaymentController::class, 'chargeSquare'])
+    ->name('pay.square.charge')
+    ->middleware('throttle:30,1');
+
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)
 Route::post('/webhook/stripe/{stripeAccount}', [StripeWebhookController::class, 'handle'])
     ->name('webhook.stripe')
+    ->middleware('throttle:120,1');
+
+// {squareAccount} resolves by integer id (implicit model binding)
+Route::post('/webhook/square/{squareAccount}', [SquareWebhookController::class, 'handle'])
+    ->name('webhook.square')
     ->middleware('throttle:120,1');
 
 require __DIR__.'/settings.php';

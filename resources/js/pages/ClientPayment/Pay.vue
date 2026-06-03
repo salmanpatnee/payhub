@@ -8,8 +8,10 @@ import PaymentLayout from '@/layouts/PaymentLayout.vue'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
+import SquarePaymentForm from './SquarePaymentForm.vue'
 
 const props = defineProps<{
+    provider: 'stripe' | 'square'
     payment: {
         uuid: string
         reference_code: number | null
@@ -25,8 +27,13 @@ const props = defineProps<{
         primary_color: string
         secondary_color: string
     }
-    stripeAccount: { publishable_key: string }
-    clientSecret: string
+    stripeAccount?: { publishable_key: string }
+    clientSecret?: string
+    squareAccount?: {
+        application_id: string
+        location_id: string
+        environment: 'sandbox' | 'production'
+    }
 }>()
 
 const stripeLoaded  = ref(false)
@@ -35,6 +42,9 @@ const errorMessage  = ref<string | null>(null)
 
 // WR-01: Check return value — loadStripe() returns null if Stripe.js CDN fails to load
 onMounted(async () => {
+    if (props.provider !== 'stripe' || !props.stripeAccount) {
+        return
+    }
     const stripe = await loadStripe(props.stripeAccount.publishable_key)
     if (stripe !== null) {
         stripeLoaded.value = true
@@ -55,7 +65,7 @@ function formatAmount(cents: number, currency: string): string {
 }
 
 const elementsOptions = computed(() => ({
-    clientSecret: props.clientSecret,
+    clientSecret: props.clientSecret ?? '',
     appearance: {
         theme: 'stripe' as const,
         variables: {
@@ -138,8 +148,16 @@ async function submit(instance: any, elements: any): Promise<void> {
                 </p>
             </div>
 
+            <!-- Square embedded form -->
+            <SquarePaymentForm
+                v-if="provider === 'square' && squareAccount"
+                :payment="{ uuid: payment.uuid, amount: payment.amount, currency: payment.currency }"
+                :brand="{ name: brand.name, primary_color: brand.primary_color }"
+                :square-account="squareAccount"
+            />
+
             <!-- Stripe Elements — gated on stripeLoaded -->
-            <template v-if="stripeLoaded">
+            <template v-else-if="stripeLoaded && stripeAccount">
                 <StripeElements
                     :stripe-key="stripeAccount.publishable_key"
                     :elements-options="elementsOptions"

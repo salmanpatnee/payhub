@@ -4,24 +4,47 @@ namespace App\Http\Controllers;
 
 use App\Models\Brand;
 use App\Models\Payment;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Square\Environments;
+use Square\Exceptions\SquareApiException;
+use Square\Exceptions\SquareException;
+use Square\Payments\Requests\CreatePaymentRequest;
+use Square\SquareClient;
+use Square\Types\Money;
 use Stripe\StripeClient;
 
 class ClientPaymentController extends Controller
 {
     public function show(Payment $payment): Response|RedirectResponse
     {
-        $payment->loadMissing(['brand', 'stripeAccount']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'squareAccount']);
 
-        // D-03 + D-12: Guard check BEFORE any StripeClient call.
-        // failed is allowed through so a declined card can be retried — the existing PI reuse
-        // logic below handles confirmable (requires_payment_method) vs terminal PI states.
+        // D-03 + D-12: Guard check BEFORE any processor call.
+        // failed is allowed through so a declined card can be retried.
         if (! in_array($payment->status, ['pending', 'failed'])) {
             return Inertia::render('ClientPayment/Unavailable', [
                 'status' => $payment->status,
                 'brand' => $this->brandProps($payment->brand),
+            ]);
+        }
+
+        // Square embedded: no pre-charge. The Web Payments SDK tokenizes client-side and POSTs
+        // the token to chargeSquare(). NEVER expose access_token to the client.
+        if ($payment->provider === 'square') {
+            return Inertia::render('ClientPayment/Pay', [
+                'provider' => 'square',
+                'payment' => $this->paymentProps($payment),
+                'brand' => $this->brandProps($payment->brand),
+                'squareAccount' => [
+                    'application_id' => $payment->squareAccount->application_id,
+                    'location_id' => $payment->squareAccount->location_id,
+                    'environment' => $payment->squareAccount->environment,
+                ],
             ]);
         }
 
@@ -69,11 +92,72 @@ class ClientPaymentController extends Controller
 
         // SEC-04: clientSecret only in Inertia props — NEVER logged, NEVER in URL
         return Inertia::render('ClientPayment/Pay', [
+            'provider' => 'stripe',
             'payment' => $this->paymentProps($payment),
             'brand' => $this->brandProps($payment->brand),
             'stripeAccount' => ['publishable_key' => $payment->stripeAccount->publishable_key],
             'clientSecret' => $pi->client_secret,
         ]);
+    }
+
+    /**
+     * Square embedded charge endpoint. Receives a tokenized card (source_id) and optional
+     * SCA verification_token, then charges via the per-account Square client.
+     *
+     * The response only correlates the Square payment id — the authoritative status write
+     * still comes from the payment.updated webhook (CLAUDE.md rule: never trust client charge).
+     */
+    public function chargeSquare(Request $request, Payment $payment): JsonResponse
+    {
+        $payment->loadMissing('squareAccount');
+
+        // Guard mirrors show(): only Square payments in a chargeable state.
+        if ($payment->provider !== 'square' || ! in_array($payment->status, ['pending', 'failed'])) {
+            return response()->json(['ok' => false, 'error' => 'This payment cannot be processed.'], 422);
+        }
+
+        $validated = $request->validate([
+            'source_id' => ['required', 'string'],
+            'verification_token' => ['nullable', 'string'],
+        ]);
+
+        // Per-account SquareClient — NEVER a global token. app()->make() allows test mocking
+        // via app()->bind(SquareClient::class, ...).
+        $square = app()->make(SquareClient::class, [
+            'token' => $payment->squareAccount->access_token,
+            'options' => ['baseUrl' => $payment->squareAccount->environment === 'production'
+                ? Environments::Production->value
+                : Environments::Sandbox->value],
+        ]);
+
+        try {
+            $response = $square->payments->create(new CreatePaymentRequest([
+                'idempotencyKey' => (string) Str::uuid(),
+                'sourceId' => $validated['source_id'],
+                'verificationToken' => $validated['verification_token'] ?? null,
+                'amountMoney' => new Money([
+                    'amount' => $payment->amount,                 // integer cents from DB — SEC-02, never from client
+                    'currency' => strtoupper($payment->currency), // 'USD' | 'GBP'
+                ]),
+                'locationId' => $payment->squareAccount->location_id,
+                'referenceId' => (string) $payment->reference_code,
+                'note' => $payment->uuid,
+            ]));
+        } catch (SquareApiException) {
+            // Sanitized — never surface card data, tokens, or raw processor errors.
+            return response()->json(['ok' => false, 'error' => 'Your payment could not be processed. Please check your card details and try again.'], 422);
+        } catch (SquareException) {
+            return response()->json(['ok' => false, 'error' => 'Could not reach the payment processor. Please try again.'], 502);
+        }
+
+        $squarePaymentId = $response->getPayment()?->getId();
+
+        if ($squarePaymentId) {
+            // Store for webhook correlation only. Do NOT set status to completed here.
+            $payment->update(['square_payment_id' => $squarePaymentId]);
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     public function success(Payment $payment): Response|RedirectResponse

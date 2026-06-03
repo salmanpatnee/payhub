@@ -16,22 +16,39 @@ class SecurityHeaders
         $response->headers->set('X-Frame-Options', 'DENY');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-        $vite = app()->environment('local')
-            ? ' http://127.0.0.1:5173 http://localhost:5173'
-            : '';
-        $viteWs = app()->environment('local')
-            ? ' ws://127.0.0.1:5173 ws://localhost:5173'
-            : '';
+        $vite = '';
+        $viteWs = '';
+
+        if (app()->environment('local')) {
+            // Vite dev server origin follows the app scheme/host (e.g. https://payhub.test:5173
+            // once `herd secure` is enabled). Always include the localhost fallbacks too.
+            $parsed = parse_url((string) config('app.url'));
+            $scheme = $parsed['scheme'] ?? 'http';
+            $host = $parsed['host'] ?? 'localhost';
+            $wsScheme = $scheme === 'https' ? 'wss' : 'ws';
+
+            $vite = " {$scheme}://{$host}:5173 http://127.0.0.1:5173 http://localhost:5173";
+            $viteWs = " {$wsScheme}://{$host}:5173 ws://127.0.0.1:5173 ws://localhost:5173";
+        }
+
         $scriptInline = app()->environment('local') ? " 'unsafe-inline'" : '';
+
+        // Square Web Payments SDK: scripts + card-field iframes load from *.squarecdn.com;
+        // tokenize / verifyBuyer (3DS/SCA) call *.squareup.com and the sandbox variant.
+        $square = ' https://sandbox.web.squarecdn.com https://web.squarecdn.com https://*.squarecdn.com';
+        $squareConnect = ' https://connect.squareup.com https://connect.squareupsandbox.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com https://*.squarecdn.com';
+        // Square card-field font loads from this CloudFront host; 3DS/SCA challenge renders in connect frames.
+        $squareFonts = ' https://d1g145x70srn7h.cloudfront.net';
+        $squareFrames = ' https://connect.squareup.com https://connect.squareupsandbox.com';
 
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
-            "script-src 'self' https://js.stripe.com{$vite}{$scriptInline}; ".
-            'frame-src https://js.stripe.com; '.
-            "connect-src 'self' https://api.stripe.com{$vite}{$viteWs}; ".
+            "script-src 'self' https://js.stripe.com{$square}{$vite}{$scriptInline}; ".
+            "frame-src https://js.stripe.com{$square}{$squareFrames}; ".
+            "connect-src 'self' https://api.stripe.com{$squareConnect}{$vite}{$viteWs}; ".
             "img-src 'self' data: https:; ".
-            "style-src 'self' 'unsafe-inline'{$vite}; ".
-            "font-src 'self'{$vite};"
+            "style-src 'self' 'unsafe-inline'{$square}{$vite}; ".
+            "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$vite};"
         );
 
         return $response;

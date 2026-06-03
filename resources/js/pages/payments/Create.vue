@@ -17,13 +17,13 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 
 type BrandOption = { id: number; name: string };
-type AccountOption = { id: number; account_name: string };
+type PaymentAccountOption = { value: string; label: string; provider: string };
 type RmOption = { id: number; name: string };
 
 const props = defineProps<{
     brands: BrandOption[];
-    stripeAccounts: AccountOption[];
-    isStripeAccountLocked: boolean;
+    paymentAccounts: PaymentAccountOption[];
+    isAccountLocked: boolean;
     relationshipManagers: RmOption[];
 }>();
 
@@ -38,7 +38,7 @@ defineOptions({
 
 const form = useForm({
     brand_id:                  '',
-    stripe_account_id:         '',
+    payment_account:           '',
     relationship_manager_id:   '',
     currency:                  'usd',
     amount:                    '',
@@ -50,8 +50,8 @@ const form = useForm({
 });
 
 onMounted(() => {
-    if (props.isStripeAccountLocked && props.stripeAccounts.length > 0) {
-        form.stripe_account_id = String(props.stripeAccounts[0].id);
+    if (props.isAccountLocked && props.paymentAccounts.length > 0) {
+        form.payment_account = props.paymentAccounts[0].value;
     }
 });
 
@@ -98,22 +98,22 @@ function submit() {
                         <InputError class="mt-1" :message="form.errors.brand_id" />
                     </div>
 
-                    <!-- Stripe Account -->
+                    <!-- Payment Account (merged Stripe + Square) -->
                     <div class="grid gap-2">
-                        <Label for="stripe_account_id">Stripe Account</Label>
-                        <Select v-model="form.stripe_account_id" :disabled="isStripeAccountLocked">
-                            <SelectTrigger id="stripe_account_id" class="w-full">
-                                <SelectValue placeholder="Select a Stripe account" />
+                        <Label for="payment_account">Payment Account</Label>
+                        <Select v-model="form.payment_account" :disabled="isAccountLocked">
+                            <SelectTrigger id="payment_account" class="w-full">
+                                <SelectValue placeholder="Select a payment account" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem
-                                    v-for="account in props.stripeAccounts"
-                                    :key="account.id"
-                                    :value="String(account.id)"
-                                >{{ account.account_name }}</SelectItem>
+                                    v-for="account in props.paymentAccounts"
+                                    :key="account.value"
+                                    :value="account.value"
+                                >{{ account.label }}</SelectItem>
                             </SelectContent>
                         </Select>
-                        <InputError class="mt-1" :message="form.errors.stripe_account_id" />
+                        <InputError class="mt-1" :message="form.errors.payment_account" />
                     </div>
 
                     <!-- Relationship Manager -->

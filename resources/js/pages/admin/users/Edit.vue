@@ -24,7 +24,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 
-type AccountOption = { id: number; account_name: string };
+type PaymentAccountOption = { value: string; label: string };
 type NamedOption = { id: number; name: string };
 
 type UserProp = {
@@ -32,7 +32,7 @@ type UserProp = {
     name: string;
     username: string;
     roles: string[];
-    stripe_account_id: number | null;
+    payment_account: string;
     brand_ids: number[];
     relationship_manager_ids: number[];
 };
@@ -40,7 +40,7 @@ type UserProp = {
 const props = defineProps<{
     user: UserProp;
     roles: string[];
-    stripeAccounts: AccountOption[];
+    paymentAccounts: PaymentAccountOption[];
     brands: NamedOption[];
     relationshipManagers: NamedOption[];
 }>();
@@ -63,7 +63,7 @@ const form = useForm({
     username:                   props.user.username,
     password:                   '',
     role:                       props.user.roles[0] ?? 'agent',
-    stripe_account_id:          props.user.stripe_account_id ? String(props.user.stripe_account_id) : '',
+    payment_account:            props.user.payment_account ?? '',
     brand_ids:                  [...props.user.brand_ids],
     relationship_manager_ids:   [...props.user.relationship_manager_ids],
 });
@@ -155,20 +155,20 @@ function executeDelete() {
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">
-                        <Label for="stripe_account_id">Stripe Account</Label>
-                        <Select v-model="form.stripe_account_id">
-                            <SelectTrigger id="stripe_account_id" class="w-full">
-                                <SelectValue placeholder="Select a Stripe account" />
+                        <Label for="payment_account">Payment Account</Label>
+                        <Select v-model="form.payment_account">
+                            <SelectTrigger id="payment_account" class="w-full">
+                                <SelectValue placeholder="Select a payment account" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem
-                                    v-for="account in stripeAccounts"
-                                    :key="account.id"
-                                    :value="String(account.id)"
-                                >{{ account.account_name }}</SelectItem>
+                                    v-for="account in paymentAccounts"
+                                    :key="account.value"
+                                    :value="account.value"
+                                >{{ account.label }}</SelectItem>
                             </SelectContent>
                         </Select>
-                        <InputError class="mt-2" :message="form.errors.stripe_account_id" />
+                        <InputError class="mt-2" :message="form.errors.payment_account" />
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">

@@ -3,6 +3,7 @@
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
+use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,6 +38,32 @@ it('brand has many payments', function () {
     ]);
 
     expect($brand->payments)->toHaveCount(3);
+});
+
+it('square payment belongs to a square account and user belongs to a square account', function () {
+    $squareAccount = SquareAccount::factory()->create();
+    $user = User::factory()->create(['square_account_id' => $squareAccount->id]);
+
+    $payment = Payment::factory()->square()->create([
+        'square_account_id' => $squareAccount->id,
+        'user_id' => $user->id,
+    ]);
+
+    expect($payment->squareAccount->id)->toBe($squareAccount->id);
+    expect($payment->stripe_account_id)->toBeNull();
+    expect($user->squareAccount->id)->toBe($squareAccount->id);
+    expect($squareAccount->payments->pluck('id'))->toContain($payment->id);
+});
+
+it('account_name accessor resolves per provider', function () {
+    $stripeAccount = StripeAccount::factory()->create(['account_name' => 'Stripe Co']);
+    $squareAccount = SquareAccount::factory()->create(['account_name' => 'Square Co']);
+
+    $stripePayment = Payment::factory()->create(['stripe_account_id' => $stripeAccount->id]);
+    $squarePayment = Payment::factory()->square()->create(['square_account_id' => $squareAccount->id]);
+
+    expect($stripePayment->account_name)->toBe('Stripe Co');
+    expect($squarePayment->account_name)->toBe('Square Co');
 });
 
 it('user maps to many brands and relationship managers', function () {

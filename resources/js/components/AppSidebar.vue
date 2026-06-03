@@ -24,6 +24,7 @@ const mainNavItems = computed((): NavItem[] => [
     ...(isAdmin.value ? [
         { title: 'Brands',          href: '/admin/brands',                  icon: Building2  } as NavItem,
         { title: 'Stripe Accounts', href: '/admin/stripe-accounts',         icon: Wallet     } as NavItem,
+        { title: 'Square Accounts', href: '/admin/square-accounts',         icon: Wallet     } as NavItem,
         { title: 'Users',           href: '/admin/users',                   icon: Users      } as NavItem,
         { title: 'RMs',             href: '/admin/relationship-managers',   icon: UserCheck2 } as NavItem,
     ] : []),

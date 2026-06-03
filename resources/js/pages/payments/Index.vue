@@ -31,6 +31,7 @@ type PaymentRow = {
     amount: number;
     currency: string;
     brand_name: string;
+    provider: string;
     account_name: string;
     status: string;
     created_at: string;
@@ -72,7 +73,8 @@ const COLUMN_DEFS = [
     { key: 'client', label: 'Client' },
     { key: 'amount', label: 'Amount' },
     { key: 'brand', label: 'Brand' },
-    { key: 'account_name', label: 'Stripe Account' },
+    { key: 'provider', label: 'Provider' },
+    { key: 'account_name', label: 'Payment Account' },
     { key: 'status', label: 'Status' },
     { key: 'created', label: 'Created' },
 ] as const;
@@ -358,7 +360,8 @@ async function copyLink(uuid: string): Promise<void> {
                         <th v-if="visibleColumns.client" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client</th>
                         <th v-if="visibleColumns.amount" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
                         <th v-if="visibleColumns.brand" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
-                        <th v-if="visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Stripe Account</th>
+                        <th v-if="visibleColumns.provider" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Provider</th>
+                        <th v-if="visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Payment Account</th>
                         <th v-if="visibleColumns.status" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th v-if="visibleColumns.created" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
@@ -375,6 +378,14 @@ async function copyLink(uuid: string): Promise<void> {
                         <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
                         <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
+                        <td v-if="visibleColumns.provider" class="px-5 py-3.5">
+                            <span
+                                class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize"
+                                :class="payment.provider === 'square'
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
+                                    : 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400'"
+                            >{{ payment.provider }}</span>
+                        </td>
                         <td v-if="visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name }}</td>
                         <td v-if="visibleColumns.status" class="px-5 py-3.5">
                             <PaymentStatusBadge :status="payment.status" />

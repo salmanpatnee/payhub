@@ -3,6 +3,7 @@
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
+use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,9 +26,27 @@ function validPaymentPayload(Brand $brand, StripeAccount $account): array
 
     return [
         'brand_id' => $brand->id,
-        'stripe_account_id' => $account->id,
+        'payment_account' => 'stripe:'.$account->id,
         'relationship_manager_id' => $rm->id,
         'currency' => 'usd',
+        'amount' => '25.00',
+        'client_name' => 'Alice Smith',
+        'client_email' => 'alice@example.com',
+        'service' => 'Web Design',
+        'package' => 'standard',
+        'note' => null,
+    ];
+}
+
+function validSquarePaymentPayload(Brand $brand, SquareAccount $account): array
+{
+    $rm = RelationshipManager::factory()->create();
+
+    return [
+        'brand_id' => $brand->id,
+        'payment_account' => 'square:'.$account->id,
+        'relationship_manager_id' => $rm->id,
+        'currency' => 'gbp',
         'amount' => '25.00',
         'client_name' => 'Alice Smith',
         'client_email' => 'alice@example.com',
@@ -84,6 +103,81 @@ it('rejects inactive stripe account with validation error', function () {
         ->assertSessionHasErrors('stripe_account_id');
 
     expect(Payment::count())->toBe(0);
+});
+
+// Merged dropdown: admin can create a Square payment via "square:{id}"
+it('admin can create a square payment via the merged payment_account value', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = SquareAccount::factory()->create(['is_active' => true]);
+
+    $response = $this->actingAs($admin)
+        ->post('/payments', validSquarePaymentPayload($brand, $account));
+
+    $payment = Payment::first();
+    $response->assertRedirect("/payments/{$payment->uuid}");
+    expect($payment->provider)->toBe('square');
+    expect($payment->square_account_id)->toBe($account->id);
+    expect($payment->stripe_account_id)->toBeNull();
+    expect($payment->status)->toBe('pending');
+});
+
+// Merged dropdown: inactive Square account is rejected with a validation error
+it('rejects inactive square account with validation error', function () {
+    $user = User::factory()->create();
+    $user->assignRole('user');
+    $brand = Brand::factory()->create();
+    $account = SquareAccount::factory()->create(['is_active' => false]);
+
+    $this->actingAs($user)
+        ->post('/payments', validSquarePaymentPayload($brand, $account))
+        ->assertSessionHasErrors('square_account_id');
+
+    expect(Payment::count())->toBe(0);
+});
+
+// Merged dropdown: stripe value sets provider=stripe and the stripe FK only
+it('stripe payment_account sets provider stripe and the stripe fk only', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = StripeAccount::factory()->create(['is_active' => true]);
+
+    $this->actingAs($admin)->post('/payments', validPaymentPayload($brand, $account));
+
+    $payment = Payment::first();
+    expect($payment->provider)->toBe('stripe');
+    expect($payment->stripe_account_id)->toBe($account->id);
+    expect($payment->square_account_id)->toBeNull();
+});
+
+// Agent locked to a Square account creates a Square payment (failover)
+it('agent locked to a square account creates a square payment', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $account = SquareAccount::factory()->create(['is_active' => true]);
+    $agent->square_account_id = $account->id;
+    $agent->save();
+
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+    $agent->brands()->sync([$brand->id]);
+    $agent->relationshipManagers()->sync([$rm->id]);
+
+    $payload = validSquarePaymentPayload($brand, $account);
+    $payload['relationship_manager_id'] = $rm->id;
+    // Even if the client tries to inject a different account, the agent is locked server-side.
+    $payload['payment_account'] = 'stripe:99999';
+
+    $this->actingAs($agent)->post('/payments', $payload)
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $payment = Payment::first();
+    expect($payment->provider)->toBe('square');
+    expect($payment->square_account_id)->toBe($account->id);
 });
 
 // PAY-03: client_name and client_email are stored on the Payment record

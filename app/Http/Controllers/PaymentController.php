@@ -6,6 +6,7 @@ use App\Http\Requests\StorePaymentRequest;
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
+use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -21,7 +22,7 @@ class PaymentController extends Controller
         $user = auth()->user();
         $isAdmin = $user->hasRole('admin');
 
-        $query = Payment::with(['brand', 'stripeAccount', 'user', 'relationshipManager'])
+        $query = Payment::with(['brand', 'stripeAccount', 'squareAccount', 'user', 'relationshipManager'])
             ->orderByDesc('created_at');
 
         if (! $isAdmin) {
@@ -58,7 +59,8 @@ class PaymentController extends Controller
                 'amount' => $p->amount,
                 'currency' => $p->currency,
                 'brand_name' => $p->brand->name,
-                'account_name' => $p->stripeAccount->account_name,
+                'provider' => $p->provider,
+                'account_name' => $p->account_name,
                 'status' => $p->status,
                 'created_at' => $p->created_at->toISOString(),
                 'client_email' => $p->client_email,
@@ -82,8 +84,11 @@ class PaymentController extends Controller
         $user = auth()->user();
 
         if ($user->hasRole('agent')) {
-            if (! $user->stripe_account_id) {
-                Inertia::flash('toast', ['type' => 'error', 'message' => 'No Stripe account assigned. Contact an admin.']);
+            // Agents are locked to a single assigned account (Stripe OR Square) for failover.
+            $lockedAccount = $this->resolveAgentLockedAccount($user);
+
+            if ($lockedAccount === null) {
+                Inertia::flash('toast', ['type' => 'error', 'message' => 'No payment account assigned. Contact an admin.']);
 
                 return redirect()->route('payments.index');
             }
@@ -97,21 +102,19 @@ class PaymentController extends Controller
                 return redirect()->route('payments.index');
             }
 
-            $stripeAccounts = StripeAccount::where('id', $user->stripe_account_id)->get(['id', 'account_name']);
-            $isStripeAccountLocked = true;
+            $paymentAccounts = [$lockedAccount];
+            $isAccountLocked = true;
         } else {
-            $stripeAccounts = StripeAccount::where('is_active', true)
-                ->orderBy('account_name')
-                ->get(['id', 'account_name']);
-            $isStripeAccountLocked = false;
+            $paymentAccounts = $this->paymentAccountOptions();
+            $isAccountLocked = false;
             $brands = Brand::orderBy('name')->get(['id', 'name']);
             $relationshipManagers = RelationshipManager::orderBy('name')->get(['id', 'name']);
         }
 
         return Inertia::render('payments/Create', [
             'brands' => $brands,
-            'stripeAccounts' => $stripeAccounts,
-            'isStripeAccountLocked' => $isStripeAccountLocked,
+            'paymentAccounts' => $paymentAccounts,
+            'isAccountLocked' => $isAccountLocked,
             'relationshipManagers' => $relationshipManagers,
         ]);
     }
@@ -119,15 +122,12 @@ class PaymentController extends Controller
     public function store(StorePaymentRequest $request): RedirectResponse
     {
         // SEC-02: amount is integer cents from StorePaymentRequest::validated().
-        // user_id and status are NEVER from the request.
+        // provider + the correct account FK are resolved in StorePaymentRequest
+        // (agents are locked server-side there). user_id and status are NEVER from the request.
         $data = $request->validated();
 
         /** @var User $user */
         $user = auth()->user();
-
-        if ($user->hasRole('agent')) {
-            $data['stripe_account_id'] = $user->stripe_account_id;
-        }
 
         $payment = Payment::create([
             ...$data,
@@ -139,10 +139,64 @@ class PaymentController extends Controller
         return redirect()->route('payments.show', $payment);
     }
 
+    /**
+     * Merged dropdown options: active Stripe + active Square accounts, each provider-labeled.
+     *
+     * @return array<int, array{value: string, label: string, provider: string}>
+     */
+    private function paymentAccountOptions(): array
+    {
+        $stripe = StripeAccount::where('is_active', true)
+            ->orderBy('account_name')
+            ->get(['id', 'account_name'])
+            ->map(fn (StripeAccount $a) => [
+                'value' => 'stripe:'.$a->id,
+                'label' => $a->account_name.' (Stripe)',
+                'provider' => 'stripe',
+            ]);
+
+        $square = SquareAccount::where('is_active', true)
+            ->orderBy('account_name')
+            ->get(['id', 'account_name'])
+            ->map(fn (SquareAccount $a) => [
+                'value' => 'square:'.$a->id,
+                'label' => $a->account_name.' (Square)',
+                'provider' => 'square',
+            ]);
+
+        return $stripe->concat($square)->values()->all();
+    }
+
+    /**
+     * Resolve an agent's single assigned account (Stripe takes precedence) as a dropdown option.
+     *
+     * @return array{value: string, label: string, provider: string}|null
+     */
+    private function resolveAgentLockedAccount(User $user): ?array
+    {
+        if ($user->stripe_account_id && ($account = StripeAccount::find($user->stripe_account_id))) {
+            return [
+                'value' => 'stripe:'.$account->id,
+                'label' => $account->account_name.' (Stripe)',
+                'provider' => 'stripe',
+            ];
+        }
+
+        if ($user->square_account_id && ($account = SquareAccount::find($user->square_account_id))) {
+            return [
+                'value' => 'square:'.$account->id,
+                'label' => $account->account_name.' (Square)',
+                'provider' => 'square',
+            ];
+        }
+
+        return null;
+    }
+
     public function show(Payment $payment): Response
     {
         Gate::authorize('view', $payment);
-        $payment->loadMissing(['brand', 'stripeAccount', 'relationshipManager']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'squareAccount', 'relationshipManager']);
 
         return Inertia::render('payments/Show', [
             'payment' => [
@@ -157,10 +211,12 @@ class PaymentController extends Controller
                 'package' => $payment->package,
                 'note' => $payment->note,
                 'brand_name' => $payment->brand->name,
-                'account_name' => $payment->stripeAccount->account_name,
+                'provider' => $payment->provider,
+                'account_name' => $payment->account_name,
                 'relationship_manager_name' => $payment->relationshipManager?->name,
                 'created_at' => $payment->created_at->toISOString(),
                 'stripe_payment_intent_id' => $payment->stripe_payment_intent_id,
+                'square_payment_id' => $payment->square_payment_id,
                 'paid_at' => $payment->paid_at?->toISOString(),
                 'expires_at' => $payment->expires_at?->toISOString(),
             ],
