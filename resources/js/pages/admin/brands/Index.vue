@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
+import { Eye, Pencil, Plus, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
+import BrandPaymentPreview from '@/components/BrandPaymentPreview.vue';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 
 type BrandRow = {
@@ -28,6 +29,14 @@ defineOptions({
 const deleteTarget = ref<BrandRow | null>(null);
 const deleteOpen   = ref(false);
 const deleteForm   = useForm({});
+
+const previewTarget = ref<BrandRow | null>(null);
+const previewOpen   = ref(false);
+
+function openPreview(brand: BrandRow) {
+    previewTarget.value = brand;
+    previewOpen.value   = true;
+}
 
 function confirmDelete(brand: BrandRow) {
     deleteTarget.value = brand;
@@ -115,6 +124,15 @@ function executeDelete() {
 
                         <td class="px-5 py-3.5 text-right">
                             <div class="flex items-center justify-end gap-1">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="cursor-pointer"
+                                    :aria-label="`Preview ${brand.name}`"
+                                    @click="openPreview(brand)"
+                                >
+                                    <Eye class="size-4" />
+                                </Button>
                                 <Button variant="ghost" size="icon" as-child>
                                     <Link
                                         :href="`/admin/brands/${brand.id}/edit`"
@@ -153,5 +171,13 @@ function executeDelete() {
         description="This cannot be undone. All brand data will be permanently removed."
         :processing="deleteForm.processing"
         @confirm="executeDelete"
+    />
+
+    <BrandPaymentPreview
+        v-model:open="previewOpen"
+        :name="previewTarget?.name ?? ''"
+        :primary-color="previewTarget?.primary_color ?? '#000000'"
+        :secondary-color="previewTarget?.secondary_color ?? '#cccccc'"
+        :logo-url="previewTarget?.logo_url ?? null"
     />
 </template>
