@@ -7,20 +7,23 @@ use App\Http\Requests\Admin\StoreRelationshipManagerRequest;
 use App\Http\Requests\Admin\UpdateRelationshipManagerRequest;
 use App\Models\RelationshipManager;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class RelationshipManagerController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
         return Inertia::render('admin/relationship-managers/Index', [
             'rms' => RelationshipManager::orderBy('name')
-                ->get()
-                ->map(fn (RelationshipManager $rm) => [
+                ->when($request->search, fn ($q, $v) => $q->where('name', 'LIKE', "%{$v}%"))
+                ->paginate(20)
+                ->through(fn (RelationshipManager $rm) => [
                     'id' => $rm->id,
                     'name' => $rm->name,
                 ]),
+            'filters' => $request->only(['search']),
         ]);
     }
 

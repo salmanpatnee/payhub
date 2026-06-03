@@ -31,7 +31,7 @@ type PaymentRow = {
     amount: number;
     currency: string;
     brand_name: string;
-    account_name: string;
+    account_name: string | null;
     status: string;
     created_at: string;
     client_email: string;
@@ -375,7 +375,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
                         <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
-                        <td v-if="visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name }}</td>
+                        <td v-if="visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name ?? '—' }}</td>
                         <td v-if="visibleColumns.status" class="px-5 py-3.5">
                             <PaymentStatusBadge :status="payment.status" />
                         </td>
