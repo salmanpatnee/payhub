@@ -60,6 +60,7 @@ class PaymentController extends Controller
                 'currency' => $p->currency,
                 'brand_name' => $p->brand->name,
                 'account_name' => $p->stripeAccount?->account_name,
+                'relationship_manager_name' => $p->relationshipManager?->name,
                 'status' => $p->status,
                 'created_at' => $p->created_at->toISOString(),
                 'client_email' => $p->client_email,
