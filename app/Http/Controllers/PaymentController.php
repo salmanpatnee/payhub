@@ -21,11 +21,13 @@ class PaymentController extends Controller
     {
         $user = auth()->user();
         $isAdmin = $user->hasRole('admin');
+        $isAccount = $user->hasRole('account');
+        $canViewAll = $isAdmin || $isAccount;
 
         $query = Payment::with(['brand', 'stripeAccount', 'user', 'relationshipManager'])
             ->orderByDesc('created_at');
 
-        if (! $isAdmin) {
+        if (! $canViewAll) {
             $query->where('user_id', $user->id);
         }
 
@@ -67,19 +69,22 @@ class PaymentController extends Controller
                 'client_name' => $p->client_name,
             ]),
             'filters' => $request->only(['brand_id', 'stripe_account_id', 'relationship_manager_id', 'status', 'from', 'to', 'search']),
-            'brands' => $isAdmin
+            'brands' => $canViewAll
                 ? Brand::orderBy('name')->get(['id', 'name'])
                 : [],
             'accounts' => $isAdmin
                 ? StripeAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
                 : [],
             'isAdmin' => $isAdmin,
+            'readOnly' => $isAccount,
             'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
         ]);
     }
 
     public function create(): Response|RedirectResponse
     {
+        Gate::authorize('create', Payment::class);
+
         /** @var User $user */
         $user = auth()->user();
 

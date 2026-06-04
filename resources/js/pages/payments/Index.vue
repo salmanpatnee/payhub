@@ -65,6 +65,7 @@ const props = defineProps<{
     filters: FilterState;
     brands: { id: number; name: string }[];
     isAdmin: boolean;
+    readOnly: boolean;
     relationshipManagers: { id: number; name: string }[];
 }>();
 
@@ -250,7 +251,7 @@ async function copyLink(uuid: string): Promise<void> {
     <div class="p-6 space-y-4">
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-semibold tracking-tight">Payments</h1>
-            <Button as-child>
+            <Button v-if="!readOnly" as-child>
                 <Link href="/payments/create">
                     <Plus class="size-4 mr-1" />
                     New payment
@@ -296,7 +297,7 @@ async function copyLink(uuid: string): Promise<void> {
                     </div>
                 </div>
 
-                <div v-if="isAdmin" class="flex flex-col gap-1.5 flex-1 min-w-0">
+                <div v-if="brands.length" class="flex flex-col gap-1.5 flex-1 min-w-0">
                     <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</Label>
                     <SearchableSelect
                         v-model="filters.brand_id"
@@ -409,17 +410,17 @@ async function copyLink(uuid: string): Promise<void> {
                         </td>
                         <td class="px-5 py-3.5 text-right">
                             <div class="flex items-center justify-end gap-1">
-                                <Button variant="ghost" size="sm" as-child title="View payment details">
+                                <Button v-if="!readOnly" variant="ghost" size="sm" as-child title="View payment details">
                                     <Link :href="`/payments/${payment.uuid}`">
                                         <Eye class="size-4" />
                                     </Link>
                                 </Button>
-                                <Button variant="ghost" size="sm" title="Copy payment link" @click="copyLink(payment.uuid)">
+                                <Button v-if="!readOnly" variant="ghost" size="sm" title="Copy payment link" @click="copyLink(payment.uuid)">
                                     <Check v-if="copiedUuid === payment.uuid" class="size-4 text-green-600" />
                                     <Copy v-else class="size-4" />
                                 </Button>
                                 <Button
-                                    v-if="payment.status === 'pending'"
+                                    v-if="!readOnly && payment.status === 'pending'"
                                     variant="ghost"
                                     size="sm"
                                     as-child

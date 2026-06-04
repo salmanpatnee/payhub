@@ -117,6 +117,7 @@ function submit() {
                             <SelectContent>
                                 <SelectItem value="admin">Admin</SelectItem>
                                 <SelectItem value="agent">Agent</SelectItem>
+                                <SelectItem value="account">Account</SelectItem>
                             </SelectContent>
                         </Select>
                         <InputError class="mt-2" :message="form.errors.role" />

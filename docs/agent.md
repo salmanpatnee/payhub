@@ -2,33 +2,40 @@
 
 ## RBAC & Roles
 
-Two roles exist: `admin` and `agent`. There is no `user` role.
+Three roles exist: `admin`, `agent`, and `account`. There is no `user` role.
+
+The `account` role is a **read-only Payments viewer** for finance staff (will own the
+payments export feature in a future phase). It sees **all** payments (no `user_id` scope,
+like admin) but cannot create, edit, delete, copy links, or open the Show page — index +
+filters only. It has no Stripe account / brand / RM mappings (like admin).
 
 ### Nav access matrix
 
-| Nav item        | Admin | Agent |
-|-----------------|-------|-------|
-| Brands          | ✓     | ✗     |
-| Stripe Accounts | ✓     | ✗     |
-| Users           | ✓     | ✗     |
-| Payments        | ✓     | ✓     |
-| Settings        | ✓     | ✓     |
+| Nav item        | Admin | Agent | Account |
+|-----------------|-------|-------|---------|
+| Brands          | ✓     | ✗     | ✗       |
+| Stripe Accounts | ✓     | ✗     | ✗       |
+| Users           | ✓     | ✗     | ✗       |
+| Payments        | ✓     | ✓     | ✓ (read-only) |
+| Settings        | ✓     | ✗     | ✗       |
 
 ### Implementation rules
 
 - Sidebar nav items must only render for roles that can access them
 - `isAdmin` computed in `resources/js/components/AppSidebar.vue` gates admin-only links — **never render inaccessible links**
 - Backend routes protected by `role:admin` middleware — frontend hiding is UX only, backend is the real gate
-- Form request validation: `'role' => ['required', 'string', 'in:admin,agent']` — never `in:admin,user`
-- Seeder: `Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web'])`
+- Form request validation: `'role' => ['required', 'string', 'in:admin,agent,account']` — never `in:admin,user`
+- Account read-only enforcement is server-side: `PaymentController::index` sends a `readOnly` prop and scopes data via `$canViewAll = isAdmin || isAccount`; `PaymentPolicy::create` (admin|agent) blocks create/store; `view`/`update`/`delete` already 403 for account (not admin, owns no payments)
+- Seeder: `Role::firstOrCreate(['name' => 'account', 'guard_name' => 'web'])`
 - Role badge display: use Tailwind `capitalize` class on the badge element
 
 ### Seeded users (dev)
 
 | Email             | Role  | Password |
 |-------------------|-------|----------|
-| admin@payhub.test | admin | password |
-| user@payhub.test  | agent | password |
+| admin@payhub.test   | admin   | password |
+| agent@payhub.test   | agent   | password |
+| account@payhub.test | account | password |
 
 ---
 
