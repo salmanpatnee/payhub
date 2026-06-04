@@ -6,6 +6,7 @@ import { Check, Columns, Copy, Eye, Filter, Pencil, Plus, Search, Trash2, X } fr
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -284,40 +285,26 @@ async function copyLink(uuid: string): Promise<void> {
 
                 <div v-if="isAdmin" class="flex flex-col gap-1.5 flex-1 min-w-0">
                     <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</Label>
-                    <Select v-model="filters.brand_id">
-                        <SelectTrigger class="w-full">
-                            <SelectValue placeholder="All brands" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All Brands</SelectItem>
-                            <SelectItem
-                                v-for="brand in brands"
-                                :key="brand.id"
-                                :value="String(brand.id)"
-                            >
-                                {{ brand.name }}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        v-model="filters.brand_id"
+                        :options="brands"
+                        :all-value="UNSET"
+                        all-label="All Brands"
+                        placeholder="All brands"
+                        search-placeholder="Search brands…"
+                    />
                 </div>
 
                 <div class="flex flex-col gap-1.5 flex-1 min-w-0">
                     <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</Label>
-                    <Select v-model="filters.relationship_manager_id">
-                        <SelectTrigger class="w-full">
-                            <SelectValue placeholder="All RMs" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All RMs</SelectItem>
-                            <SelectItem
-                                v-for="rm in relationshipManagers"
-                                :key="rm.id"
-                                :value="String(rm.id)"
-                            >
-                                {{ rm.name }}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        v-model="filters.relationship_manager_id"
+                        :options="relationshipManagers"
+                        :all-value="UNSET"
+                        all-label="All RMs"
+                        placeholder="All RMs"
+                        search-placeholder="Search RMs…"
+                    />
                 </div>
 
                 <div class="flex flex-col gap-1.5 flex-1 min-w-0">

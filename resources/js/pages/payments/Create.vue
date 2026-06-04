@@ -10,6 +10,7 @@ import {
 import { Input } from '@/components/ui/input';
 import InputError from '@/components/InputError.vue';
 import { Label } from '@/components/ui/label';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import {
     Select, SelectContent, SelectItem,
     SelectTrigger, SelectValue,
@@ -83,18 +84,14 @@ function submit() {
                     <!-- Brand -->
                     <div class="grid gap-2">
                         <Label for="brand_id">Brand <span class="text-destructive">*</span></Label>
-                        <Select v-model="form.brand_id">
-                            <SelectTrigger id="brand_id" class="w-full">
-                                <SelectValue placeholder="Select a brand" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="brand in props.brands"
-                                    :key="brand.id"
-                                    :value="String(brand.id)"
-                                >{{ brand.name }}</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            id="brand_id"
+                            v-model="form.brand_id"
+                            required
+                            :options="props.brands"
+                            placeholder="Select a brand"
+                            search-placeholder="Search brands…"
+                        />
                         <InputError class="mt-1" :message="form.errors.brand_id" />
                     </div>
 
@@ -119,18 +116,14 @@ function submit() {
                     <!-- Relationship Manager -->
                     <div class="grid gap-2">
                         <Label for="relationship_manager_id">Relationship Manager <span class="text-destructive">*</span></Label>
-                        <Select v-model="form.relationship_manager_id">
-                            <SelectTrigger id="relationship_manager_id" class="w-full">
-                                <SelectValue placeholder="Select a relationship manager" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="rm in props.relationshipManagers"
-                                    :key="rm.id"
-                                    :value="String(rm.id)"
-                                >{{ rm.name }}</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            id="relationship_manager_id"
+                            v-model="form.relationship_manager_id"
+                            required
+                            :options="props.relationshipManagers"
+                            placeholder="Select a relationship manager"
+                            search-placeholder="Search relationship managers…"
+                        />
                         <InputError class="mt-1" :message="form.errors.relationship_manager_id" />
                     </div>
 
