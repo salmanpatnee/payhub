@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Check } from 'lucide-vue-next';
+import { ArrowLeft, Check, Eye, EyeOff } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,6 +57,7 @@ defineOptions({
 const page     = usePage();
 const isSelf   = computed(() => page.props.auth.user?.id === props.user.id);
 const deleteOpen = ref(false);
+const showPassword = ref(false);
 
 const form = useForm({
     name:                       props.user.name,
@@ -130,13 +131,25 @@ function executeDelete() {
 
                     <div class="grid gap-2">
                         <Label for="password">Password</Label>
-                        <Input
-                            id="password"
-                            v-model="form.password"
-                            type="password"
-                            autocomplete="new-password"
-                            placeholder="Leave blank to keep current password"
-                        />
+                        <div class="relative">
+                            <Input
+                                id="password"
+                                v-model="form.password"
+                                :type="showPassword ? 'text' : 'password'"
+                                autocomplete="new-password"
+                                class="pr-10"
+                                placeholder="Leave blank to keep current password"
+                            />
+                            <button
+                                type="button"
+                                class="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                                :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                                @click="showPassword = !showPassword"
+                            >
+                                <EyeOff v-if="showPassword" class="size-4" />
+                                <Eye v-else class="size-4" />
+                            </button>
+                        </div>
                         <InputError class="mt-2" :message="form.errors.password" />
                     </div>
 

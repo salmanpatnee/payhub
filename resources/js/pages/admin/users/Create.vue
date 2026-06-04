@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, UserPlus } from 'lucide-vue-next';
+import { ArrowLeft, Eye, EyeOff, UserPlus } from 'lucide-vue-next';
+import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,6 +44,8 @@ const form = useForm({
     brand_ids:                  [] as number[],
     relationship_manager_ids:   [] as number[],
 });
+
+const showPassword = ref(false);
 
 function submit() {
     form.post('/admin/users');
@@ -98,13 +101,25 @@ function submit() {
 
                     <div class="grid gap-2">
                         <Label for="password">Password</Label>
-                        <Input
-                            id="password"
-                            v-model="form.password"
-                            type="password"
-                            autocomplete="new-password"
-                            required
-                        />
+                        <div class="relative">
+                            <Input
+                                id="password"
+                                v-model="form.password"
+                                :type="showPassword ? 'text' : 'password'"
+                                autocomplete="new-password"
+                                class="pr-10"
+                                required
+                            />
+                            <button
+                                type="button"
+                                class="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                                :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                                @click="showPassword = !showPassword"
+                            >
+                                <EyeOff v-if="showPassword" class="size-4" />
+                                <Eye v-else class="size-4" />
+                            </button>
+                        </div>
                         <InputError class="mt-2" :message="form.errors.password" />
                     </div>
 
