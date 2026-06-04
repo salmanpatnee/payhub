@@ -21,6 +21,7 @@ class UpdateRelationshipManagerRequest extends FormRequest
                 'max:255',
                 Rule::unique('relationship_managers', 'name')->ignore($this->relationship_manager),
             ],
+            'is_active' => ['boolean'],
         ];
     }
 }

@@ -110,6 +110,48 @@ class RelationshipManagerTest extends TestCase
         $this->assertDatabaseHas('relationship_managers', ['id' => $rm->id]);
     }
 
+    public function test_stored_rm_defaults_to_active(): void
+    {
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.relationship-managers.store'), ['name' => 'Heidi'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('relationship_managers', ['name' => 'Heidi', 'is_active' => true]);
+    }
+
+    public function test_admin_can_deactivate_rm(): void
+    {
+        $rm = RelationshipManager::factory()->create();
+
+        $this->actingAs($this->adminUser())
+            ->patch(route('admin.relationship-managers.deactivate', $rm))
+            ->assertRedirect(route('admin.relationship-managers.index'));
+
+        $this->assertDatabaseHas('relationship_managers', ['id' => $rm->id, 'is_active' => false]);
+    }
+
+    public function test_admin_can_activate_rm(): void
+    {
+        $rm = RelationshipManager::factory()->inactive()->create();
+
+        $this->actingAs($this->adminUser())
+            ->patch(route('admin.relationship-managers.activate', $rm))
+            ->assertRedirect(route('admin.relationship-managers.index'));
+
+        $this->assertDatabaseHas('relationship_managers', ['id' => $rm->id, 'is_active' => true]);
+    }
+
+    public function test_admin_can_toggle_is_active_on_update(): void
+    {
+        $rm = RelationshipManager::factory()->create();
+
+        $this->actingAs($this->adminUser())
+            ->put(route('admin.relationship-managers.update', $rm), ['name' => $rm->name, 'is_active' => false])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('relationship_managers', ['id' => $rm->id, 'is_active' => false]);
+    }
+
     public function test_agent_cannot_access_rm_routes(): void
     {
         $this->actingAs($this->agentUser())

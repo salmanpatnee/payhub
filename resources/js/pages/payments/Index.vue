@@ -2,10 +2,11 @@
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
-import { Check, Columns, Copy, Eye, Filter, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
+import { Check, Columns, Copy, Download, Eye, Filter, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -33,6 +34,7 @@ type PaymentRow = {
     currency: string;
     brand_name: string;
     account_name: string | null;
+    relationship_manager_name: string | null;
     status: string;
     created_at: string;
     client_email: string;
@@ -63,6 +65,8 @@ const props = defineProps<{
     filters: FilterState;
     brands: { id: number; name: string }[];
     isAdmin: boolean;
+    readOnly: boolean;
+    canExport: boolean;
     relationshipManagers: { id: number; name: string }[];
 }>();
 
@@ -94,6 +98,7 @@ const COLUMN_DEFS = [
     { key: 'amount', label: 'Amount' },
     { key: 'brand', label: 'Brand' },
     { key: 'account_name', label: 'Stripe Account' },
+    { key: 'relationship_manager_name', label: 'RM' },
     { key: 'status', label: 'Status' },
     { key: 'created', label: 'Created' },
 ] as const;
@@ -177,6 +182,14 @@ watch(
     { deep: true },
 );
 
+const exportUrl = computed((): string => {
+    const activeFilters = Object.fromEntries(
+        Object.entries(filters).filter(([, v]) => v !== '' && v !== UNSET)
+    ) as Record<string, string>;
+    const qs = new URLSearchParams(activeFilters).toString();
+    return qs ? `/payments/export?${qs}` : '/payments/export';
+});
+
 function clearFilters(): void {
     filters.brand_id = UNSET;
     filters.relationship_manager_id = UNSET;
@@ -205,8 +218,21 @@ function goToPage(page: number): void {
     );
 }
 
+const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
 function formatDate(iso: string): string {
     const d = new Date(iso);
+    const diffMs = Date.now() - d.getTime();
+    const diffSec = Math.round(diffMs / 1000);
+
+    if (diffSec < 60) return 'just now';
+
+    const diffMin = Math.round(diffSec / 60);
+    if (diffMin < 60) return relativeTime.format(-diffMin, 'minute');
+
+    const diffHour = Math.round(diffMin / 60);
+    if (diffHour < 24) return relativeTime.format(-diffHour, 'hour');
+
     const month = d.toLocaleDateString('en-GB', { month: 'short' });
     return `${d.getDate()}-${month}-${d.getFullYear()}`;
 }
@@ -234,12 +260,20 @@ async function copyLink(uuid: string): Promise<void> {
     <div class="p-6 space-y-4">
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-semibold tracking-tight">Payments</h1>
-            <Button as-child>
-                <Link href="/payments/create">
-                    <Plus class="size-4 mr-1" />
-                    New payment
-                </Link>
-            </Button>
+            <div class="flex items-center gap-2">
+                <Button v-if="canExport" as-child variant="outline">
+                    <a :href="exportUrl">
+                        <Download class="size-4 mr-1" />
+                        Export
+                    </a>
+                </Button>
+                <Button v-if="!readOnly" as-child>
+                    <Link href="/payments/create">
+                        <Plus class="size-4 mr-1" />
+                        New payment
+                    </Link>
+                </Button>
+            </div>
         </div>
 
         <!-- Filter bar -->
@@ -280,42 +314,28 @@ async function copyLink(uuid: string): Promise<void> {
                     </div>
                 </div>
 
-                <div v-if="isAdmin" class="flex flex-col gap-1.5 flex-1 min-w-0">
+                <div v-if="brands.length" class="flex flex-col gap-1.5 flex-1 min-w-0">
                     <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</Label>
-                    <Select v-model="filters.brand_id">
-                        <SelectTrigger class="w-full">
-                            <SelectValue placeholder="All brands" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All Brands</SelectItem>
-                            <SelectItem
-                                v-for="brand in brands"
-                                :key="brand.id"
-                                :value="String(brand.id)"
-                            >
-                                {{ brand.name }}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        v-model="filters.brand_id"
+                        :options="brands"
+                        :all-value="UNSET"
+                        all-label="All Brands"
+                        placeholder="All brands"
+                        search-placeholder="Search brands…"
+                    />
                 </div>
 
                 <div class="flex flex-col gap-1.5 flex-1 min-w-0">
                     <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</Label>
-                    <Select v-model="filters.relationship_manager_id">
-                        <SelectTrigger class="w-full">
-                            <SelectValue placeholder="All RMs" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All RMs</SelectItem>
-                            <SelectItem
-                                v-for="rm in relationshipManagers"
-                                :key="rm.id"
-                                :value="String(rm.id)"
-                            >
-                                {{ rm.name }}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        v-model="filters.relationship_manager_id"
+                        :options="relationshipManagers"
+                        :all-value="UNSET"
+                        all-label="All RMs"
+                        placeholder="All RMs"
+                        search-placeholder="Search RMs…"
+                    />
                 </div>
 
                 <div class="flex flex-col gap-1.5 flex-1 min-w-0">
@@ -380,6 +400,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <th v-if="visibleColumns.amount" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
                         <th v-if="visibleColumns.brand" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
                         <th v-if="visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Stripe Account</th>
+                        <th v-if="visibleColumns.relationship_manager_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</th>
                         <th v-if="visibleColumns.status" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th v-if="visibleColumns.created" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
@@ -397,6 +418,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
                         <td v-if="visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name ?? '—' }}</td>
+                        <td v-if="visibleColumns.relationship_manager_name" class="px-5 py-3.5">{{ payment.relationship_manager_name ?? '—' }}</td>
                         <td v-if="visibleColumns.status" class="px-5 py-3.5">
                             <PaymentStatusBadge :status="payment.status" />
                         </td>
@@ -405,17 +427,17 @@ async function copyLink(uuid: string): Promise<void> {
                         </td>
                         <td class="px-5 py-3.5 text-right">
                             <div class="flex items-center justify-end gap-1">
-                                <Button variant="ghost" size="sm" as-child title="View payment details">
+                                <Button v-if="!readOnly" variant="ghost" size="sm" as-child title="View payment details">
                                     <Link :href="`/payments/${payment.uuid}`">
                                         <Eye class="size-4" />
                                     </Link>
                                 </Button>
-                                <Button variant="ghost" size="sm" title="Copy payment link" @click="copyLink(payment.uuid)">
+                                <Button v-if="!readOnly" variant="ghost" size="sm" title="Copy payment link" @click="copyLink(payment.uuid)">
                                     <Check v-if="copiedUuid === payment.uuid" class="size-4 text-green-600" />
                                     <Copy v-else class="size-4" />
                                 </Button>
                                 <Button
-                                    v-if="payment.status === 'pending'"
+                                    v-if="!readOnly && payment.status === 'pending'"
                                     variant="ghost"
                                     size="sm"
                                     as-child

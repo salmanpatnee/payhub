@@ -299,6 +299,60 @@ it('agent can create a payment with mapped brand and relationship manager', func
     expect(Payment::first()->brand_id)->toBe($brand->id);
 });
 
+// RM deactivation: admin create page excludes inactive RMs from selection
+it('admin create page excludes inactive relationship managers', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $active = RelationshipManager::factory()->create();
+    RelationshipManager::factory()->inactive()->create();
+
+    $this->actingAs($admin)->get('/payments/create')
+        ->assertStatus(200)
+        ->assertInertia(fn ($page) => $page
+            ->has('relationshipManagers', 1)
+            ->where('relationshipManagers.0.id', $active->id)
+        );
+});
+
+// RM deactivation: editing a payment whose RM is inactive still lists that RM
+it('payment edit page includes the currently-assigned inactive relationship manager', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $account = StripeAccount::factory()->create(['is_active' => true]);
+    $inactiveRm = RelationshipManager::factory()->inactive()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'stripe_account_id' => $account->id,
+        'relationship_manager_id' => $inactiveRm->id,
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($admin)->get("/payments/{$payment->uuid}/edit")
+        ->assertStatus(200)
+        ->assertInertia(fn ($page) => $page
+            ->has('relationshipManagers', 1)
+            ->where('relationshipManagers.0.id', $inactiveRm->id)
+        );
+});
+
+// RM deactivation: index filter dropdown still lists inactive RMs (historical filtering)
+it('payment index filter still lists inactive relationship managers', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    RelationshipManager::factory()->create();
+    RelationshipManager::factory()->inactive()->create();
+
+    $this->actingAs($admin)->get('/payments')
+        ->assertStatus(200)
+        ->assertInertia(fn ($page) => $page->has('relationshipManagers', 2));
+});
+
 // SEC-02: Amount in database matches round of submitted decimal times 100
 it('amount in database matches round of submitted decimal times 100', function () {
     $user = User::factory()->create();

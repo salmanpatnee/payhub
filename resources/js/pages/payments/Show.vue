@@ -1,17 +1,16 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, type Component } from 'vue';
 import {
-    ArrowLeft, Banknote, Briefcase, Building2, Calendar,
-    CalendarCheck, CalendarX, Check, Copy, CreditCard,
-    FileText, Hash, Handshake, Mail, Package, Pencil, Trash2, User,
+    ArrowLeft, Ban, Briefcase, Building2, Check, CheckCircle2,
+    Clock4, Copy, CreditCard, FileText, Hash, Handshake, Link2,
+    Mail, Package, Pencil, Plus, Trash2, User, XCircle,
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
 import {
-    Card, CardContent, CardDescription,
-    CardHeader, CardTitle,
+    Card, CardContent, CardHeader, CardTitle,
 } from '@/components/ui/card';
 
 type PaymentDetail = {
@@ -81,29 +80,83 @@ function formatAmount(cents: number, currency: string): string {
     ).format(cents / 100);
 }
 
+function formatDateTime(iso: string): string {
+    return new Date(iso).toLocaleString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+    });
+}
 
 function titleCase(str: string | null): string {
     if (!str) return '—';
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-const feeBreakdown = computed(() => {
-    const amt = props.payment.amount / 100;
-    const currency = props.payment.currency;
-    const fee = currency === 'gbp' ? amt * 0.015 + 0.20 : amt * 0.029 + 0.30;
-    const receive = amt - fee;
-    const locale = currency === 'gbp' ? 'en-GB' : 'en-US';
-    const curr = currency.toUpperCase();
-    const fmt = (n: number) =>
-        new Intl.NumberFormat(locale, { style: 'currency', currency: curr }).format(n);
-    return { charge: fmt(amt), fee: fmt(fee), receive: fmt(receive) };
+const referenceLabel = computed(() =>
+    props.payment.reference_code != null
+        ? '#' + String(props.payment.reference_code).padStart(6, '0')
+        : 'NO REFERENCE'
+);
+
+type Tone = 'done' | 'pending' | 'failed' | 'muted';
+type TimelineStep = { label: string; date: string; tone: Tone; icon: Component };
+
+const dotClasses: Record<Tone, string> = {
+    done: 'bg-emerald-500 text-white ring-emerald-100 dark:ring-emerald-900/40',
+    pending: 'bg-amber-400 text-white ring-amber-100 dark:ring-amber-900/40 animate-pulse',
+    failed: 'bg-red-500 text-white ring-red-100 dark:ring-red-900/40',
+    muted: 'bg-zinc-300 text-zinc-600 ring-zinc-100 dark:bg-zinc-700 dark:text-zinc-300 dark:ring-zinc-800',
+};
+
+const timeline = computed<TimelineStep[]>(() => {
+    const p = props.payment;
+    const steps: TimelineStep[] = [
+        {
+            label: 'Payment link created',
+            date: formatDateTime(p.created_at),
+            tone: 'done',
+            icon: Plus,
+        },
+    ];
+
+    if (p.status === 'completed') {
+        steps.push({
+            label: 'Payment received',
+            date: p.paid_at ? formatDateTime(p.paid_at) : '—',
+            tone: 'done',
+            icon: CheckCircle2,
+        });
+    } else if (p.status === 'failed') {
+        steps.push({
+            label: 'Payment failed',
+            date: p.paid_at ? formatDateTime(p.paid_at) : 'Last attempt',
+            tone: 'failed',
+            icon: XCircle,
+        });
+    } else if (p.status === 'cancelled') {
+        steps.push({
+            label: 'Cancelled',
+            date: '—',
+            tone: 'muted',
+            icon: Ban,
+        });
+    } else {
+        steps.push({
+            label: 'Awaiting payment',
+            date: p.expires_at ? `Expires ${formatDateTime(p.expires_at)}` : 'No expiry',
+            tone: 'pending',
+            icon: Clock4,
+        });
+    }
+
+    return steps;
 });
 </script>
 
 <template>
     <Head title="Payment Link" />
 
-    <div class="p-6 max-w-5xl space-y-4">
+    <div class="p-6 space-y-4">
         <div class="flex items-center justify-between">
             <Button variant="ghost" size="sm" as-child class="-ml-2">
                 <Link href="/payments">
@@ -132,23 +185,72 @@ const feeBreakdown = computed(() => {
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-            <!-- Left: Payment Summary -->
-            <Card class="h-full">
-                <CardHeader>
-                    <div class="flex items-center justify-between">
-                        <CardTitle>Payment summary</CardTitle>
+        <!-- Hero: amount anchor + shareable link -->
+        <Card class="overflow-hidden">
+            <div class="grid gap-px bg-border/60 md:grid-cols-[1.15fr_1fr]">
+                <!-- Amount -->
+                <div class="flex flex-col gap-6 bg-card p-6 sm:p-8">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                            <p class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</p>
+                            <p class="mt-0.5 truncate text-sm font-semibold">{{ payment.brand_name }}</p>
+                        </div>
                         <PaymentStatusBadge :status="payment.status" />
                     </div>
+
+                    <!-- Amount -->
+                    <div>
+                        <p class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</p>
+                        <div class="mt-1 flex items-baseline gap-2">
+                            <span class="text-4xl font-semibold tracking-tight tabular-nums sm:text-5xl">
+                                {{ formatAmount(payment.amount, payment.currency) }}
+                            </span>
+                            <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                {{ payment.currency.toUpperCase() }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Meta -->
+                    <div class="flex items-end justify-between gap-4 border-t border-border pt-4">
+                        <div class="min-w-0">
+                            <p class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Billed to</p>
+                            <p class="mt-0.5 truncate text-sm font-medium">{{ payment.client_name }}</p>
+                        </div>
+                        <div class="shrink-0 text-right">
+                            <p class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Reference</p>
+                            <p class="mt-0.5 font-mono text-sm font-medium">{{ referenceLabel }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shareable link -->
+                <div class="flex flex-col justify-center gap-3 bg-[#F7F5F2] p-6 sm:p-8 dark:bg-muted/30">
+                    <div class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        <Link2 class="size-3.5" />
+                        Payment link
+                    </div>
+                    <div class="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5">
+                        <span class="flex-1 truncate font-mono text-sm select-all">{{ shareableLink }}</span>
+                        <Button variant="outline" size="sm" @click="copyLink">
+                            <Check v-if="copied" class="size-4 text-emerald-600" />
+                            <Copy v-else class="size-4" />
+                            {{ copied ? 'Copied!' : 'Copy' }}
+                        </Button>
+                    </div>
+                    <p class="text-xs text-muted-foreground">Share with your client to collect payment.</p>
+                </div>
+            </div>
+        </Card>
+
+        <!-- Details + timeline -->
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
+            <Card class="lg:col-span-2">
+                <CardHeader>
+                    <CardTitle class="text-base">Payment details</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                        <div v-if="payment.reference_code" class="col-span-2">
-                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
-                                <Hash class="size-3.5 shrink-0" />Reference
-                            </dt>
-                            <dd class="font-mono font-semibold">{{ String(payment.reference_code).padStart(6, '0') }}</dd>
-                        </div>
                         <div>
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
                                 <User class="size-3.5 shrink-0" />Client
@@ -160,12 +262,6 @@ const feeBreakdown = computed(() => {
                                 <Mail class="size-3.5 shrink-0" />Email
                             </dt>
                             <dd>{{ payment.client_email }}</dd>
-                        </div>
-                        <div>
-                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
-                                <Banknote class="size-3.5 shrink-0" />Amount
-                            </dt>
-                            <dd class="font-mono font-semibold">{{ formatAmount(payment.amount, payment.currency) }}</dd>
                         </div>
                         <div>
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
@@ -203,24 +299,6 @@ const feeBreakdown = computed(() => {
                             </dt>
                             <dd class="mt-1 text-muted-foreground italic">{{ payment.note }}</dd>
                         </div>
-                        <div>
-                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
-                                <Calendar class="size-3.5 shrink-0" />Created
-                            </dt>
-                            <dd>{{ new Date(payment.created_at).toLocaleDateString() }}</dd>
-                        </div>
-                        <div v-if="payment.paid_at">
-                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
-                                <CalendarCheck class="size-3.5 shrink-0" />Paid at
-                            </dt>
-                            <dd>{{ new Date(payment.paid_at).toLocaleString() }}</dd>
-                        </div>
-                        <div v-if="payment.expires_at">
-                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
-                                <CalendarX class="size-3.5 shrink-0" />Expires
-                            </dt>
-                            <dd>{{ new Date(payment.expires_at).toLocaleString() }}</dd>
-                        </div>
                         <div v-if="payment.stripe_payment_intent_id" class="col-span-2">
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
                                 <Hash class="size-3.5 shrink-0" />Stripe PI
@@ -231,48 +309,39 @@ const feeBreakdown = computed(() => {
                 </CardContent>
             </Card>
 
-            <!-- Right: Shareable Link + Fee Breakdown -->
-            <div class="space-y-4">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Payment link created</CardTitle>
-                        <CardDescription>Share this link with your client to collect payment.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3">
-                            <span class="flex-1 text-sm font-mono truncate select-all">{{ shareableLink }}</span>
-                            <Button variant="outline" size="sm" @click="copyLink">
-                                <Check v-if="copied" class="size-4 text-green-600" />
-                                <Copy v-else class="size-4" />
-                                {{ copied ? 'Copied!' : 'Copy' }}
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Fee breakdown</CardTitle>
-                        <CardDescription>Based on standard Stripe rates.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div class="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-                            <div class="flex justify-between py-1">
-                                <span class="text-muted-foreground">Charge amount</span>
-                                <span class="font-medium">{{ feeBreakdown.charge }}</span>
+            <Card>
+                <CardHeader>
+                    <CardTitle class="text-base">Timeline</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <ol class="relative">
+                        <li
+                            v-for="(step, i) in timeline"
+                            :key="i"
+                            class="relative flex gap-3 pb-6 last:pb-0"
+                        >
+                            <!-- connector -->
+                            <span
+                                v-if="i < timeline.length - 1"
+                                class="absolute left-[11px] top-7 h-[calc(100%-1rem)] w-px bg-border"
+                                aria-hidden="true"
+                            />
+                            <span
+                                :class="[
+                                    'flex size-[22px] shrink-0 items-center justify-center rounded-full ring-4',
+                                    dotClasses[step.tone],
+                                ]"
+                            >
+                                <component :is="step.icon" class="size-3" />
+                            </span>
+                            <div class="-mt-px min-w-0 flex-1">
+                                <p class="text-sm font-medium leading-tight">{{ step.label }}</p>
+                                <p class="mt-0.5 text-xs text-muted-foreground">{{ step.date }}</p>
                             </div>
-                            <div class="flex justify-between py-1">
-                                <span class="text-muted-foreground">Stripe fee</span>
-                                <span class="text-destructive">− {{ feeBreakdown.fee }}</span>
-                            </div>
-                            <div class="flex justify-between py-1 border-t border-border mt-1 pt-2">
-                                <span class="font-semibold">You receive</span>
-                                <span class="font-semibold text-green-600">{{ feeBreakdown.receive }}</span>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+                        </li>
+                    </ol>
+                </CardContent>
+            </Card>
         </div>
     </div>
 

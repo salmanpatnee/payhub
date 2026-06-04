@@ -18,6 +18,10 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    // Must be registered before the resource route — otherwise `payments/export`
+    // is captured by the `payments/{payment}` show route (payment = "export").
+    Route::get('payments/export', [PaymentController::class, 'export'])
+        ->name('payments.export');
     Route::resource('payments', PaymentController::class)
         ->only(['index', 'create', 'show']);
     Route::post('payments', [PaymentController::class, 'store'])
@@ -47,6 +51,16 @@ Route::middleware(['auth', 'verified', 'role:admin'])
 
         Route::resource('relationship-managers', RelationshipManagerController::class)
             ->except(['show']);
+
+        Route::patch(
+            'relationship-managers/{relationshipManager}/deactivate',
+            [RelationshipManagerController::class, 'deactivate']
+        )->name('relationship-managers.deactivate');
+
+        Route::patch(
+            'relationship-managers/{relationshipManager}/activate',
+            [RelationshipManagerController::class, 'activate']
+        )->name('relationship-managers.activate');
 
         Route::patch(
             'stripe-accounts/{stripe_account}/deactivate',

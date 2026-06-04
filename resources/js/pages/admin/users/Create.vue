@@ -117,14 +117,15 @@ function submit() {
                             <SelectContent>
                                 <SelectItem value="admin">Admin</SelectItem>
                                 <SelectItem value="agent">Agent</SelectItem>
+                                <SelectItem value="account">Account</SelectItem>
                             </SelectContent>
                         </Select>
                         <InputError class="mt-2" :message="form.errors.role" />
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">
-                        <Label for="stripe_account_id">Stripe Account</Label>
-                        <Select v-model="form.stripe_account_id">
+                        <Label for="stripe_account_id">Stripe Account <span class="text-destructive">*</span></Label>
+                        <Select v-model="form.stripe_account_id" required>
                             <SelectTrigger id="stripe_account_id" class="w-full">
                                 <SelectValue placeholder="Select a Stripe account" />
                             </SelectTrigger>
@@ -140,25 +141,27 @@ function submit() {
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">
-                        <Label>Brands</Label>
+                        <Label>Brands <span class="text-destructive">*</span></Label>
                         <MultiSelectCombobox
                             v-model="form.brand_ids"
                             :options="brands"
                             placeholder="Select brands"
                             search-placeholder="Search brands…"
                             empty-text="No brands found."
+                            required
                         />
                         <InputError class="mt-2" :message="form.errors.brand_ids" />
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">
-                        <Label>Relationship Managers</Label>
+                        <Label>Relationship Managers <span class="text-destructive">*</span></Label>
                         <MultiSelectCombobox
                             v-model="form.relationship_manager_ids"
                             :options="relationshipManagers"
                             placeholder="Select relationship managers"
                             search-placeholder="Search relationship managers…"
                             empty-text="No relationship managers found."
+                            required
                         />
                         <InputError class="mt-2" :message="form.errors.relationship_manager_ids" />
                     </div>

@@ -19,6 +19,17 @@ class RelationshipManagerFactory extends Factory
     {
         return [
             'name' => fake()->name(),
+            'is_active' => true,
         ];
+    }
+
+    /**
+     * Indicate that the relationship manager is inactive.
+     */
+    public function inactive(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'is_active' => false,
+        ]);
     }
 }

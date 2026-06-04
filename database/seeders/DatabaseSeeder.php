@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
         // Seed roles first — assignRole() requires these to exist
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'account', 'guard_name' => 'web']);
 
         $brand = Brand::firstOrCreate(
             ['slug' => 'demo-brand'],
@@ -62,6 +63,16 @@ class DatabaseSeeder extends Seeder
         $user->stripe_account_id = $stripeAccount->id;
         $user->save();
         $user->syncRoles(['agent']);
+
+        $account = User::firstOrCreate(
+            ['username' => 'account'],
+            [
+                'name' => 'Account User',
+                'email' => 'account@payhub.test',
+                'password' => Hash::make('password'),
+            ]
+        );
+        $account->syncRoles(['account']);
 
         $relationshipManager = RelationshipManager::firstOrCreate(['name' => 'Demo RM']);
 

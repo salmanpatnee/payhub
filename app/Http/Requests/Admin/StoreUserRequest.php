@@ -19,7 +19,7 @@ class StoreUserRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'max:255', Rule::unique('users', 'username')],
             'password' => ['required', 'string', Password::default()],
-            'role' => ['required', 'string', 'in:admin,agent'],
+            'role' => ['required', 'string', 'in:admin,agent,account'],
             'stripe_account_id' => [
                 Rule::requiredIf(fn () => $this->input('role') === 'agent'),
                 'nullable',

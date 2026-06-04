@@ -26,35 +26,42 @@ const props = withDefaults(
         searchPlaceholder?: string;
         emptyText?: string;
         required?: boolean;
+        id?: string;
+        allLabel?: string;
+        allValue?: string;
     }>(),
     {
         placeholder: 'Select…',
         searchPlaceholder: 'Search…',
         emptyText: 'No results.',
         required: false,
+        id: undefined,
+        allLabel: undefined,
+        allValue: '__all',
     },
 );
 
-const model = defineModel<number[]>({ default: () => [] });
+const model = defineModel<string>({ default: '' });
 
 const open = ref(false);
 
 const selectedLabel = computed(() => {
-    if (model.value.length === 0) {
-        return props.placeholder;
+    if (props.allLabel && model.value === props.allValue) {
+        return props.allLabel;
     }
 
-    const names = props.options
-        .filter((option) => model.value.includes(option.id))
-        .map((option) => option.name);
+    const match = props.options.find((option) => String(option.id) === model.value);
 
-    return names.length <= 2 ? names.join(', ') : `${names.length} selected`;
+    return match ? match.name : props.placeholder;
 });
 
-function toggle(id: number): void {
-    model.value = model.value.includes(id)
-        ? model.value.filter((value) => value !== id)
-        : [...model.value, id];
+const isPlaceholder = computed(
+    () => selectedLabel.value === props.placeholder && !(props.allLabel && model.value === props.allValue),
+);
+
+function select(value: string): void {
+    model.value = value;
+    open.value = false;
 }
 </script>
 
@@ -62,12 +69,13 @@ function toggle(id: number): void {
     <Popover v-model:open="open">
         <PopoverTrigger as-child>
             <Button
+                :id="id"
                 type="button"
                 variant="outline"
                 role="combobox"
                 :aria-expanded="open"
                 class="relative w-full justify-between font-normal"
-                :class="{ 'text-muted-foreground': model.length === 0 }"
+                :class="{ 'text-muted-foreground': isPlaceholder }"
             >
                 <span class="truncate">{{ selectedLabel }}</span>
                 <ChevronsUpDown class="ml-2 size-4 shrink-0 opacity-50" />
@@ -78,7 +86,7 @@ function toggle(id: number): void {
                     aria-hidden="true"
                     class="absolute bottom-0 left-1/2 size-0 -translate-x-1/2 opacity-0"
                     :required="required"
-                    :value="model.length > 0 ? 'selected' : ''"
+                    :value="model && model !== allValue ? 'selected' : ''"
                     @focus="open = true"
                 >
             </Button>
@@ -90,13 +98,23 @@ function toggle(id: number): void {
                     <CommandEmpty>{{ emptyText }}</CommandEmpty>
                     <CommandGroup>
                         <CommandItem
+                            v-if="allLabel"
+                            :value="allLabel"
+                            @select="select(allValue)"
+                        >
+                            <Check
+                                :class="cn('mr-2 size-4', model === allValue ? 'opacity-100' : 'opacity-0')"
+                            />
+                            {{ allLabel }}
+                        </CommandItem>
+                        <CommandItem
                             v-for="option in options"
                             :key="option.id"
                             :value="option.name"
-                            @select="toggle(option.id)"
+                            @select="select(String(option.id))"
                         >
                             <Check
-                                :class="cn('mr-2 size-4', model.includes(option.id) ? 'opacity-100' : 'opacity-0')"
+                                :class="cn('mr-2 size-4', model === String(option.id) ? 'opacity-100' : 'opacity-0')"
                             />
                             {{ option.name }}
                         </CommandItem>

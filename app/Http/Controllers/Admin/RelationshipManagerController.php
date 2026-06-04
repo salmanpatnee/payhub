@@ -22,6 +22,7 @@ class RelationshipManagerController extends Controller
                 ->through(fn (RelationshipManager $rm) => [
                     'id' => $rm->id,
                     'name' => $rm->name,
+                    'is_active' => $rm->is_active,
                 ]),
             'filters' => $request->only(['search']),
         ]);
@@ -46,6 +47,7 @@ class RelationshipManagerController extends Controller
             'rm' => [
                 'id' => $relationshipManager->id,
                 'name' => $relationshipManager->name,
+                'is_active' => $relationshipManager->is_active,
             ],
         ]);
     }
@@ -56,6 +58,22 @@ class RelationshipManagerController extends Controller
 
         return redirect()->route('admin.relationship-managers.index')
             ->with('success', 'Relationship manager updated.');
+    }
+
+    public function deactivate(RelationshipManager $relationshipManager): RedirectResponse
+    {
+        $relationshipManager->update(['is_active' => false]);
+
+        return redirect()->route('admin.relationship-managers.index')
+            ->with('success', 'Relationship manager deactivated.');
+    }
+
+    public function activate(RelationshipManager $relationshipManager): RedirectResponse
+    {
+        $relationshipManager->update(['is_active' => true]);
+
+        return redirect()->route('admin.relationship-managers.index')
+            ->with('success', 'Relationship manager activated.');
     }
 
     public function destroy(RelationshipManager $relationshipManager): RedirectResponse
