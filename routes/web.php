@@ -49,6 +49,16 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             ->except(['show']);
 
         Route::patch(
+            'relationship-managers/{relationshipManager}/deactivate',
+            [RelationshipManagerController::class, 'deactivate']
+        )->name('relationship-managers.deactivate');
+
+        Route::patch(
+            'relationship-managers/{relationshipManager}/activate',
+            [RelationshipManagerController::class, 'activate']
+        )->name('relationship-managers.activate');
+
+        Route::patch(
             'stripe-accounts/{stripe_account}/deactivate',
             [StripeAccountController::class, 'deactivate']
         )->name('stripe-accounts.deactivate');

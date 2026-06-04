@@ -15,6 +15,7 @@ class StoreRelationshipManagerRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255', 'unique:relationship_managers,name'],
+            'is_active' => ['boolean'],
         ];
     }
 }

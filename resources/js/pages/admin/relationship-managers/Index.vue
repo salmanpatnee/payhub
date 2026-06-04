@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { Pencil, Plus, Search, Trash2 } from 'lucide-vue-next';
+import { CheckCircle2, Pencil, Plus, Power, PowerOff, Search, Trash2, XCircle } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
@@ -11,6 +19,7 @@ import { index as rmsIndex } from '@/actions/App/Http/Controllers/Admin/Relation
 type RmRow = {
     id: number;
     name: string;
+    is_active: boolean;
 };
 
 type PaginatedRms = {
@@ -74,9 +83,47 @@ function goToPage(page: number): void {
     );
 }
 
+const deactivateTarget = ref<RmRow | null>(null);
+const deactivateOpen   = ref(false);
+const deactivateForm   = useForm({});
+
+const activateTarget = ref<RmRow | null>(null);
+const activateOpen   = ref(false);
+const activateForm   = useForm({});
+
 const deleteTarget = ref<RmRow | null>(null);
 const deleteOpen   = ref(false);
 const deleteForm   = useForm({});
+
+function confirmActivate(rm: RmRow) {
+    activateTarget.value = rm;
+    activateOpen.value   = true;
+}
+
+function executeActivate() {
+    if (!activateTarget.value) return;
+    activateForm.patch(`/admin/relationship-managers/${activateTarget.value.id}/activate`, {
+        onSuccess: () => {
+            activateOpen.value   = false;
+            activateTarget.value = null;
+        },
+    });
+}
+
+function confirmDeactivate(rm: RmRow) {
+    deactivateTarget.value = rm;
+    deactivateOpen.value   = true;
+}
+
+function executeDeactivate() {
+    if (!deactivateTarget.value) return;
+    deactivateForm.patch(`/admin/relationship-managers/${deactivateTarget.value.id}/deactivate`, {
+        onSuccess: () => {
+            deactivateOpen.value   = false;
+            deactivateTarget.value = null;
+        },
+    });
+}
 
 function confirmDelete(rm: RmRow) {
     deleteTarget.value = rm;
@@ -132,6 +179,7 @@ function executeDelete() {
                     <tr class="bg-[#F7F5F2] border-b border-border">
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">S.No</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Name</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
@@ -145,6 +193,16 @@ function executeDelete() {
                         <td class="px-5 py-3.5">
                             <span class="font-medium">{{ rm.name }}</span>
                         </td>
+                        <td class="px-5 py-3.5">
+                            <div v-if="rm.is_active" class="inline-flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-500">
+                                <CheckCircle2 class="size-4" />
+                                Active
+                            </div>
+                            <div v-else class="inline-flex items-center gap-1.5 text-sm font-medium text-red-500 dark:text-red-400">
+                                <XCircle class="size-4" />
+                                Inactive
+                            </div>
+                        </td>
 
                         <td class="px-5 py-3.5 text-right">
                             <div class="flex items-center justify-end gap-1">
@@ -155,6 +213,26 @@ function executeDelete() {
                                     >
                                         <Pencil class="size-4" />
                                     </Link>
+                                </Button>
+                                <Button
+                                    v-if="rm.is_active"
+                                    variant="ghost"
+                                    size="icon"
+                                    class="cursor-pointer"
+                                    :aria-label="`Deactivate ${rm.name}`"
+                                    @click="confirmDeactivate(rm)"
+                                >
+                                    <PowerOff class="size-4 text-destructive" />
+                                </Button>
+                                <Button
+                                    v-if="!rm.is_active"
+                                    variant="ghost"
+                                    size="icon"
+                                    class="cursor-pointer"
+                                    :aria-label="`Activate ${rm.name}`"
+                                    @click="confirmActivate(rm)"
+                                >
+                                    <Power class="size-4 text-green-600" />
                                 </Button>
                                 <Button
                                     variant="ghost"
@@ -171,7 +249,7 @@ function executeDelete() {
                     </tr>
 
                     <tr v-if="rms.data.length === 0">
-                        <td colspan="3" class="px-5 py-16 text-center text-muted-foreground text-sm">
+                        <td colspan="4" class="px-5 py-16 text-center text-muted-foreground text-sm">
                             No relationship managers yet. Add the first one to get started.
                         </td>
                     </tr>
@@ -232,6 +310,48 @@ function executeDelete() {
             </div>
         </div>
     </div>
+
+    <Dialog v-model:open="deactivateOpen">
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Deactivate RM?</DialogTitle>
+                <DialogDescription>
+                    {{ deactivateTarget?.name }} will be hidden from selection dropdowns for new
+                    users and payments. Existing assignments are preserved.
+                </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+                <Button variant="outline" @click="deactivateOpen = false">Keep active</Button>
+                <Button
+                    variant="destructive"
+                    :disabled="deactivateForm.processing"
+                    @click="executeDeactivate"
+                >
+                    Deactivate
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="activateOpen">
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Activate RM?</DialogTitle>
+                <DialogDescription>
+                    {{ activateTarget?.name }} will become available for selection again.
+                </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+                <Button variant="outline" @click="activateOpen = false">Cancel</Button>
+                <Button
+                    :disabled="activateForm.processing"
+                    @click="executeActivate"
+                >
+                    Activate
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 
     <ConfirmDeleteDialog
         v-model:open="deleteOpen"

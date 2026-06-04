@@ -96,9 +96,13 @@ class PaymentController extends Controller
      * create and edit forms. Agents are restricted to their assigned resources;
      * returns a RedirectResponse if the agent has no Stripe account, brands, or RMs.
      *
+     * Inactive relationship managers are hidden from selection, except the
+     * payment's currently-assigned RM ($currentRmId) which is always included
+     * so historical records remain editable.
+     *
      * @return array{brands: mixed, stripeAccounts: mixed, isStripeAccountLocked: bool, relationshipManagers: mixed}|RedirectResponse
      */
-    private function formOptions(User $user): array|RedirectResponse
+    private function formOptions(User $user, ?int $currentRmId = null): array|RedirectResponse
     {
         if ($user->hasRole('agent')) {
             if (! $user->stripe_account_id) {
@@ -108,7 +112,10 @@ class PaymentController extends Controller
             }
 
             $brands = $user->brands()->orderBy('name')->get(['brands.id', 'name']);
-            $relationshipManagers = $user->relationshipManagers()->orderBy('name')->get(['relationship_managers.id', 'name']);
+            $relationshipManagers = $user->relationshipManagers()
+                ->where(fn ($q) => $q->where('is_active', true)->orWhere('relationship_managers.id', $currentRmId))
+                ->orderBy('name')
+                ->get(['relationship_managers.id', 'name']);
 
             if ($brands->isEmpty() || $relationshipManagers->isEmpty()) {
                 Inertia::flash('toast', ['type' => 'error', 'message' => 'No brands or relationship managers assigned. Contact an admin.']);
@@ -124,7 +131,9 @@ class PaymentController extends Controller
                 ->get(['id', 'account_name']);
             $isStripeAccountLocked = false;
             $brands = Brand::orderBy('name')->get(['id', 'name']);
-            $relationshipManagers = RelationshipManager::orderBy('name')->get(['id', 'name']);
+            $relationshipManagers = RelationshipManager::where(fn ($q) => $q->where('is_active', true)->orWhere('id', $currentRmId))
+                ->orderBy('name')
+                ->get(['id', 'name']);
         }
 
         return [
@@ -165,7 +174,7 @@ class PaymentController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        $options = $this->formOptions($user);
+        $options = $this->formOptions($user, $payment->relationship_manager_id);
 
         if ($options instanceof RedirectResponse) {
             return $options;

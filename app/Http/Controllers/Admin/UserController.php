@@ -41,7 +41,7 @@ class UserController extends Controller
                 ->orderBy('account_name')
                 ->get(['id', 'account_name']),
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
-            'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
+            'relationshipManagers' => RelationshipManager::active()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -76,7 +76,10 @@ class UserController extends Controller
                 ->orderBy('account_name')
                 ->get(['id', 'account_name']),
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
-            'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
+            'relationshipManagers' => RelationshipManager::where('is_active', true)
+                ->orWhereIn('id', $user->relationshipManagers()->pluck('relationship_managers.id'))
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ]);
     }
 

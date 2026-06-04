@@ -10,6 +10,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import InputError from '@/components/InputError.vue';
 import { Label } from '@/components/ui/label';
@@ -17,6 +18,7 @@ import { Label } from '@/components/ui/label';
 type RmProp = {
     id: number;
     name: string;
+    is_active: boolean;
 };
 
 defineOptions({
@@ -33,6 +35,7 @@ const props = defineProps<{ rm: RmProp }>();
 const form = useForm({
     _method: 'PUT',
     name: props.rm.name,
+    is_active: props.rm.is_active,
 });
 
 function submit() {
@@ -65,6 +68,11 @@ function submit() {
                         <Input id="name" v-model="form.name" type="text" required autofocus />
                         <InputError :message="form.errors.name" />
                     </div>
+
+                    <Label for="is_active" class="flex items-center gap-3">
+                        <Checkbox id="is_active" v-model="form.is_active" />
+                        <span>Active</span>
+                    </Label>
                 </form>
             </CardContent>
             <CardFooter class="flex justify-end">

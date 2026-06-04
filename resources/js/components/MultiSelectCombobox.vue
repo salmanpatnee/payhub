@@ -25,11 +25,13 @@ const props = withDefaults(
         placeholder?: string;
         searchPlaceholder?: string;
         emptyText?: string;
+        required?: boolean;
     }>(),
     {
         placeholder: 'Select…',
         searchPlaceholder: 'Search…',
         emptyText: 'No results.',
+        required: false,
     },
 );
 
@@ -64,11 +66,21 @@ function toggle(id: number): void {
                 variant="outline"
                 role="combobox"
                 :aria-expanded="open"
-                class="w-full justify-between font-normal"
+                class="relative w-full justify-between font-normal"
                 :class="{ 'text-muted-foreground': model.length === 0 }"
             >
                 <span class="truncate">{{ selectedLabel }}</span>
                 <ChevronsUpDown class="ml-2 size-4 shrink-0 opacity-50" />
+                <!-- Focusable hidden input so the browser enforces `required` on submit. -->
+                <input
+                    v-if="required"
+                    tabindex="-1"
+                    aria-hidden="true"
+                    class="absolute bottom-0 left-1/2 size-0 -translate-x-1/2 opacity-0"
+                    :required="required"
+                    :value="model.length > 0 ? 'selected' : ''"
+                    @focus="open = true"
+                >
             </Button>
         </PopoverTrigger>
         <PopoverContent class="w-[--reka-popover-trigger-width] p-0" align="start">

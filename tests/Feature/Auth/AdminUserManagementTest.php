@@ -66,6 +66,36 @@ class AdminUserManagementTest extends TestCase
         $this->assertDatabaseHas('relationship_manager_user', ['relationship_manager_id' => $rm->id, 'user_id' => $user->id]);
     }
 
+    public function test_create_excludes_inactive_rms_from_dropdown(): void
+    {
+        $active = RelationshipManager::factory()->create();
+        $inactive = RelationshipManager::factory()->inactive()->create();
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.users.create'))
+            ->assertInertia(fn ($page) => $page
+                ->has('relationshipManagers', 1)
+                ->where('relationshipManagers.0.id', $active->id)
+            );
+
+        $this->assertDatabaseHas('relationship_managers', ['id' => $inactive->id, 'is_active' => false]);
+    }
+
+    public function test_edit_includes_assigned_inactive_rm(): void
+    {
+        $inactive = RelationshipManager::factory()->inactive()->create();
+        $target = User::factory()->create(['email_verified_at' => now()]);
+        $target->syncRoles(['agent']);
+        $target->relationshipManagers()->sync([$inactive->id]);
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.users.edit', $target))
+            ->assertInertia(fn ($page) => $page
+                ->has('relationshipManagers', 1)
+                ->where('relationshipManagers.0.id', $inactive->id)
+            );
+    }
+
     public function test_creating_agent_requires_at_least_one_brand_and_rm(): void
     {
         $admin = $this->adminUser();
