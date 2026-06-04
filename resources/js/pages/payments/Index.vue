@@ -208,8 +208,21 @@ function goToPage(page: number): void {
     );
 }
 
+const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
 function formatDate(iso: string): string {
     const d = new Date(iso);
+    const diffMs = Date.now() - d.getTime();
+    const diffSec = Math.round(diffMs / 1000);
+
+    if (diffSec < 60) return 'just now';
+
+    const diffMin = Math.round(diffSec / 60);
+    if (diffMin < 60) return relativeTime.format(-diffMin, 'minute');
+
+    const diffHour = Math.round(diffMin / 60);
+    if (diffHour < 24) return relativeTime.format(-diffHour, 'hour');
+
     const month = d.toLocaleDateString('en-GB', { month: 'short' });
     return `${d.getDate()}-${month}-${d.getFullYear()}`;
 }

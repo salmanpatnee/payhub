@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import {
     ArrowLeft, Banknote, Briefcase, Building2, Calendar,
     CalendarCheck, CalendarX, Check, Copy, CreditCard,
@@ -82,22 +82,28 @@ function formatAmount(cents: number, currency: string): string {
 }
 
 
+const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+function formatDate(iso: string): string {
+    const d = new Date(iso);
+    const diffSec = Math.round((Date.now() - d.getTime()) / 1000);
+
+    if (diffSec < 60) return 'just now';
+
+    const diffMin = Math.round(diffSec / 60);
+    if (diffMin < 60) return relativeTime.format(-diffMin, 'minute');
+
+    const diffHour = Math.round(diffMin / 60);
+    if (diffHour < 24) return relativeTime.format(-diffHour, 'hour');
+
+    const month = d.toLocaleDateString('en-GB', { month: 'short' });
+    return `${d.getDate()}-${month}-${d.getFullYear()}`;
+}
+
 function titleCase(str: string | null): string {
     if (!str) return '—';
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
-
-const feeBreakdown = computed(() => {
-    const amt = props.payment.amount / 100;
-    const currency = props.payment.currency;
-    const fee = currency === 'gbp' ? amt * 0.015 + 0.20 : amt * 0.029 + 0.30;
-    const receive = amt - fee;
-    const locale = currency === 'gbp' ? 'en-GB' : 'en-US';
-    const curr = currency.toUpperCase();
-    const fmt = (n: number) =>
-        new Intl.NumberFormat(locale, { style: 'currency', currency: curr }).format(n);
-    return { charge: fmt(amt), fee: fmt(fee), receive: fmt(receive) };
-});
 </script>
 
 <template>
@@ -207,7 +213,7 @@ const feeBreakdown = computed(() => {
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
                                 <Calendar class="size-3.5 shrink-0" />Created
                             </dt>
-                            <dd>{{ new Date(payment.created_at).toLocaleDateString() }}</dd>
+                            <dd>{{ formatDate(payment.created_at) }}</dd>
                         </div>
                         <div v-if="payment.paid_at">
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
@@ -246,29 +252,6 @@ const feeBreakdown = computed(() => {
                                 <Copy v-else class="size-4" />
                                 {{ copied ? 'Copied!' : 'Copy' }}
                             </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Fee breakdown</CardTitle>
-                        <CardDescription>Based on standard Stripe rates.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div class="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-                            <div class="flex justify-between py-1">
-                                <span class="text-muted-foreground">Charge amount</span>
-                                <span class="font-medium">{{ feeBreakdown.charge }}</span>
-                            </div>
-                            <div class="flex justify-between py-1">
-                                <span class="text-muted-foreground">Stripe fee</span>
-                                <span class="text-destructive">− {{ feeBreakdown.fee }}</span>
-                            </div>
-                            <div class="flex justify-between py-1 border-t border-border mt-1 pt-2">
-                                <span class="font-semibold">You receive</span>
-                                <span class="font-semibold text-green-600">{{ feeBreakdown.receive }}</span>
-                            </div>
                         </div>
                     </CardContent>
                 </Card>
