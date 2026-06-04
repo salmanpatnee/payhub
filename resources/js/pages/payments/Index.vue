@@ -2,7 +2,7 @@
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
-import { Check, Columns, Copy, Eye, Filter, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
+import { Check, Columns, Copy, Download, Eye, Filter, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
@@ -66,6 +66,7 @@ const props = defineProps<{
     brands: { id: number; name: string }[];
     isAdmin: boolean;
     readOnly: boolean;
+    canExport: boolean;
     relationshipManagers: { id: number; name: string }[];
 }>();
 
@@ -181,6 +182,14 @@ watch(
     { deep: true },
 );
 
+const exportUrl = computed((): string => {
+    const activeFilters = Object.fromEntries(
+        Object.entries(filters).filter(([, v]) => v !== '' && v !== UNSET)
+    ) as Record<string, string>;
+    const qs = new URLSearchParams(activeFilters).toString();
+    return qs ? `/payments/export?${qs}` : '/payments/export';
+});
+
 function clearFilters(): void {
     filters.brand_id = UNSET;
     filters.relationship_manager_id = UNSET;
@@ -251,12 +260,20 @@ async function copyLink(uuid: string): Promise<void> {
     <div class="p-6 space-y-4">
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-semibold tracking-tight">Payments</h1>
-            <Button v-if="!readOnly" as-child>
-                <Link href="/payments/create">
-                    <Plus class="size-4 mr-1" />
-                    New payment
-                </Link>
-            </Button>
+            <div class="flex items-center gap-2">
+                <Button v-if="canExport" as-child variant="outline">
+                    <a :href="exportUrl">
+                        <Download class="size-4 mr-1" />
+                        Export
+                    </a>
+                </Button>
+                <Button v-if="!readOnly" as-child>
+                    <Link href="/payments/create">
+                        <Plus class="size-4 mr-1" />
+                        New payment
+                    </Link>
+                </Button>
+            </div>
         </div>
 
         <!-- Filter bar -->

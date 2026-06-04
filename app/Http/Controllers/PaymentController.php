@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\PaymentsExport;
 use App\Http\Requests\StorePaymentRequest;
 use App\Http\Requests\UpdatePaymentRequest;
 use App\Models\Brand;
@@ -9,11 +10,14 @@ use App\Models\Payment;
 use App\Models\RelationshipManager;
 use App\Models\StripeAccount;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class PaymentController extends Controller
 {
@@ -24,34 +28,7 @@ class PaymentController extends Controller
         $isAccount = $user->hasRole('account');
         $canViewAll = $isAdmin || $isAccount;
 
-        $query = Payment::with(['brand', 'stripeAccount', 'user', 'relationshipManager'])
-            ->orderByDesc('created_at');
-
-        if (! $canViewAll) {
-            $query->where('user_id', $user->id);
-        }
-
-        // Optional filters — all applied via ->when() with Eloquent parameterised queries.
-        // Non-admin user_id scope is applied unconditionally above, so even if a non-admin
-        // sends brand_id or stripe_account_id in the URL, they can only ever see their own
-        // payments (T-07-01, ASVS V4 horizontal privilege escalation prevention).
-        $query
-            ->when($request->brand_id, fn ($q, $v) => $q->where('brand_id', $v))
-            ->when($request->stripe_account_id, fn ($q, $v) => $q->where('stripe_account_id', $v))
-            ->when($request->relationship_manager_id, fn ($q, $v) => $q->where('relationship_manager_id', $v))
-            ->when($request->status, fn ($q, $v) => $q->where('status', $v))
-            ->when($request->from, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
-            ->when($request->to, fn ($q, $v) => $q->whereDate('created_at', '<=', $v))
-            ->when($request->search, fn ($q, $v) => $q->where(function ($inner) use ($v): void {
-                $inner->where('client_name', 'LIKE', "%{$v}%")
-                    ->orWhere('client_email', 'LIKE', "%{$v}%")
-                    ->orWhere('uuid', 'LIKE', strtolower($v).'%');
-
-                $refSearch = ltrim(ltrim(trim($v), '#'), '0');
-                if ($refSearch !== '' && ctype_digit($refSearch)) {
-                    $inner->orWhere('reference_code', (int) $refSearch);
-                }
-            }));
+        $query = $this->filteredPaymentsQuery($request, $user);
 
         return Inertia::render('payments/Index', [
             'payments' => $query->paginate(20)->through(fn (Payment $p) => [
@@ -77,8 +54,59 @@ class PaymentController extends Controller
                 : [],
             'isAdmin' => $isAdmin,
             'readOnly' => $isAccount,
+            'canExport' => $canViewAll,
             'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
         ]);
+    }
+
+    /**
+     * Build the role-scoped, filtered payments query shared by the index listing
+     * and the Excel export so both always return an identical set of rows.
+     *
+     * The non-admin user_id scope is applied unconditionally, so even if a
+     * non-admin sends brand_id/stripe_account_id in the URL they can only ever
+     * see their own payments (T-07-01, ASVS V4 horizontal privilege escalation).
+     */
+    private function filteredPaymentsQuery(Request $request, User $user): Builder
+    {
+        $canViewAll = $user->hasRole('admin') || $user->hasRole('account');
+
+        $query = Payment::with(['brand', 'stripeAccount', 'user', 'relationshipManager'])
+            ->orderByDesc('created_at');
+
+        if (! $canViewAll) {
+            $query->where('user_id', $user->id);
+        }
+
+        return $query
+            ->when($request->brand_id, fn ($q, $v) => $q->where('brand_id', $v))
+            ->when($request->stripe_account_id, fn ($q, $v) => $q->where('stripe_account_id', $v))
+            ->when($request->relationship_manager_id, fn ($q, $v) => $q->where('relationship_manager_id', $v))
+            ->when($request->status, fn ($q, $v) => $q->where('status', $v))
+            ->when($request->from, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
+            ->when($request->to, fn ($q, $v) => $q->whereDate('created_at', '<=', $v))
+            ->when($request->search, fn ($q, $v) => $q->where(function ($inner) use ($v): void {
+                $inner->where('client_name', 'LIKE', "%{$v}%")
+                    ->orWhere('client_email', 'LIKE', "%{$v}%")
+                    ->orWhere('uuid', 'LIKE', strtolower($v).'%');
+
+                $refSearch = ltrim(ltrim(trim($v), '#'), '0');
+                if ($refSearch !== '' && ctype_digit($refSearch)) {
+                    $inner->orWhere('reference_code', (int) $refSearch);
+                }
+            }));
+    }
+
+    public function export(Request $request): BinaryFileResponse
+    {
+        Gate::authorize('export', Payment::class);
+
+        $query = $this->filteredPaymentsQuery($request, auth()->user());
+
+        return Excel::download(
+            new PaymentsExport($query),
+            'payments-'.now()->format('Y-m-d').'.xlsx'
+        );
     }
 
     public function create(): Response|RedirectResponse

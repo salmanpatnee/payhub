@@ -29,4 +29,11 @@ class PaymentPolicy
     {
         return $user->hasRole('admin');
     }
+
+    public function export(User $user): bool
+    {
+        // Only admins and the read-only `account` (finance) role may export the
+        // payments register; agents are barred.
+        return $user->hasRole('admin') || $user->hasRole('account');
+    }
 }

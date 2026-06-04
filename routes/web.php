@@ -18,6 +18,10 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    // Must be registered before the resource route — otherwise `payments/export`
+    // is captured by the `payments/{payment}` show route (payment = "export").
+    Route::get('payments/export', [PaymentController::class, 'export'])
+        ->name('payments.export');
     Route::resource('payments', PaymentController::class)
         ->only(['index', 'create', 'show']);
     Route::post('payments', [PaymentController::class, 'store'])
