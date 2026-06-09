@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -73,5 +74,10 @@ class Payment extends Model
     public function relationshipManager(): BelongsTo
     {
         return $this->belongsTo(RelationshipManager::class);
+    }
+
+    public function consents(): HasMany
+    {
+        return $this->hasMany(PaymentConsent::class);
     }
 }

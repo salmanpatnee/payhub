@@ -95,6 +95,21 @@ it('clientSecret and publishable_key are in props and secret_key is not exposed'
         );
 });
 
+// Policy consent: policies are passed to the Pay page for the consent UI
+it('passes policies to ClientPayment/Pay component', function () {
+    $payment = Payment::factory()->create(['status' => 'pending']);
+    mockStripeClient();
+    $this->get("/pay/{$payment->uuid}")
+        ->assertInertia(fn ($page) => $page
+            ->component('ClientPayment/Pay')
+            ->has('policies', 3)
+            ->has('policies.0.key')
+            ->has('policies.0.title')
+            ->has('policies.0.url')
+            ->has('policies.0.version')
+        );
+});
+
 // D-02: stripe_payment_intent_id stored after show()
 it('stripe_payment_intent_id is stored on the payment after page load', function () {
     $payment = Payment::factory()->create(['status' => 'pending', 'stripe_payment_intent_id' => null]);

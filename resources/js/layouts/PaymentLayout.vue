@@ -143,7 +143,7 @@ const statusConfig = computed(() => {
 
         <!-- Main content -->
         <main class="form-panel flex-1 flex flex-col items-center justify-center px-6 py-14 lg:px-14">
-            <div class="w-full max-w-md">
+            <div class="w-full max-w-lg">
                 <slot />
             </div>
         </main>

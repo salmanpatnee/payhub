@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StorePaymentConsentRequest;
 use App\Models\Brand;
 use App\Models\Payment;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -73,7 +75,30 @@ class ClientPaymentController extends Controller
             'brand' => $this->brandProps($payment->brand),
             'stripeAccount' => ['publishable_key' => $payment->stripeAccount->publishable_key],
             'clientSecret' => $pi->client_secret,
+            'policies' => $this->policyProps(),
         ]);
+    }
+
+    /**
+     * Record the customer's acceptance of the policies for the audit trail.
+     * Called client-side immediately before Stripe confirmPayment() — there is
+     * no Laravel submit round-trip for the payment itself.
+     */
+    public function storeConsent(StorePaymentConsentRequest $request, Payment $payment): JsonResponse
+    {
+        // Same guard as show(): only payable (pending/failed) payments can record consent.
+        abort_unless(in_array($payment->status, ['pending', 'failed']), 422);
+
+        $payment->consents()->create([
+            'policy_versions' => collect(config('policies'))
+                ->map(fn (array $policy): string => $policy['version'])
+                ->all(),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'accepted_at' => now(),
+        ]);
+
+        return response()->json(['ok' => true]);
     }
 
     public function success(Payment $payment): Response|RedirectResponse
@@ -119,6 +144,22 @@ class ClientPaymentController extends Controller
     private function formatReferenceCode(?int $code): string
     {
         return '#'.str_pad((string) ($code ?? 0), 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * @return array<int, array{key: string, title: string, url: string, version: string}>
+     */
+    private function policyProps(): array
+    {
+        return collect(config('policies'))
+            ->map(fn (array $policy, string $key): array => [
+                'key' => $key,
+                'title' => $policy['title'],
+                'url' => $policy['url'],
+                'version' => $policy['version'],
+            ])
+            ->values()
+            ->all();
     }
 
     private function brandProps(Brand $brand): array
