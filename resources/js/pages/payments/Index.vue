@@ -99,7 +99,7 @@ const COLUMN_DEFS = [
     { key: 'client', label: 'Client' },
     { key: 'amount', label: 'Amount' },
     { key: 'brand', label: 'Brand' },
-    { key: 'account_name', label: 'Stripe Account' },
+    { key: 'account_name', label: 'Account' },
     { key: 'relationship_manager_name', label: 'RM' },
     { key: 'status', label: 'Status' },
     { key: 'created', label: 'Created' },
@@ -350,7 +350,7 @@ async function copyLink(uuid: string): Promise<void> {
                 </div>
 
                 <div v-if="accounts.length" class="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Stripe Account</Label>
+                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account</Label>
                     <SearchableSelect
                         v-model="filters.stripe_account_id"
                         :options="accountOptions"
@@ -447,7 +447,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <th v-if="visibleColumns.client" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client</th>
                         <th v-if="visibleColumns.amount" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
                         <th v-if="visibleColumns.brand" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
-                        <th v-if="visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Stripe Account</th>
+                        <th v-if="visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account</th>
                         <th v-if="visibleColumns.relationship_manager_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</th>
                         <th v-if="visibleColumns.status" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th v-if="visibleColumns.created" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
