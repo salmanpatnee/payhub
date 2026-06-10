@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Head, useHttp } from '@inertiajs/vue3'
-import { AlertCircle, LockIcon, FileText, ExternalLink } from 'lucide-vue-next'
+import { AlertCircle, LockIcon, X } from 'lucide-vue-next'
 import { StripeElements, StripeElement } from 'vue-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 import PaymentLayout from '@/layouts/PaymentLayout.vue'
@@ -10,10 +10,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
 import { storeConsent } from '@/actions/App/Http/Controllers/ClientPaymentController'
 
-type Policy = { key: string; title: string; url: string; version: string }
+type Policy = { key: string; title: string; version: string; html: string }
 
 const props = defineProps<{
     payment: {
@@ -44,20 +44,32 @@ const errorMessage  = ref<string | null>(null)
 const consent       = ref(true)
 const consentError  = ref<string | undefined>(undefined)
 const activePolicy  = ref<Policy | null>(null)
-
-function policy(key: string): Policy | undefined {
-    return props.policies.find((p) => p.key === key)
-}
+// Material/Google dialog: the header gains a divider + faint elevation only once
+// the body is scrolled away from the top.
+const policyScrolled = ref(false)
 
 function openPolicy(key: string): void {
-    const found = policy(key)
+    const found = props.policies.find((p) => p.key === key)
     if (found) {
+        policyScrolled.value = false
         activePolicy.value = found
     }
 }
 
+function onPolicyScroll(event: Event): void {
+    policyScrolled.value = (event.target as HTMLElement).scrollTop > 4
+}
+
 function onConsentChange(): void {
     consentError.value = undefined
+}
+
+// Discourage casual copying of policy text. Not DRM — degrades gracefully,
+// view-source still works. Scroll keys (arrows/PageUp/PageDown/Space) untouched.
+function blockCopyKeys(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && ['c', 'a', 'x', 's', 'p'].includes(event.key.toLowerCase())) {
+        event.preventDefault()
+    }
 }
 
 // WR-01: Check return value — loadStripe() returns null if Stripe.js CDN fails to load
@@ -199,46 +211,7 @@ async function submit(instance: any, elements: any): Promise<void> {
                                 <AlertDescription>{{ errorMessage }}</AlertDescription>
                             </Alert>
 
-                            <!-- Policy consent — grouped trust card -->
-                            <div
-                                class="rounded-xl border bg-slate-50/70 p-3.5 transition-colors"
-                                :class="consentError ? 'border-red-300 bg-red-50/50' : 'border-slate-200'"
-                            >
-                                <div class="flex items-start gap-3">
-                                    <Checkbox
-                                        id="policy-consent"
-                                        v-model="consent"
-                                        :aria-invalid="!!consentError"
-                                        class="mt-0.5 shrink-0 bg-white"
-                                        @update:model-value="onConsentChange"
-                                    />
-                                    <Label for="policy-consent" class="text-[13px] font-normal leading-relaxed text-slate-600">
-                                        I have read, understood, and agree to the Terms &amp; Conditions, Refund Policy, and Privacy Policy.
-                                    </Label>
-                                </div>
-
-                                <!-- Policy documents — non-breaking chips, never split mid-name -->
-                                <div class="mt-3 flex flex-wrap gap-2 pl-[1.9rem]">
-                                    <button type="button" class="policy-chip" @click="openPolicy('terms')">
-                                        <FileText class="size-3.5 shrink-0" />
-                                        Terms &amp; Conditions
-                                    </button>
-                                    <button type="button" class="policy-chip" @click="openPolicy('refund')">
-                                        <FileText class="size-3.5 shrink-0" />
-                                        Refund Policy
-                                    </button>
-                                    <button type="button" class="policy-chip" @click="openPolicy('privacy')">
-                                        <FileText class="size-3.5 shrink-0" />
-                                        Privacy Policy
-                                    </button>
-                                </div>
-
-                                <p v-if="consentError" class="mt-3 flex items-start gap-1.5 pl-[1.9rem] text-xs font-medium text-red-600">
-                                    <AlertCircle class="mt-px size-3.5 shrink-0" />
-                                    <span>{{ consentError }}</span>
-                                </p>
-                            </div>
-
+                            <!-- Primary action — the sole visual focus -->
                             <Button
                                 type="submit"
                                 size="lg"
@@ -249,11 +222,40 @@ async function submit(instance: any, elements: any): Promise<void> {
                                 <span>{{ processing ? 'Processing…' : `Pay ${formatAmount(payment.amount, payment.currency)}` }}</span>
                             </Button>
 
-                            <!-- Security micro-copy -->
+                            <!-- Security reassurance — directly under the CTA -->
                             <p class="flex items-center justify-center gap-1.5 text-xs text-slate-600 text-center leading-relaxed">
                                 <LockIcon class="size-3 shrink-0" />
                                 Your card details are never stored · 256-bit SSL
                             </p>
+
+                            <!-- Compliance footer — consent + policy links, intentionally low-emphasis boilerplate -->
+                            <div class="mt-8 space-y-2.5 border-t border-slate-100 pt-5">
+                                <div class="flex items-start gap-2">
+                                    <Checkbox
+                                        id="policy-consent"
+                                        v-model="consent"
+                                        :aria-invalid="!!consentError"
+                                        class="mt-px size-3.5 shrink-0 data-[state=checked]:!bg-slate-400 data-[state=checked]:!border-slate-400 data-[state=checked]:!text-white"
+                                        @update:model-value="onConsentChange"
+                                    />
+                                    <Label for="policy-consent" class="text-[11px] font-normal leading-relaxed text-slate-400">
+                                        I have read, understood, and agree to the Terms &amp; Conditions, Refund Policy, and Privacy Policy.
+                                    </Label>
+                                </div>
+
+                                <p v-if="consentError" class="flex items-start gap-1.5 pl-[1.35rem] text-[11px] font-medium text-red-600">
+                                    <AlertCircle class="mt-px size-3 shrink-0" />
+                                    <span>{{ consentError }}</span>
+                                </p>
+
+                                <div class="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
+                                    <button type="button" class="policy-link" @click="openPolicy('terms')">Terms &amp; Conditions</button>
+                                    <span aria-hidden="true">·</span>
+                                    <button type="button" class="policy-link" @click="openPolicy('refund')">Refund Policy</button>
+                                    <span aria-hidden="true">·</span>
+                                    <button type="button" class="policy-link" @click="openPolicy('privacy')">Privacy Policy</button>
+                                </div>
+                            </div>
                         </form>
                     </template>
                 </StripeElements>
@@ -272,82 +274,132 @@ async function submit(instance: any, elements: any): Promise<void> {
                 </div>
             </template>
 
-            <!-- Policy document viewer — half-screen bottom sheet -->
-            <Sheet :open="!!activePolicy" @update:open="(open) => { if (!open) activePolicy = null }">
-                <SheetContent
-                    side="bottom"
-                    class="policy-sheet flex h-[88vh] flex-col gap-0 overflow-hidden rounded-t-2xl border-0 p-0 sm:h-[85vh]"
+            <!-- Policy viewer — Material 3 / Google-style dialog. Native HTML, read-only, fully legible. -->
+            <Dialog :open="!!activePolicy" @update:open="(open) => { if (!open) activePolicy = null }">
+                <DialogContent
+                    :show-close-button="false"
+                    class="policy-dialog flex max-h-[72vh] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-2xl border-0 p-0 sm:max-w-lg"
                     :style="{ '--brand-primary': brand.primary_color }"
                 >
-                    <SheetHeader class="policy-header relative flex-row items-center justify-start gap-3 overflow-hidden px-5 py-3 text-white sm:px-6">
-                        <SheetTitle class="sr-only">{{ activePolicy?.title }}</SheetTitle>
-                        <a
-                            v-if="activePolicy"
-                            :href="activePolicy.url"
-                            target="_blank"
-                            rel="noopener"
-                            class="relative z-10 inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white/80 ring-1 ring-white/25 ring-inset transition-colors hover:bg-white/15 hover:text-white"
-                        >
-                            <ExternalLink class="size-3.5" />
-                            <span>Open in new tab</span>
-                        </a>
-                    </SheetHeader>
-                    <div class="relative flex-1 bg-slate-100">
-                        <iframe
-                            v-if="activePolicy"
-                            :src="activePolicy.url"
-                            :title="activePolicy.title"
-                            class="absolute inset-0 size-full border-0"
-                        />
+                    <!-- Header — persistent hairline divider; scroll adds a faint shadow only -->
+                    <div
+                        class="relative z-10 flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-5 py-3.5 transition-shadow duration-200"
+                        :class="policyScrolled ? 'policy-header-elevated' : ''"
+                    >
+                        <DialogTitle class="text-[17px] font-semibold leading-snug tracking-[-0.01em] text-slate-900">
+                            {{ activePolicy?.title }}
+                        </DialogTitle>
+                        <DialogClose class="-mr-1 flex size-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
+                            <X class="size-4" />
+                            <span class="sr-only">Close</span>
+                        </DialogClose>
                     </div>
-                </SheetContent>
-            </Sheet>
+                    <DialogDescription class="sr-only">{{ activePolicy?.title }} — policy document</DialogDescription>
+
+                    <!-- Scrollable body — copy-discouraged, but text stays fully readable -->
+                    <div
+                        tabindex="0"
+                        class="policy-prose flex-1 overflow-y-auto px-5 pb-6 pt-4 sm:px-6"
+                        @scroll="onPolicyScroll"
+                        @copy.prevent
+                        @cut.prevent
+                        @contextmenu.prevent
+                        @dragstart.prevent
+                        @keydown="blockCopyKeys"
+                        v-html="activePolicy?.html"
+                    />
+                </DialogContent>
+            </Dialog>
         </div>
     </PaymentLayout>
 </template>
 
 <style scoped>
-.policy-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    white-space: nowrap;
-    border-radius: 0.5rem;
-    border: 1px solid hsl(0, 0%, 90%);
-    background: #fff;
-    padding: 0.3125rem 0.625rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    line-height: 1;
+.policy-link {
+    color: inherit;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    text-underline-offset: 2px;
+    transition: color 0.15s ease;
+}
+.policy-link:hover {
     color: hsl(215, 16%, 38%);
-    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    text-decoration: underline;
 }
-.policy-chip:hover {
-    color: var(--brand-primary);
-    border-color: color-mix(in srgb, var(--brand-primary) 45%, transparent);
-    background: color-mix(in srgb, var(--brand-primary) 6%, #fff);
-}
-.policy-chip:focus-visible {
+.policy-link:focus-visible {
     outline: none;
-    border-color: var(--brand-primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-primary) 22%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-primary) 35%, transparent);
 }
 
-/* Brand-gradient policy modal header — mirrors the sidebar treatment */
-.policy-header {
-    background:
-        radial-gradient(ellipse 90% 130% at 0% 0%, rgba(255, 255, 255, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 75% 130% at 100% 100%, rgba(0, 0, 0, 0.25) 0%, transparent 70%),
-        var(--brand-primary);
+/* Refined enterprise-SaaS surface — hairline border + restrained shadow. */
+.policy-dialog {
+    border-radius: 1rem !important;
+    border: 1px solid hsl(214 20% 90%) !important;
+    box-shadow:
+        0 12px 32px -12px rgba(15, 23, 42, 0.18),
+        0 2px 6px -2px rgba(15, 23, 42, 0.08) !important;
 }
-.policy-header::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-    background-size: 20px 20px;
-    pointer-events: none;
-    z-index: 0;
+
+/* Persistent divider lives on the header element; scroll only adds a faint shadow. */
+.policy-header-elevated {
+    box-shadow: 0 3px 8px -4px rgba(15, 23, 42, 0.16);
+}
+
+/* Native long-form policy typography. v-html injects unscoped markup, so :deep() is required. */
+.policy-prose {
+    user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    color: hsl(215, 19%, 35%);
+    font-size: 0.9rem;
+    line-height: 1.72;
+}
+.policy-prose:focus-visible {
+    outline: none;
+}
+/* The markdown's leading "# Title" duplicates the dialog header — hide it. */
+.policy-prose :deep(h1) {
+    display: none;
+}
+.policy-prose :deep(h2) {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: hsl(222, 30%, 18%);
+    margin-top: 1.6rem;
+    margin-bottom: 0.5rem;
+}
+.policy-prose :deep(h2:first-of-type) {
+    margin-top: 0.25rem;
+}
+.policy-prose :deep(p) {
+    margin-bottom: 0.85rem;
+}
+.policy-prose :deep(ul),
+.policy-prose :deep(ol) {
+    margin: 0.5rem 0 1rem;
+    padding-left: 1.35rem;
+}
+.policy-prose :deep(ul) {
+    list-style: disc;
+}
+.policy-prose :deep(ol) {
+    list-style: decimal;
+}
+.policy-prose :deep(li) {
+    margin-bottom: 0.4rem;
+    padding-left: 0.15rem;
+}
+.policy-prose :deep(li::marker) {
+    color: color-mix(in srgb, var(--brand-primary) 55%, hsl(215, 16%, 60%));
+}
+.policy-prose :deep(strong) {
+    font-weight: 600;
+    color: hsl(222, 47%, 20%);
+}
+.policy-prose :deep(a) {
+    color: var(--brand-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
 }
 
 .form-content {
@@ -368,24 +420,5 @@ async function submit(instance: any, elements: any): Promise<void> {
 @keyframes shimmer {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
-}
-</style>
-
-<!-- Global: the Sheet portals to <body>, so the built-in close button (direct child of
-     .policy-sheet) is recolored white here to read on the brand-gradient header. -->
-<style>
-.policy-sheet > button {
-    color: #fff;
-    opacity: 0.7;
-    z-index: 20;
-    transition: opacity 0.15s ease;
-}
-.policy-sheet > button:hover {
-    opacity: 1;
-}
-.policy-sheet > button:focus-visible {
-    opacity: 1;
-    outline: 2px solid rgba(255, 255, 255, 0.7);
-    outline-offset: 2px;
 }
 </style>

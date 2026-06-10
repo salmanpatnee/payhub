@@ -13,7 +13,7 @@ class SecurityHeaders
         $response = $next($request);
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
+        $response->headers->set('X-Frame-Options', 'DENY');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         $viteHost = $request->getHost();
@@ -28,7 +28,7 @@ class SecurityHeaders
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
             "script-src 'self' https://js.stripe.com{$vite}{$scriptInline}; ".
-            "frame-src 'self' https://js.stripe.com; ".
+            'frame-src https://js.stripe.com; '.
             "connect-src 'self' https://api.stripe.com{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$vite}; ".

@@ -2,7 +2,7 @@
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
-import { Check, Columns, Copy, Download, Eye, Filter, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
+import { Check, Columns, Copy, Download, Eye, Filter, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
@@ -43,6 +43,7 @@ type PaymentRow = {
 
 type FilterState = {
     brand_id: string;
+    stripe_account_id: string;
     relationship_manager_id: string;
     status: string;
     from: string;
@@ -64,6 +65,7 @@ const props = defineProps<{
     payments: PaginatedPayments;
     filters: FilterState;
     brands: { id: number; name: string }[];
+    accounts: { id: number; account_name: string }[];
     isAdmin: boolean;
     readOnly: boolean;
     canExport: boolean;
@@ -124,8 +126,13 @@ defineOptions({
 
 const UNSET = '__all';
 
+const accountOptions = computed(() =>
+    props.accounts.map((a) => ({ id: a.id, name: a.account_name })),
+);
+
 const filters = reactive<FilterState>({
     brand_id: props.filters.brand_id || UNSET,
+    stripe_account_id: props.filters.stripe_account_id || UNSET,
     relationship_manager_id: props.filters.relationship_manager_id || UNSET,
     status: props.filters.status || UNSET,
     from: props.filters.from || '',
@@ -135,6 +142,7 @@ const filters = reactive<FilterState>({
 
 const hasActiveFilters = computed(() =>
     filters.brand_id !== UNSET ||
+    filters.stripe_account_id !== UNSET ||
     filters.relationship_manager_id !== UNSET ||
     filters.status !== UNSET ||
     filters.from !== '' ||
@@ -145,6 +153,7 @@ const hasActiveFilters = computed(() =>
 const activeFilterCount = computed(() =>
     [
         filters.brand_id !== UNSET,
+        filters.stripe_account_id !== UNSET,
         filters.relationship_manager_id !== UNSET,
         filters.status !== UNSET,
         filters.from !== '',
@@ -192,6 +201,7 @@ const exportUrl = computed((): string => {
 
 function clearFilters(): void {
     filters.brand_id = UNSET;
+    filters.stripe_account_id = UNSET;
     filters.relationship_manager_id = UNSET;
     filters.status = UNSET;
     filters.from = '';
@@ -206,6 +216,19 @@ function formatAmount(cents: number, currency: string): string {
     ).format(cents / 100);
 }
 
+
+const refreshing = ref(false);
+
+const skeletonRowCount = computed(() =>
+    Math.min(Math.max(props.payments.data.length, 1), 10),
+);
+
+function refresh(): void {
+    refreshing.value = true;
+    router.reload({
+        onFinish: () => { refreshing.value = false; },
+    });
+}
 
 function goToPage(page: number): void {
     const activeFilters = Object.fromEntries(
@@ -326,6 +349,18 @@ async function copyLink(uuid: string): Promise<void> {
                     />
                 </div>
 
+                <div v-if="accounts.length" class="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Stripe Account</Label>
+                    <SearchableSelect
+                        v-model="filters.stripe_account_id"
+                        :options="accountOptions"
+                        :all-value="UNSET"
+                        all-label="All Accounts"
+                        placeholder="All accounts"
+                        search-placeholder="Search accounts…"
+                    />
+                </div>
+
                 <div class="flex flex-col gap-1.5 flex-1 min-w-0">
                     <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</Label>
                     <SearchableSelect
@@ -369,27 +404,40 @@ async function copyLink(uuid: string): Promise<void> {
         <div class="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
             <div class="flex items-center justify-between px-5 py-3 border-b border-border/60 bg-[#F7F5F2]">
                 <span class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{{ payments.total }} payments</span>
-                <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                        <Button variant="outline" size="sm" class="h-7 px-2 text-xs gap-1">
-                            <Columns class="size-3.5" />
-                            Columns
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuCheckboxItem
-                            v-for="col in COLUMN_DEFS"
-                            :key="col.key"
-                            :model-value="visibleColumns[col.key]"
-                            @update:model-value="(v: boolean) => (visibleColumns[col.key] = v)"
-                            @select.prevent
-                        >
-                            {{ col.label }}
-                        </DropdownMenuCheckboxItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <div class="flex items-center gap-1">
+                    <DropdownMenu v-if="isAdmin">
+                        <DropdownMenuTrigger as-child>
+                            <Button variant="outline" size="sm" class="h-7 px-2 text-xs gap-1">
+                                <Columns class="size-3.5" />
+                                Columns
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuCheckboxItem
+                                v-for="col in COLUMN_DEFS"
+                                :key="col.key"
+                                :model-value="visibleColumns[col.key]"
+                                @update:model-value="(v: boolean) => (visibleColumns[col.key] = v)"
+                                @select.prevent
+                            >
+                                {{ col.label }}
+                            </DropdownMenuCheckboxItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-7 w-7 p-0"
+                        :disabled="refreshing"
+                        title="Refresh payments"
+                        aria-label="Refresh payments"
+                        @click="refresh"
+                    >
+                        <RefreshCw :class="['size-3.5', refreshing && 'animate-spin']" />
+                    </Button>
+                </div>
             </div>
             <table class="w-full text-sm">
                 <thead>
@@ -406,7 +454,18 @@ async function copyLink(uuid: string): Promise<void> {
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody v-if="refreshing">
+                    <tr
+                        v-for="n in skeletonRowCount"
+                        :key="`skeleton-${n}`"
+                        class="border-b border-border/50 last:border-0"
+                    >
+                        <td v-for="c in visibleColumnCount" :key="c" class="px-5 py-3.5">
+                            <div class="h-4 rounded bg-muted animate-pulse" :style="{ width: `${40 + ((c * 13) % 45)}%` }"></div>
+                        </td>
+                    </tr>
+                </tbody>
+                <tbody v-else>
                     <tr
                         v-for="(payment, index) in payments.data"
                         :key="payment.id"
