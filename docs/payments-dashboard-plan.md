@@ -115,28 +115,31 @@ Legend: ✅ Done · 🚧 In progress · ⬜ Not started
 | Item | Status | Notes |
 |---|---|---|
 | Decide chart library (Unovis) | ✅ | This document |
-| Install `@unovis/ts` + `@unovis/vue` / `add chart` | ⬜ | |
-| Add `--chart-1..5` CSS vars | ⬜ | |
-| Dashboard route + Inertia page | ⬜ | |
-| Backend aggregation endpoint/service | ⬜ | Server-side, multi-currency safe |
-| Global filter bar (date/brand/RM/currency) | ⬜ | |
+| Install `@unovis/ts` + `@unovis/vue` / `add chart` | ✅ | `components/ui/chart/` added |
+| Add `--chart-1..5` CSS vars | ✅ | Already present in `app.css` |
+| Dashboard route + Inertia page | ✅ | `DashboardController` behind `role:admin\|account` |
+| Backend aggregation endpoint/service | ✅ | `app/Services/DashboardMetrics.php`, multi-currency safe |
+| Global filter bar (date/brand/RM/currency) | ✅ | `DashboardFilters.vue` |
+| Redirect admin+account → dashboard | ✅ | `Navigation::homePathFor` + `LoginResponse` |
+| Sidebar nav item (admin+account) | ✅ | `AppSidebar.vue` |
 
 ### Phase 1 — MVP
 | Item | Status | Notes |
 |---|---|---|
-| KPI: Collected | ⬜ | |
-| KPI: Conversion Rate | ⬜ | |
-| KPI: Pending Pipeline | ⬜ | |
-| KPI: Success Rate | ⬜ | |
-| KPI: Avg Payment Value | ⬜ | |
-| KPI: Active Brands | ⬜ | |
-| Chart: Revenue Trend | ⬜ | |
-| Chart: Conversion Funnel | ⬜ | |
-| Chart: Brand Performance | ⬜ | |
-| Chart: RM Leaderboard | ⬜ | |
-| Chart: Currency Donut | ⬜ | |
-| Table: Stale-Pending / High-Value worklist | ⬜ | |
-| Auto-insight strip | ⬜ | |
+| KPI: Collected | ✅ | Per-currency |
+| KPI: Conversion Rate | ✅ | |
+| KPI: Pending Pipeline | ✅ | |
+| KPI: Success Rate | ✅ | |
+| KPI: Avg Payment Value | ✅ | Per-currency |
+| KPI: Active Brands | ✅ | |
+| Chart: Revenue Trend | ✅ | Unovis line/area, USD+GBP |
+| Chart: Conversion Funnel | ✅ | CSS horizontal bars |
+| Chart: Brand Performance | ✅ | Ranked bars |
+| Chart: RM Leaderboard | ✅ | Bar + table |
+| Chart: Currency Donut | ✅ | Unovis donut |
+| Table: Stale-Pending / High-Value worklist | ✅ | |
+| Auto-insight strip | ✅ | Server-computed sentences |
+| Tests (gate, metrics, redirect) | ✅ | 18 tests, full suite green |
 
 ### Phase 2 — Near-Term
 | Item | Status | Notes |

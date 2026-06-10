@@ -25,6 +25,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentController';
+import { formatMoney, formatReferenceCode } from '@/lib/utils';
 
 type PaymentRow = {
     id: number;
@@ -208,14 +209,6 @@ function clearFilters(): void {
     filters.to = '';
     filters.search = '';
 }
-
-function formatAmount(cents: number, currency: string): string {
-    return new Intl.NumberFormat(
-        currency === 'gbp' ? 'en-GB' : 'en-US',
-        { style: 'currency', currency: currency.toUpperCase() }
-    ).format(cents / 100);
-}
-
 
 const refreshing = ref(false);
 
@@ -472,9 +465,9 @@ async function copyLink(uuid: string): Promise<void> {
                         class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                     >
                         <td class="px-5 py-3.5 text-muted-foreground tabular-nums">{{ (payments.from ?? 1) + index }}</td>
-                        <td v-if="visibleColumns.reference_code" class="px-5 py-3.5 font-mono text-muted-foreground">{{ payment.reference_code != null ? '#' + String(payment.reference_code).padStart(6, '0') : '—' }}</td>
+                        <td v-if="visibleColumns.reference_code" class="px-5 py-3.5 font-mono text-muted-foreground">{{ formatReferenceCode(payment.reference_code) }}</td>
                         <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
-                        <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
+                        <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatMoney(payment.amount, payment.currency) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
                         <td v-if="visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name ?? '—' }}</td>
                         <td v-if="visibleColumns.relationship_manager_name" class="px-5 py-3.5">{{ payment.relationship_manager_name ?? '—' }}</td>
@@ -591,7 +584,7 @@ async function copyLink(uuid: string): Promise<void> {
 
     <ConfirmDeleteDialog
         v-model:open="deleteOpen"
-        :title="`Delete payment ${deleteTarget?.reference_code != null ? '#' + String(deleteTarget.reference_code).padStart(6, '0') : ''}?`"
+        :title="`Delete payment ${deleteTarget?.reference_code != null ? formatReferenceCode(deleteTarget.reference_code) : ''}?`"
         description="This will remove the payment from the list. The payment link will no longer be accessible."
         :processing="deleteForm.processing"
         @confirm="executeDelete"
