@@ -2,6 +2,8 @@
 
 > Living document. Keep the **Status Tracker** updated as work lands so we always know what's done and what's pending.
 
+**Current status:** ✅ **Phase 1 MVP shipped** (branch `feat/payments-dashboard`, commit `fe8464d`). Dashboard live at `/dashboard`, gated to admin + account, full test suite green. Phase 2 / Phase 3 not started.
+
 ---
 
 ## Charting Library Decision
@@ -40,7 +42,7 @@ Neither blocks the plan — both already designed around bars.
 
 ## Data Reality (ground truth)
 
-Based on the production export (`u129819864_payhub.json`, 63 payments, 14-day window):
+Based on a one-off production DB export (63 payments, 14-day window). _The raw export file held live Stripe secrets and was deleted after analysis — do not re-commit DB dumps._
 
 - Statuses are **`completed` / `pending` / `failed`** (no refunds yet).
 - **Single payment provider (Stripe)** with **3 Stripe accounts** — there is no Square. Use the Stripe-account dimension, not "Stripe vs Square".
