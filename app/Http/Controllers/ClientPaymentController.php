@@ -7,6 +7,7 @@ use App\Models\Brand;
 use App\Models\Payment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Stripe\StripeClient;
@@ -147,7 +148,12 @@ class ClientPaymentController extends Controller
     }
 
     /**
-     * @return array<int, array{key: string, title: string, url: string, version: string}>
+     * Policies for the consent UI. The PDF is no longer surfaced — instead the
+     * versioned Markdown in resources/policies is rendered to HTML and shown in
+     * an in-app modal. Render is cached per version (content only changes on a
+     * version bump).
+     *
+     * @return array<int, array{key: string, title: string, version: string, html: string}>
      */
     private function policyProps(): array
     {
@@ -155,11 +161,21 @@ class ClientPaymentController extends Controller
             ->map(fn (array $policy, string $key): array => [
                 'key' => $key,
                 'title' => $policy['title'],
-                'url' => $policy['url'],
                 'version' => $policy['version'],
+                'html' => $this->policyHtml($key, $policy['version']),
             ])
             ->values()
             ->all();
+    }
+
+    private function policyHtml(string $key, string $version): string
+    {
+        return cache()->rememberForever(
+            "policy.html.{$key}.{$version}",
+            fn (): string => Str::markdown(
+                (string) file_get_contents(resource_path("policies/{$key}.md"))
+            )
+        );
     }
 
     private function brandProps(Brand $brand): array

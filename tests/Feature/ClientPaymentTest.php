@@ -105,8 +105,8 @@ it('passes policies to ClientPayment/Pay component', function () {
             ->has('policies', 3)
             ->has('policies.0.key')
             ->has('policies.0.title')
-            ->has('policies.0.url')
             ->has('policies.0.version')
+            ->has('policies.0.html')
         );
 });
 
