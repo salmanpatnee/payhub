@@ -47,6 +47,7 @@ class ClientPaymentController extends Controller
                     'amount' => $payment->amount,
                     'currency' => $payment->currency,
                     'automatic_payment_methods' => ['enabled' => true],
+                    'description' => $this->buildDescription($payment),
                     'metadata' => [
                         'reference_code' => $this->formatReferenceCode($payment->reference_code),
                         'payment_uuid' => $payment->uuid,
@@ -61,6 +62,7 @@ class ClientPaymentController extends Controller
                 'amount' => $payment->amount,   // integer cents from DB — SEC-02
                 'currency' => $payment->currency, // 'usd' or 'gbp'
                 'automatic_payment_methods' => ['enabled' => true], // handles 3DS automatically — CLIENT-05
+                'description' => $this->buildDescription($payment),
                 'metadata' => [
                     'reference_code' => $this->formatReferenceCode($payment->reference_code),
                     'payment_uuid' => $payment->uuid,
@@ -145,6 +147,15 @@ class ClientPaymentController extends Controller
     private function formatReferenceCode(?int $code): string
     {
         return '#'.str_pad((string) ($code ?? 0), 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Human-readable PaymentIntent description shown in the Stripe dashboard.
+     * Example: "Reference code for this order is: #000123"
+     */
+    private function buildDescription(Payment $payment): string
+    {
+        return 'Reference code for this order is: '.$this->formatReferenceCode($payment->reference_code);
     }
 
     /**
