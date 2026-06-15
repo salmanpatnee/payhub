@@ -18,7 +18,7 @@ type UserRow = {
     name: string;
     username: string;
     roles: string[];
-    stripe_account_name: string | null;
+    account_name: string | null;
 };
 
 defineProps<{ users: UserRow[] }>();
@@ -74,7 +74,7 @@ function executeDelete() {
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Name</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Username</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Role</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Stripe Account</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Payment Account</th>
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
@@ -93,7 +93,7 @@ function executeDelete() {
                                 </Badge>
                             </td>
                             <td class="px-5 py-3.5 text-muted-foreground">
-                                {{ user.stripe_account_name ?? '—' }}
+                                {{ user.account_name ?? '—' }}
                             </td>
                             <td class="px-5 py-3.5 text-right">
                                 <div class="flex items-center justify-end gap-1">

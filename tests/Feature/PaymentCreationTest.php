@@ -25,7 +25,8 @@ function validPaymentPayload(Brand $brand, StripeAccount $account): array
 
     return [
         'brand_id' => $brand->id,
-        'stripe_account_id' => $account->id,
+        'provider' => 'stripe',
+        'account_id' => $account->id,
         'relationship_manager_id' => $rm->id,
         'currency' => 'usd',
         'amount' => '25.00',
@@ -81,7 +82,7 @@ it('rejects inactive stripe account with validation error', function () {
 
     $this->actingAs($user)
         ->post('/payments', validPaymentPayload($brand, $account))
-        ->assertSessionHasErrors('stripe_account_id');
+        ->assertSessionHasErrors('account_id');
 
     expect(Payment::count())->toBe(0);
 });

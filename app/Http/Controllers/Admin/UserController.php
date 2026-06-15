@@ -7,10 +7,12 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\Brand;
 use App\Models\RelationshipManager;
+use App\Models\RevolutAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\Permission\Models\Role;
@@ -20,7 +22,7 @@ class UserController extends Controller
     public function index(): Response
     {
         return Inertia::render('admin/users/Index', [
-            'users' => User::with(['roles', 'stripeAccount'])
+            'users' => User::with(['roles', 'stripeAccount', 'revolutAccount'])
                 ->orderBy('name')
                 ->get()
                 ->map(fn (User $user) => [
@@ -28,7 +30,7 @@ class UserController extends Controller
                     'name' => $user->name,
                     'username' => $user->username,
                     'roles' => $user->getRoleNames(),
-                    'stripe_account_name' => $user->stripeAccount?->account_name,
+                    'account_name' => $user->stripeAccount?->account_name ?? $user->revolutAccount?->account_name,
                 ]),
         ]);
     }
@@ -37,9 +39,7 @@ class UserController extends Controller
     {
         return Inertia::render('admin/users/Create', [
             'roles' => Role::pluck('name'),
-            'stripeAccounts' => StripeAccount::where('is_active', true)
-                ->orderBy('account_name')
-                ->get(['id', 'account_name']),
+            'accounts' => $this->activeAccountOptions(),
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
             'relationshipManagers' => RelationshipManager::active()->orderBy('name')->get(['id', 'name']),
         ]);
@@ -48,9 +48,7 @@ class UserController extends Controller
     public function store(StoreUserRequest $request): RedirectResponse
     {
         $data = $request->safe()->only('name', 'username', 'password');
-        $data['stripe_account_id'] = $request->validated('role') === 'agent'
-            ? $request->validated('stripe_account_id')
-            : null;
+        $data = [...$data, ...$this->resolveAccountColumns($request)];
 
         $user = User::create($data);
         $user->syncRoles([$request->validated('role')]);
@@ -64,17 +62,17 @@ class UserController extends Controller
     {
         return Inertia::render('admin/users/Edit', [
             'user' => array_merge(
-                $user->only('id', 'name', 'username', 'stripe_account_id'),
+                $user->only('id', 'name', 'username'),
                 [
+                    'provider' => $user->stripe_account_id ? 'stripe' : ($user->revolut_account_id ? 'revolut' : null),
+                    'account_id' => $user->stripe_account_id ?? $user->revolut_account_id,
                     'roles' => $user->getRoleNames(),
                     'brand_ids' => $user->brands()->pluck('brands.id'),
                     'relationship_manager_ids' => $user->relationshipManagers()->pluck('relationship_managers.id'),
                 ]
             ),
             'roles' => Role::pluck('name'),
-            'stripeAccounts' => StripeAccount::where('is_active', true)
-                ->orderBy('account_name')
-                ->get(['id', 'account_name']),
+            'accounts' => $this->activeAccountOptions(),
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
             'relationshipManagers' => RelationshipManager::where('is_active', true)
                 ->orWhereIn('id', $user->relationshipManagers()->pluck('relationship_managers.id'))
@@ -91,9 +89,7 @@ class UserController extends Controller
             $data['password'] = $request->validated('password');
         }
 
-        $data['stripe_account_id'] = $request->validated('role') === 'agent'
-            ? $request->validated('stripe_account_id')
-            : null;
+        $data = [...$data, ...$this->resolveAccountColumns($request)];
 
         $user->update($data);
         $user->syncRoles([$request->validated('role')]);
@@ -104,8 +100,46 @@ class UserController extends Controller
     }
 
     /**
+     * Union of active Stripe + Revolut accounts as { id, account_name, provider }
+     * for the agent payment-account selector.
+     *
+     * @return Collection<int, array{id: int, account_name: string, provider: string}>
+     */
+    private function activeAccountOptions(): Collection
+    {
+        $stripe = StripeAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (StripeAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'stripe']);
+
+        $revolut = RevolutAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (RevolutAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'revolut']);
+
+        return $stripe->concat($revolut)->values();
+    }
+
+    /**
+     * Resolve the payment-account FK columns from the request. Only agents carry
+     * an account; for other roles both columns are cleared.
+     *
+     * @return array{stripe_account_id: ?int, revolut_account_id: ?int}
+     */
+    private function resolveAccountColumns(StoreUserRequest|UpdateUserRequest $request): array
+    {
+        if ($request->validated('role') !== 'agent') {
+            return ['stripe_account_id' => null, 'revolut_account_id' => null];
+        }
+
+        $provider = $request->validated('provider');
+        $accountId = (int) $request->validated('account_id');
+
+        return [
+            'stripe_account_id' => $provider === 'stripe' ? $accountId : null,
+            'revolut_account_id' => $provider === 'revolut' ? $accountId : null,
+        ];
+    }
+
+    /**
      * Sync an agent's brand and relationship-manager mappings.
-     * Mappings are cleared for non-agent roles, mirroring stripe_account_id.
+     * Mappings are cleared for non-agent roles, mirroring the payment account.
      */
     private function syncMappings(User $user, StoreUserRequest|UpdateUserRequest $request): void
     {

@@ -22,7 +22,8 @@ function updatePayload(Brand $brand, StripeAccount $account, RelationshipManager
 {
     return [
         'brand_id' => $brand->id,
-        'stripe_account_id' => $account->id,
+        'provider' => 'stripe',
+        'account_id' => $account->id,
         'relationship_manager_id' => $rm->id,
         'currency' => 'gbp',
         'amount' => '42.50',

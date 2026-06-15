@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Eye, EyeOff, UserPlus } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,12 +16,12 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 
-type AccountOption = { id: number; account_name: string };
+type AccountOption = { id: number; account_name: string; provider: string };
 type NamedOption = { id: number; name: string };
 
 defineProps<{
     roles: string[];
-    stripeAccounts: AccountOption[];
+    accounts: AccountOption[];
     brands: NamedOption[];
     relationshipManagers: NamedOption[];
 }>();
@@ -40,9 +40,20 @@ const form = useForm({
     username:                   '',
     password:                   '',
     role:                       'agent',
-    stripe_account_id:          '',
+    provider:                   '',
+    account_id:                 '',
     brand_ids:                  [] as number[],
     relationship_manager_ids:   [] as number[],
+});
+
+const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut' };
+
+// The account selector encodes "provider:id" since ids collide across providers.
+const accountValue = ref('');
+watch(accountValue, (val) => {
+    const [provider, id] = val.split(':');
+    form.provider = provider ?? '';
+    form.account_id = id ?? '';
 });
 
 const showPassword = ref(false);
@@ -139,20 +150,20 @@ function submit() {
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">
-                        <Label for="stripe_account_id">Stripe Account <span class="text-destructive">*</span></Label>
-                        <Select v-model="form.stripe_account_id" required>
-                            <SelectTrigger id="stripe_account_id" class="w-full">
-                                <SelectValue placeholder="Select a Stripe account" />
+                        <Label for="account_id">Payment Account <span class="text-destructive">*</span></Label>
+                        <Select v-model="accountValue" required>
+                            <SelectTrigger id="account_id" class="w-full">
+                                <SelectValue placeholder="Select a payment account" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem
-                                    v-for="account in stripeAccounts"
-                                    :key="account.id"
-                                    :value="String(account.id)"
-                                >{{ account.account_name }}</SelectItem>
+                                    v-for="account in accounts"
+                                    :key="`${account.provider}:${account.id}`"
+                                    :value="`${account.provider}:${account.id}`"
+                                >{{ account.account_name }} ({{ providerLabel[account.provider] ?? account.provider }})</SelectItem>
                             </SelectContent>
                         </Select>
-                        <InputError class="mt-2" :message="form.errors.stripe_account_id" />
+                        <InputError class="mt-2" :message="form.errors.account_id" />
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">

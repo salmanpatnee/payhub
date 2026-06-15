@@ -59,7 +59,8 @@ it('account cannot store a payment', function () {
 
     $this->actingAs($account)->post('/payments', [
         'brand_id' => $brand->id,
-        'stripe_account_id' => $stripeAccount->id,
+        'provider' => 'stripe',
+        'account_id' => $stripeAccount->id,
         'relationship_manager_id' => $rm->id,
         'currency' => 'usd',
         'amount' => '25.00',
@@ -84,7 +85,8 @@ it('account cannot edit, update, or delete a payment', function () {
     // A valid body so the request passes validation and reaches the update gate.
     $validUpdate = [
         'brand_id' => Brand::factory()->create()->id,
-        'stripe_account_id' => StripeAccount::factory()->create(['is_active' => true])->id,
+        'provider' => 'stripe',
+        'account_id' => StripeAccount::factory()->create(['is_active' => true])->id,
         'relationship_manager_id' => RelationshipManager::factory()->create()->id,
         'currency' => 'usd',
         'amount' => '25.00',

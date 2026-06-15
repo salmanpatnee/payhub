@@ -8,11 +8,13 @@ use App\Http\Requests\UpdatePaymentRequest;
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
+use App\Models\RevolutAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -38,7 +40,7 @@ class PaymentController extends Controller
                 'amount' => $p->amount,
                 'currency' => $p->currency,
                 'brand_name' => $p->brand->name,
-                'account_name' => $canViewAll ? $p->stripeAccount?->account_name : null,
+                'account_name' => $canViewAll ? $p->providerAccountName() : null,
                 'relationship_manager_name' => $p->relationshipManager?->name,
                 'status' => $p->status,
                 'created_at' => $p->created_at->toISOString(),
@@ -72,7 +74,7 @@ class PaymentController extends Controller
     {
         $canViewAll = $user->hasRole('admin') || $user->hasRole('account');
 
-        $query = Payment::with(['brand', 'stripeAccount', 'user', 'relationshipManager'])
+        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'user', 'relationshipManager'])
             ->orderByDesc('created_at');
 
         if (! $canViewAll) {
@@ -127,21 +129,24 @@ class PaymentController extends Controller
     }
 
     /**
-     * Load the brand / Stripe account / relationship manager options for the
+     * Load the brand / payment account / relationship manager options for the
      * create and edit forms. Agents are restricted to their assigned resources;
-     * returns a RedirectResponse if the agent has no Stripe account, brands, or RMs.
+     * returns a RedirectResponse if the agent has no payment account, brands, or RMs.
+     *
+     * The account list is a union of active Stripe and Revolut accounts, each
+     * tagged with its provider — the selector implies the provider on submit.
      *
      * Inactive relationship managers are hidden from selection, except the
      * payment's currently-assigned RM ($currentRmId) which is always included
      * so historical records remain editable.
      *
-     * @return array{brands: mixed, stripeAccounts: mixed, isStripeAccountLocked: bool, relationshipManagers: mixed}|RedirectResponse
+     * @return array{brands: mixed, accounts: mixed, isAccountLocked: bool, relationshipManagers: mixed}|RedirectResponse
      */
     private function formOptions(User $user, ?int $currentRmId = null): array|RedirectResponse
     {
         if ($user->hasRole('agent')) {
-            if (! $user->stripe_account_id) {
-                Inertia::flash('toast', ['type' => 'error', 'message' => 'No Stripe account assigned. Contact an admin.']);
+            if (! $user->stripe_account_id && ! $user->revolut_account_id) {
+                Inertia::flash('toast', ['type' => 'error', 'message' => 'No payment account assigned. Contact an admin.']);
 
                 return redirect()->route('payments.index');
             }
@@ -158,13 +163,17 @@ class PaymentController extends Controller
                 return redirect()->route('payments.index');
             }
 
-            $stripeAccounts = StripeAccount::where('id', $user->stripe_account_id)->get(['id']);
-            $isStripeAccountLocked = true;
+            // Agents never receive the account name (only id + provider) — the
+            // selector is locked/hidden for them. Mirrors the existing privacy rule.
+            $accounts = $user->stripe_account_id
+                ? StripeAccount::where('id', $user->stripe_account_id)->get(['id'])
+                    ->map(fn (StripeAccount $a) => ['id' => $a->id, 'provider' => 'stripe'])
+                : RevolutAccount::where('id', $user->revolut_account_id)->get(['id'])
+                    ->map(fn (RevolutAccount $a) => ['id' => $a->id, 'provider' => 'revolut']);
+            $isAccountLocked = true;
         } else {
-            $stripeAccounts = StripeAccount::where('is_active', true)
-                ->orderBy('account_name')
-                ->get(['id', 'account_name']);
-            $isStripeAccountLocked = false;
+            $accounts = $this->activeAccountOptions();
+            $isAccountLocked = false;
             $brands = Brand::orderBy('name')->get(['id', 'name']);
             $relationshipManagers = RelationshipManager::where(fn ($q) => $q->where('is_active', true)->orWhere('id', $currentRmId))
                 ->orderBy('name')
@@ -173,10 +182,40 @@ class PaymentController extends Controller
 
         return [
             'brands' => $brands,
-            'stripeAccounts' => $stripeAccounts,
-            'isStripeAccountLocked' => $isStripeAccountLocked,
+            'accounts' => $accounts,
+            'isAccountLocked' => $isAccountLocked,
             'relationshipManagers' => $relationshipManagers,
         ];
+    }
+
+    /**
+     * Union of active Stripe + Revolut accounts as { id, account_name, provider }.
+     *
+     * @return Collection<int, array{id: int, account_name: string, provider: string}>
+     */
+    private function activeAccountOptions(): Collection
+    {
+        $stripe = StripeAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (StripeAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'stripe']);
+
+        $revolut = RevolutAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (RevolutAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'revolut']);
+
+        return $stripe->concat($revolut)->values();
+    }
+
+    /**
+     * Resolve an agent's locked provider/account FK columns from their assignment.
+     *
+     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int}
+     */
+    private function agentAccountData(User $user): array
+    {
+        if ($user->stripe_account_id) {
+            return ['provider' => 'stripe', 'stripe_account_id' => $user->stripe_account_id, 'revolut_account_id' => null];
+        }
+
+        return ['provider' => 'revolut', 'stripe_account_id' => null, 'revolut_account_id' => $user->revolut_account_id];
     }
 
     public function store(StorePaymentRequest $request): RedirectResponse
@@ -189,7 +228,7 @@ class PaymentController extends Controller
         $user = auth()->user();
 
         if ($user->hasRole('agent')) {
-            $data['stripe_account_id'] = $user->stripe_account_id;
+            $data = [...$data, ...$this->agentAccountData($user)];
         }
 
         $payment = Payment::create([
@@ -220,7 +259,8 @@ class PaymentController extends Controller
             'payment' => [
                 'uuid' => $payment->uuid,
                 'brand_id' => $payment->brand_id,
-                'stripe_account_id' => $payment->stripe_account_id,
+                'provider' => $payment->provider->value,
+                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id,
                 'relationship_manager_id' => $payment->relationship_manager_id,
                 'currency' => $payment->currency,
                 // Cents → decimal string for the amount input.
@@ -246,10 +286,10 @@ class PaymentController extends Controller
         $user = auth()->user();
 
         if ($user->hasRole('agent')) {
-            $data['stripe_account_id'] = $user->stripe_account_id;
+            $data = [...$data, ...$this->agentAccountData($user)];
         }
 
-        // status, user_id, and stripe_payment_intent_id are never updated here.
+        // status, user_id, and provider transaction ids are never updated here.
         $payment->update($data);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Payment updated.']);
@@ -271,7 +311,7 @@ class PaymentController extends Controller
     public function show(Payment $payment): Response
     {
         Gate::authorize('view', $payment);
-        $payment->loadMissing(['brand', 'stripeAccount', 'relationshipManager']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'relationshipManager']);
 
         $user = auth()->user();
         $canViewStripeAccount = $user->hasRole('admin') || $user->hasRole('account');
@@ -285,16 +325,18 @@ class PaymentController extends Controller
                 'amount' => $payment->amount,
                 'currency' => $payment->currency,
                 'status' => $payment->status,
+                'provider' => $payment->provider->value,
+                'provider_label' => $payment->provider->label(),
                 'client_name' => $payment->client_name,
                 'client_email' => $payment->client_email,
                 'service' => $payment->service,
                 'package' => $payment->package,
                 'note' => $payment->note,
                 'brand_name' => $payment->brand->name,
-                'account_name' => $canViewStripeAccount ? $payment->stripeAccount->account_name : null,
+                'account_name' => $canViewStripeAccount ? $payment->providerAccountName() : null,
                 'relationship_manager_name' => $payment->relationshipManager?->name,
                 'created_at' => $payment->created_at->toISOString(),
-                'stripe_payment_intent_id' => $payment->stripe_payment_intent_id,
+                'provider_reference' => $payment->stripe_payment_intent_id ?? $payment->revolut_order_id,
                 'paid_at' => $payment->paid_at?->toISOString(),
                 'expires_at' => $payment->expires_at?->toISOString(),
             ],

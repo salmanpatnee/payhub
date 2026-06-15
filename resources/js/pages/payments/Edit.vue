@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { onMounted } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { ArrowLeft, Save } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,12 +18,13 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 
 type BrandOption = { id: number; name: string };
-type AccountOption = { id: number; account_name?: string };
+type AccountOption = { id: number; account_name?: string; provider: string };
 type RmOption = { id: number; name: string };
 type PaymentData = {
     uuid: string;
     brand_id: number;
-    stripe_account_id: number;
+    provider: string;
+    account_id: number;
     relationship_manager_id: number | null;
     currency: string;
     amount: string;
@@ -36,8 +37,8 @@ type PaymentData = {
 
 const props = defineProps<{
     brands: BrandOption[];
-    stripeAccounts: AccountOption[];
-    isStripeAccountLocked: boolean;
+    accounts: AccountOption[];
+    isAccountLocked: boolean;
     relationshipManagers: RmOption[];
     payment: PaymentData;
 }>();
@@ -53,7 +54,8 @@ defineOptions({
 
 const form = useForm({
     brand_id:                  String(props.payment.brand_id),
-    stripe_account_id:         String(props.payment.stripe_account_id),
+    provider:                  props.payment.provider,
+    account_id:                String(props.payment.account_id),
     relationship_manager_id:   props.payment.relationship_manager_id != null ? String(props.payment.relationship_manager_id) : '',
     currency:                  props.payment.currency,
     amount:                    props.payment.amount,
@@ -64,9 +66,20 @@ const form = useForm({
     note:                      props.payment.note ?? '',
 });
 
+const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut' };
+
+// The account selector encodes "provider:id" since ids collide across providers.
+const accountValue = ref(`${props.payment.provider}:${props.payment.account_id}`);
+watch(accountValue, (val) => {
+    const [provider, id] = val.split(':');
+    form.provider = provider ?? '';
+    form.account_id = id ?? '';
+});
+
 onMounted(() => {
-    if (props.isStripeAccountLocked && props.stripeAccounts.length > 0) {
-        form.stripe_account_id = String(props.stripeAccounts[0].id);
+    if (props.isAccountLocked && props.accounts.length > 0) {
+        const a = props.accounts[0];
+        accountValue.value = `${a.provider}:${a.id}`;
     }
 });
 
@@ -109,22 +122,23 @@ function submit() {
                         <InputError class="mt-1" :message="form.errors.brand_id" />
                     </div>
 
-                    <!-- Stripe Account — hidden for agents (locked to their assigned account) -->
-                    <div v-if="!isStripeAccountLocked" class="grid gap-2">
-                        <Label for="stripe_account_id">Stripe Account <span class="text-destructive">*</span></Label>
-                        <Select v-model="form.stripe_account_id">
-                            <SelectTrigger id="stripe_account_id" class="w-full">
-                                <SelectValue placeholder="Select a Stripe account" />
+                    <!-- Payment account — hidden for agents (locked to their assigned account).
+                         Selecting an account sets the provider (Stripe or Revolut). -->
+                    <div v-if="!isAccountLocked" class="grid gap-2">
+                        <Label for="account_id">Payment Account <span class="text-destructive">*</span></Label>
+                        <Select v-model="accountValue">
+                            <SelectTrigger id="account_id" class="w-full">
+                                <SelectValue placeholder="Select a payment account" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem
-                                    v-for="account in props.stripeAccounts"
-                                    :key="account.id"
-                                    :value="String(account.id)"
-                                >{{ account.account_name }}</SelectItem>
+                                    v-for="account in props.accounts"
+                                    :key="`${account.provider}:${account.id}`"
+                                    :value="`${account.provider}:${account.id}`"
+                                >{{ account.account_name }} ({{ providerLabel[account.provider] ?? account.provider }})</SelectItem>
                             </SelectContent>
                         </Select>
-                        <InputError class="mt-1" :message="form.errors.stripe_account_id" />
+                        <InputError class="mt-1" :message="form.errors.account_id" />
                     </div>
 
                     <!-- Relationship Manager -->

@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'revolut' => [
+        // 'sandbox' targets sandbox-merchant.revolut.com; 'prod' targets merchant.revolut.com.
+        // Per-account secret/webhook keys live (encrypted) on the revolut_accounts table.
+        'environment' => env('REVOLUT_ENVIRONMENT', 'sandbox'),
+        // Pinned Merchant API version (YYYY-MM-DD) sent on every request.
+        'api_version' => env('REVOLUT_API_VERSION', '2024-09-01'),
+    ],
+
 ];

@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\RelationshipManagerController;
+use App\Http\Controllers\Admin\RevolutAccountController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\RevolutWebhookController;
 use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -81,6 +83,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'stripe-accounts/{stripe_account}/test-connection',
             [StripeAccountController::class, 'testStoredConnection']
         )->name('stripe-accounts.test-stored-connection');
+
+        Route::resource('revolut-accounts', RevolutAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'revolut-accounts/{revolut_account}/deactivate',
+            [RevolutAccountController::class, 'deactivate']
+        )->name('revolut-accounts.deactivate');
+
+        Route::patch(
+            'revolut-accounts/{revolut_account}/activate',
+            [RevolutAccountController::class, 'activate']
+        )->name('revolut-accounts.activate');
+
+        Route::post(
+            'revolut-accounts/test-connection',
+            [RevolutAccountController::class, 'testKeyConnection']
+        )->name('revolut-accounts.test-connection');
+
+        Route::post(
+            'revolut-accounts/{revolut_account}/test-connection',
+            [RevolutAccountController::class, 'testStoredConnection']
+        )->name('revolut-accounts.test-stored-connection');
     });
 
 // Public payment routes — no auth middleware (CLIENT-01)
@@ -94,6 +119,11 @@ Route::get('/pay/{payment}/failed', [ClientPaymentController::class, 'failed'])-
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)
 Route::post('/webhook/stripe/{stripeAccount}', [StripeWebhookController::class, 'handle'])
     ->name('webhook.stripe')
+    ->middleware('throttle:120,1');
+
+// {revolutAccount} resolves by integer id (implicit model binding)
+Route::post('/webhook/revolut/{revolutAccount}', [RevolutWebhookController::class, 'handle'])
+    ->name('webhook.revolut')
     ->middleware('throttle:120,1');
 
 require __DIR__.'/settings.php';

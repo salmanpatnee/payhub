@@ -19,7 +19,7 @@
 |:--|:--|
 | **Amount** | {{ strtolower($payment->currency) === 'gbp' ? '£' : '$' }}{{ number_format($payment->amount / 100, 2) }} {{ strtoupper($payment->currency) }} |
 | **Brand** | {{ $payment->brand->name }} |
-| **Stripe Account** | {{ $payment->stripeAccount->account_name }} |
+| **{{ $payment->provider->label() }} Account** | {{ $payment->providerAccountName() }} |
 | **Service** | {{ $payment->service }} |
 | **Package** | {{ ucfirst($payment->package) }} |
 @if($payment->note)

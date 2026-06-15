@@ -52,7 +52,8 @@ class AdminUserManagementTest extends TestCase
                 'username' => 'testuser',
                 'password' => 'Password1!',
                 'role' => 'agent',
-                'stripe_account_id' => $stripeAccount->id,
+                'provider' => 'stripe',
+                'account_id' => $stripeAccount->id,
                 'brand_ids' => [$brand->id],
                 'relationship_manager_ids' => [$rm->id],
             ])
@@ -107,7 +108,8 @@ class AdminUserManagementTest extends TestCase
                 'username' => 'nomappings',
                 'password' => 'Password1!',
                 'role' => 'agent',
-                'stripe_account_id' => $stripeAccount->id,
+                'provider' => 'stripe',
+                'account_id' => $stripeAccount->id,
             ])
             ->assertSessionHasErrors(['brand_ids', 'relationship_manager_ids']);
 

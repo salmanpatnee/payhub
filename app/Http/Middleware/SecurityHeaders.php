@@ -25,11 +25,17 @@ class SecurityHeaders
             : '';
         $scriptInline = app()->environment('local') ? " 'unsafe-inline'" : '';
 
+        // Revolut Merchant Web SDK: embed.js/version.js are loaded as scripts, the
+        // Card Field + 3DS challenge render in an iframe, and the SDK makes XHRs —
+        // all from the merchant host (sandbox + prod). Both are whitelisted so the
+        // env can switch without a CSP change.
+        $revolut = ' https://sandbox-merchant.revolut.com https://merchant.revolut.com';
+
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
-            "script-src 'self' https://js.stripe.com{$vite}{$scriptInline}; ".
-            'frame-src https://js.stripe.com; '.
-            "connect-src 'self' https://api.stripe.com{$vite}{$viteWs}; ".
+            "script-src 'self' https://js.stripe.com{$revolut}{$vite}{$scriptInline}; ".
+            "frame-src https://js.stripe.com{$revolut}; ".
+            "connect-src 'self' https://api.stripe.com{$revolut}{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$vite}; ".
             "font-src 'self'{$vite};"

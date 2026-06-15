@@ -26,9 +26,11 @@ type PaymentDetail = {
     note: string | null;
     brand_name: string;
     account_name: string | null;
+    provider: string;
+    provider_label: string;
     relationship_manager_name: string | null;
     created_at: string;
-    stripe_payment_intent_id: string | null;
+    provider_reference: string | null;
     paid_at: string | null;
     expires_at: string | null;
 };
@@ -271,7 +273,7 @@ const timeline = computed<TimelineStep[]>(() => {
                         </div>
                         <div v-if="canViewStripeAccount">
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
-                                <CreditCard class="size-3.5 shrink-0" />Stripe Account
+                                <CreditCard class="size-3.5 shrink-0" />{{ payment.provider_label }} Account
                             </dt>
                             <dd>{{ payment.account_name }}</dd>
                         </div>
@@ -299,11 +301,11 @@ const timeline = computed<TimelineStep[]>(() => {
                             </dt>
                             <dd class="mt-1 text-muted-foreground italic">{{ payment.note }}</dd>
                         </div>
-                        <div v-if="payment.stripe_payment_intent_id" class="col-span-2">
+                        <div v-if="payment.provider_reference" class="col-span-2">
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
-                                <Hash class="size-3.5 shrink-0" />Stripe PI
+                                <Hash class="size-3.5 shrink-0" />{{ payment.provider === 'revolut' ? 'Revolut Order' : 'Stripe PI' }}
                             </dt>
-                            <dd class="font-mono text-xs truncate">{{ payment.stripe_payment_intent_id }}</dd>
+                            <dd class="font-mono text-xs truncate">{{ payment.provider_reference }}</dd>
                         </div>
                     </dl>
                 </CardContent>

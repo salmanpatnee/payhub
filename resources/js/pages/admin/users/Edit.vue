@@ -24,7 +24,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 
-type AccountOption = { id: number; account_name: string };
+type AccountOption = { id: number; account_name: string; provider: string };
 type NamedOption = { id: number; name: string };
 
 type UserProp = {
@@ -32,7 +32,8 @@ type UserProp = {
     name: string;
     username: string;
     roles: string[];
-    stripe_account_id: number | null;
+    provider: string | null;
+    account_id: number | null;
     brand_ids: number[];
     relationship_manager_ids: number[];
 };
@@ -40,7 +41,7 @@ type UserProp = {
 const props = defineProps<{
     user: UserProp;
     roles: string[];
-    stripeAccounts: AccountOption[];
+    accounts: AccountOption[];
     brands: NamedOption[];
     relationshipManagers: NamedOption[];
 }>();
@@ -64,9 +65,22 @@ const form = useForm({
     username:                   props.user.username,
     password:                   '',
     role:                       props.user.roles[0] ?? 'agent',
-    stripe_account_id:          props.user.stripe_account_id ? String(props.user.stripe_account_id) : '',
+    provider:                   props.user.provider ?? '',
+    account_id:                 props.user.account_id ? String(props.user.account_id) : '',
     brand_ids:                  [...props.user.brand_ids],
     relationship_manager_ids:   [...props.user.relationship_manager_ids],
+});
+
+const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut' };
+
+// The account selector encodes "provider:id" since ids collide across providers.
+const accountValue = ref(
+    props.user.provider && props.user.account_id ? `${props.user.provider}:${props.user.account_id}` : ''
+);
+watch(accountValue, (val) => {
+    const [provider, id] = val.split(':');
+    form.provider = provider ?? '';
+    form.account_id = id ?? '';
 });
 
 const deleteForm = useForm({});
@@ -169,20 +183,20 @@ function executeDelete() {
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">
-                        <Label for="stripe_account_id">Stripe Account <span class="text-destructive">*</span></Label>
-                        <Select v-model="form.stripe_account_id" required>
-                            <SelectTrigger id="stripe_account_id" class="w-full">
-                                <SelectValue placeholder="Select a Stripe account" />
+                        <Label for="account_id">Payment Account <span class="text-destructive">*</span></Label>
+                        <Select v-model="accountValue" required>
+                            <SelectTrigger id="account_id" class="w-full">
+                                <SelectValue placeholder="Select a payment account" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem
-                                    v-for="account in stripeAccounts"
-                                    :key="account.id"
-                                    :value="String(account.id)"
-                                >{{ account.account_name }}</SelectItem>
+                                    v-for="account in accounts"
+                                    :key="`${account.provider}:${account.id}`"
+                                    :value="`${account.provider}:${account.id}`"
+                                >{{ account.account_name }} ({{ providerLabel[account.provider] ?? account.provider }})</SelectItem>
                             </SelectContent>
                         </Select>
-                        <InputError class="mt-2" :message="form.errors.stripe_account_id" />
+                        <InputError class="mt-2" :message="form.errors.account_id" />
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">

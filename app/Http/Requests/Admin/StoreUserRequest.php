@@ -20,11 +20,18 @@ class StoreUserRequest extends FormRequest
             'username' => ['required', 'string', 'max:255', Rule::unique('users', 'username')],
             'password' => ['required', 'string', Password::default()],
             'role' => ['required', 'string', 'in:admin,agent,account'],
-            'stripe_account_id' => [
+            // Agents are assigned one payment account; the selector implies provider.
+            'provider' => [
+                Rule::requiredIf(fn () => $this->input('role') === 'agent'),
+                'nullable',
+                'string',
+                'in:stripe,revolut',
+            ],
+            'account_id' => [
                 Rule::requiredIf(fn () => $this->input('role') === 'agent'),
                 'nullable',
                 'integer',
-                Rule::exists('stripe_accounts', 'id')->where('is_active', true),
+                Rule::exists($this->input('provider') === 'revolut' ? 'revolut_accounts' : 'stripe_accounts', 'id')->where('is_active', true),
             ],
             'brand_ids' => [
                 Rule::requiredIf(fn () => $this->input('role') === 'agent'),

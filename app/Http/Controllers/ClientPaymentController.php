@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentProvider;
 use App\Http\Requests\StorePaymentConsentRequest;
 use App\Models\Brand;
 use App\Models\Payment;
+use App\Services\Revolut\RevolutClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Str;
@@ -16,17 +18,26 @@ class ClientPaymentController extends Controller
 {
     public function show(Payment $payment): Response|RedirectResponse
     {
-        $payment->loadMissing(['brand', 'stripeAccount']);
+        $payment->loadMissing('brand');
 
-        // D-03 + D-12: Guard check BEFORE any StripeClient call.
-        // failed is allowed through so a declined card can be retried — the existing PI reuse
-        // logic below handles confirmable (requires_payment_method) vs terminal PI states.
+        // D-03 + D-12: Guard check BEFORE any provider call.
+        // failed is allowed through so a declined card can be retried — the per-provider
+        // reuse logic below handles confirmable vs terminal states.
         if (! in_array($payment->status, ['pending', 'failed'])) {
             return Inertia::render('ClientPayment/Unavailable', [
                 'status' => $payment->status,
                 'brand' => $this->brandProps($payment->brand),
             ]);
         }
+
+        return $payment->provider === PaymentProvider::Revolut
+            ? $this->showRevolut($payment)
+            : $this->showStripe($payment);
+    }
+
+    private function showStripe(Payment $payment): Response
+    {
+        $payment->loadMissing('stripeAccount');
 
         // D-01: Per-account StripeClient — NEVER Stripe::setApiKey() globally
         // secret_key auto-decrypted by Laravel encrypted cast
@@ -82,6 +93,64 @@ class ClientPaymentController extends Controller
         ]);
     }
 
+    private function showRevolut(Payment $payment): Response
+    {
+        $payment->loadMissing('revolutAccount');
+
+        // Per-account RevolutClient — mirrors the per-account StripeClient rule.
+        $revolut = app()->make(RevolutClient::class, ['secretKey' => $payment->revolutAccount->secret_key]);
+
+        // Retrieve-and-reuse: reuse an order still awaiting payment; recreate once it
+        // has reached any terminal state (completed/cancelled/failed/authorised).
+        $payableStates = ['pending', 'processing'];
+
+        if ($payment->revolut_order_id) {
+            $order = $revolut->retrieveOrder($payment->revolut_order_id);
+
+            if (! in_array($order['state'] ?? '', $payableStates, true)) {
+                $order = $this->createRevolutOrder($revolut, $payment);
+                $payment->update(['revolut_order_id' => $order['id']]);
+            }
+        } else {
+            $order = $this->createRevolutOrder($revolut, $payment);
+            $payment->update(['revolut_order_id' => $order['id']]);
+        }
+
+        $mode = config('services.revolut.environment', 'sandbox') === 'prod' ? 'prod' : 'sandbox';
+
+        // SEC-04 analog: orderToken only in Inertia props — NEVER logged, NEVER in URL
+        return Inertia::render('ClientPayment/PayRevolut', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'revolutAccount' => ['public_key' => $payment->revolutAccount->public_key],
+            'orderToken' => $order['token'],
+            'mode' => $mode,
+            // Revolut's Card Field requires a customer email + cardholder name on
+            // submit. Prefill those captured at payment creation when present; the
+            // customer can edit them on the page.
+            'customerEmail' => $payment->client_email,
+            'customerName' => $payment->client_name,
+            'policies' => $this->policyProps(),
+        ]);
+    }
+
+    /**
+     * Create a Revolut Merchant API order from the server-side Payment record.
+     * Amount is read from the DB (integer minor units) — never from the client.
+     *
+     * @return array<string, mixed>
+     */
+    private function createRevolutOrder(RevolutClient $revolut, Payment $payment): array
+    {
+        return $revolut->createOrder([
+            'amount' => $payment->amount,                  // integer minor units — SEC-02
+            'currency' => strtoupper($payment->currency),  // Revolut expects ISO 4217 (GBP/USD)
+            'capture_mode' => 'automatic',                 // auto-capture → ORDER_COMPLETED is the success signal
+            'merchant_order_ext_ref' => $this->formatReferenceCode($payment->reference_code),
+            'description' => $this->buildDescription($payment),
+        ]);
+    }
+
     /**
      * Record the customer's acceptance of the policies for the audit trail.
      * Called client-side immediately before Stripe confirmPayment() — there is
@@ -106,9 +175,11 @@ class ClientPaymentController extends Controller
 
     public function success(Payment $payment): Response|RedirectResponse
     {
-        // D-04: Stripe redirects with ?redirect_status=succeeded on success
-        // SEC-04: Only read redirect_status — discard payment_intent_client_secret query param entirely
-        if (request('redirect_status') !== 'succeeded') {
+        // D-04: Stripe redirects with ?redirect_status=succeeded on success.
+        // SEC-04: Only read redirect_status — discard payment_intent_client_secret query param entirely.
+        // Revolut's Card Field completes via an onSuccess callback (no redirect param), so the
+        // redirect_status gate applies to Stripe only; truth still comes from the webhook either way.
+        if ($payment->provider === PaymentProvider::Stripe && request('redirect_status') !== 'succeeded') {
             return redirect()->route('pay.failed', $payment->uuid);
         }
 

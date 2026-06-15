@@ -130,7 +130,7 @@ it('shows the stripe account name to admins on the show page', function () {
         );
 });
 
-// Agent create page: stripeAccounts payload carries the id only, never the name.
+// Agent create page: accounts payload carries the id + provider only, never the name.
 it('omits the stripe account name from the agent create form options', function () {
     $account = StripeAccount::factory()->create(['is_active' => true, 'account_name' => 'Secret Brand']);
     $agent = makeMappedAgent($account);
@@ -141,10 +141,11 @@ it('omits the stripe account name from the agent create form options', function 
     $this->actingAs($agent)->get('/payments/create')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('isStripeAccountLocked', true)
-            ->has('stripeAccounts', 1)
-            ->where('stripeAccounts.0.id', $account->id)
-            ->missing('stripeAccounts.0.account_name')
+            ->where('isAccountLocked', true)
+            ->has('accounts', 1)
+            ->where('accounts.0.id', $account->id)
+            ->where('accounts.0.provider', 'stripe')
+            ->missing('accounts.0.account_name')
         );
 });
 
@@ -162,7 +163,8 @@ it('still saves the agent payment with their assigned stripe account', function 
     // Even if a forged account id is posted, the controller forces the assigned one.
     $this->actingAs($agent)->post('/payments', [
         'brand_id' => $brand->id,
-        'stripe_account_id' => $other->id,
+        'provider' => 'stripe',
+        'account_id' => $other->id,
         'relationship_manager_id' => $rm->id,
         'currency' => 'usd',
         'amount' => '25.00',

@@ -27,9 +27,11 @@ class StorePaymentRequest extends FormRequest
             'relationship_manager_id' => ['required', 'integer', $isAgent
                 ? Rule::exists('relationship_manager_user', 'relationship_manager_id')->where('user_id', $user->id)
                 : 'exists:relationship_managers,id'],
-            'stripe_account_id' => ['required', 'integer',
-                Rule::exists('stripe_accounts', 'id')
-                    ->where('is_active', true)],
+            // The account selector implies the provider; account_id is validated
+            // against whichever provider's table was chosen (must be active).
+            'provider' => ['required', 'string', 'in:stripe,revolut'],
+            'account_id' => ['required', 'integer',
+                Rule::exists($this->accountTable(), 'id')->where('is_active', true)],
             'currency' => ['required', 'string', 'in:usd,gbp'],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
             'client_name' => ['nullable', 'string', 'max:255'],
@@ -49,11 +51,35 @@ class StorePaymentRequest extends FormRequest
         // never sees a raw decimal amount.
         $data = parent::validated();
         $data['amount'] = (int) round($data['amount'] * 100);
+        $data = $this->mapAccountColumns($data);
 
         if ($key !== null) {
             return data_get($data, $key, $default);
         }
 
         return $data;
+    }
+
+    /**
+     * Map the unified provider/account_id pair onto the concrete FK columns.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function mapAccountColumns(array $data): array
+    {
+        $provider = $data['provider'] ?? 'stripe';
+        $accountId = (int) ($data['account_id'] ?? 0);
+        unset($data['account_id']);
+
+        $data['stripe_account_id'] = $provider === 'stripe' ? $accountId : null;
+        $data['revolut_account_id'] = $provider === 'revolut' ? $accountId : null;
+
+        return $data;
+    }
+
+    private function accountTable(): string
+    {
+        return $this->input('provider') === 'revolut' ? 'revolut_accounts' : 'stripe_accounts';
     }
 }
