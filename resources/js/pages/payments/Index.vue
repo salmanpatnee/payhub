@@ -112,11 +112,13 @@ const visibleColumns = useLocalStorage<Record<string, boolean>>(
     { mergeDefaults: true },
 );
 
-// # + Actions columns are always visible. The Account column is excluded for
-// roles that cannot view the Stripe account, so the skeleton/colspan count matches.
+// The # column is always visible; the Actions column only for non-read-only
+// roles. The Account column is excluded for roles that cannot view the Stripe
+// account, so the skeleton/colspan count always matches the rendered columns.
 const visibleColumnCount = computed(
     () =>
-        2 +
+        1 +
+        (props.readOnly ? 0 : 1) +
         COLUMN_DEFS.filter(
             (c) =>
                 visibleColumns.value[c.key] &&
@@ -459,7 +461,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <th v-if="visibleColumns.relationship_manager_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</th>
                         <th v-if="visibleColumns.status" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th v-if="visibleColumns.created" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
-                        <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
+                        <th v-if="!readOnly" class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
                 <tbody v-if="refreshing">
@@ -492,7 +494,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <td v-if="visibleColumns.created" class="px-5 py-3.5 text-muted-foreground">
                             {{ formatDate(payment.created_at) }}
                         </td>
-                        <td class="px-5 py-3.5 text-right">
+                        <td v-if="!readOnly" class="px-5 py-3.5 text-right">
                             <div class="flex items-center justify-end gap-1">
                                 <Button v-if="!readOnly" variant="ghost" size="sm" as-child title="View payment details">
                                     <Link :href="`/payments/${payment.uuid}`">
