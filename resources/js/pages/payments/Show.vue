@@ -25,7 +25,7 @@ type PaymentDetail = {
     package: string | null;
     note: string | null;
     brand_name: string;
-    account_name: string;
+    account_name: string | null;
     relationship_manager_name: string | null;
     created_at: string;
     stripe_payment_intent_id: string | null;
@@ -33,7 +33,7 @@ type PaymentDetail = {
     expires_at: string | null;
 };
 
-const props = defineProps<{ payment: PaymentDetail; isAdmin: boolean }>();
+const props = defineProps<{ payment: PaymentDetail; isAdmin: boolean; canViewStripeAccount: boolean }>();
 
 const deleteOpen = ref(false);
 const deleteForm = useForm({});
@@ -269,7 +269,7 @@ const timeline = computed<TimelineStep[]>(() => {
                             </dt>
                             <dd>{{ payment.brand_name }}</dd>
                         </div>
-                        <div>
+                        <div v-if="canViewStripeAccount">
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
                                 <CreditCard class="size-3.5 shrink-0" />Stripe Account
                             </dt>

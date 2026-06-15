@@ -18,7 +18,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 
 type BrandOption = { id: number; name: string };
-type AccountOption = { id: number; account_name: string };
+type AccountOption = { id: number; account_name?: string };
 type RmOption = { id: number; name: string };
 
 const props = defineProps<{
@@ -95,10 +95,10 @@ function submit() {
                         <InputError class="mt-1" :message="form.errors.brand_id" />
                     </div>
 
-                    <!-- Stripe Account -->
-                    <div class="grid gap-2">
+                    <!-- Stripe Account — hidden for agents (locked to their assigned account) -->
+                    <div v-if="!isStripeAccountLocked" class="grid gap-2">
                         <Label for="stripe_account_id">Stripe Account <span class="text-destructive">*</span></Label>
-                        <Select v-model="form.stripe_account_id" :disabled="isStripeAccountLocked">
+                        <Select v-model="form.stripe_account_id">
                             <SelectTrigger id="stripe_account_id" class="w-full">
                                 <SelectValue placeholder="Select a Stripe account" />
                             </SelectTrigger>

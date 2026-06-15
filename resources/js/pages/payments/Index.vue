@@ -69,6 +69,7 @@ const props = defineProps<{
     isAdmin: boolean;
     readOnly: boolean;
     canExport: boolean;
+    canViewStripeAccount: boolean;
     relationshipManagers: { id: number; name: string }[];
 }>();
 
@@ -111,9 +112,18 @@ const visibleColumns = useLocalStorage<Record<string, boolean>>(
     { mergeDefaults: true },
 );
 
-// # + Actions columns are always visible.
+// The # column is always visible; the Actions column only for non-read-only
+// roles. The Account column is excluded for roles that cannot view the Stripe
+// account, so the skeleton/colspan count always matches the rendered columns.
 const visibleColumnCount = computed(
-    () => 2 + COLUMN_DEFS.filter((c) => visibleColumns.value[c.key]).length,
+    () =>
+        1 +
+        (props.readOnly ? 0 : 1) +
+        COLUMN_DEFS.filter(
+            (c) =>
+                visibleColumns.value[c.key] &&
+                (c.key !== 'account_name' || props.canViewStripeAccount),
+        ).length,
 );
 
 defineOptions({
@@ -447,11 +457,11 @@ async function copyLink(uuid: string): Promise<void> {
                         <th v-if="visibleColumns.client" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client</th>
                         <th v-if="visibleColumns.amount" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
                         <th v-if="visibleColumns.brand" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
-                        <th v-if="visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account</th>
+                        <th v-if="canViewStripeAccount && visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account</th>
                         <th v-if="visibleColumns.relationship_manager_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</th>
                         <th v-if="visibleColumns.status" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th v-if="visibleColumns.created" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
-                        <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
+                        <th v-if="!readOnly" class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
                 <tbody v-if="refreshing">
@@ -476,7 +486,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
                         <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
-                        <td v-if="visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name ?? '—' }}</td>
+                        <td v-if="canViewStripeAccount && visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name ?? '—' }}</td>
                         <td v-if="visibleColumns.relationship_manager_name" class="px-5 py-3.5">{{ payment.relationship_manager_name ?? '—' }}</td>
                         <td v-if="visibleColumns.status" class="px-5 py-3.5">
                             <PaymentStatusBadge :status="payment.status" />
@@ -484,7 +494,7 @@ async function copyLink(uuid: string): Promise<void> {
                         <td v-if="visibleColumns.created" class="px-5 py-3.5 text-muted-foreground">
                             {{ formatDate(payment.created_at) }}
                         </td>
-                        <td class="px-5 py-3.5 text-right">
+                        <td v-if="!readOnly" class="px-5 py-3.5 text-right">
                             <div class="flex items-center justify-end gap-1">
                                 <Button v-if="!readOnly" variant="ghost" size="sm" as-child title="View payment details">
                                     <Link :href="`/payments/${payment.uuid}`">

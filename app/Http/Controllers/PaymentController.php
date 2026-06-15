@@ -38,7 +38,7 @@ class PaymentController extends Controller
                 'amount' => $p->amount,
                 'currency' => $p->currency,
                 'brand_name' => $p->brand->name,
-                'account_name' => $p->stripeAccount?->account_name,
+                'account_name' => $canViewAll ? $p->stripeAccount?->account_name : null,
                 'relationship_manager_name' => $p->relationshipManager?->name,
                 'status' => $p->status,
                 'created_at' => $p->created_at->toISOString(),
@@ -49,12 +49,13 @@ class PaymentController extends Controller
             'brands' => $canViewAll
                 ? Brand::orderBy('name')->get(['id', 'name'])
                 : [],
-            'accounts' => $isAdmin
+            'accounts' => $canViewAll
                 ? StripeAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
                 : [],
             'isAdmin' => $isAdmin,
             'readOnly' => $isAccount,
             'canExport' => $canViewAll,
+            'canViewStripeAccount' => $canViewAll,
             'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
         ]);
     }
@@ -157,7 +158,7 @@ class PaymentController extends Controller
                 return redirect()->route('payments.index');
             }
 
-            $stripeAccounts = StripeAccount::where('id', $user->stripe_account_id)->get(['id', 'account_name']);
+            $stripeAccounts = StripeAccount::where('id', $user->stripe_account_id)->get(['id']);
             $isStripeAccountLocked = true;
         } else {
             $stripeAccounts = StripeAccount::where('is_active', true)
@@ -272,8 +273,12 @@ class PaymentController extends Controller
         Gate::authorize('view', $payment);
         $payment->loadMissing(['brand', 'stripeAccount', 'relationshipManager']);
 
+        $user = auth()->user();
+        $canViewStripeAccount = $user->hasRole('admin') || $user->hasRole('account');
+
         return Inertia::render('payments/Show', [
-            'isAdmin' => auth()->user()->hasRole('admin'),
+            'isAdmin' => $user->hasRole('admin'),
+            'canViewStripeAccount' => $canViewStripeAccount,
             'payment' => [
                 'uuid' => $payment->uuid,
                 'reference_code' => $payment->reference_code,
@@ -286,7 +291,7 @@ class PaymentController extends Controller
                 'package' => $payment->package,
                 'note' => $payment->note,
                 'brand_name' => $payment->brand->name,
-                'account_name' => $payment->stripeAccount->account_name,
+                'account_name' => $canViewStripeAccount ? $payment->stripeAccount->account_name : null,
                 'relationship_manager_name' => $payment->relationshipManager?->name,
                 'created_at' => $payment->created_at->toISOString(),
                 'stripe_payment_intent_id' => $payment->stripe_payment_intent_id,
