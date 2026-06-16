@@ -17,12 +17,14 @@ const props = defineProps<{
         primary_color: string
         secondary_color: string
     }
+    provider?: 'stripe' | 'revolut'
 }>()
 </script>
 
 <template>
     <PaymentLayout
         :brand="props.brand"
+        :provider="props.provider"
         :payment="{
             uuid: payment.uuid,
             amount: payment.amount,

@@ -13,6 +13,7 @@ const props = defineProps<{
         primary_color: string
         secondary_color: string
     }
+    provider?: 'stripe' | 'revolut'
 }>()
 
 const content = computed(() => {
@@ -41,7 +42,7 @@ const content = computed(() => {
 </script>
 
 <template>
-    <PaymentLayout :brand="props.brand">
+    <PaymentLayout :brand="props.brand" :provider="props.provider">
         <Head :title="content.pageTitle" />
 
         <div class="page-content text-center space-y-5">

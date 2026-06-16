@@ -18,6 +18,7 @@ const props = defineProps<{
         primary_color: string
         secondary_color: string
     }
+    provider?: 'stripe' | 'revolut'
 }>()
 
 // 16 confetti particles — static positions computed once
@@ -36,6 +37,7 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
 <template>
     <PaymentLayout
         :brand="props.brand"
+        :provider="props.provider"
         :payment="{
             uuid: payment.uuid,
             reference_code: payment.reference_code,

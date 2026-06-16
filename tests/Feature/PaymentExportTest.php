@@ -3,6 +3,7 @@
 use App\Exports\PaymentsExport;
 use App\Models\Brand;
 use App\Models\Payment;
+use App\Models\RevolutAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -60,6 +61,40 @@ it('forbids agents from exporting', function () {
 it('redirects guests to login', function () {
     $this->get(route('payments.export'))
         ->assertRedirect(route('login'));
+});
+
+it('maps provider-aware account columns for stripe and revolut rows', function () {
+    // The export must show the correct provider, account name, and provider
+    // reference (Revolut order id / Stripe PaymentIntent id) per payment — the
+    // old hardcoded "Stripe Account" column left Revolut rows blank.
+    $headings = (new PaymentsExport(Payment::query()))->headings();
+    expect($headings)->toContain('Provider', 'Payment Account', 'Provider Reference');
+    expect($headings)->not->toContain('Stripe Account');
+
+    $with = ['brand', 'stripeAccount', 'revolutAccount', 'relationshipManager'];
+    $export = new PaymentsExport(Payment::query());
+
+    $stripeAccount = StripeAccount::factory()->create(['account_name' => 'Acme Stripe']);
+    $stripePayment = Payment::factory()
+        ->for(Brand::factory()->create())
+        ->for($stripeAccount, 'stripeAccount')
+        ->create(['stripe_payment_intent_id' => 'pi_123']);
+
+    $stripeRow = $export->map($stripePayment->load($with));
+    expect($stripeRow[6])->toBe('Stripe');
+    expect($stripeRow[7])->toBe('Acme Stripe');
+    expect($stripeRow[8])->toBe('pi_123');
+
+    $revolutAccount = RevolutAccount::factory()->create(['account_name' => 'Acme Revolut']);
+    $revolutPayment = Payment::factory()->revolut()->create([
+        'revolut_account_id' => $revolutAccount->id,
+        'revolut_order_id' => 'ord_999',
+    ]);
+
+    $revolutRow = $export->map($revolutPayment->load($with));
+    expect($revolutRow[6])->toBe('Revolut');
+    expect($revolutRow[7])->toBe('Acme Revolut');
+    expect($revolutRow[8])->toBe('ord_999');
 });
 
 it('scopes the export to the active brand filter', function () {

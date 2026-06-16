@@ -57,6 +57,34 @@ it('creates a revolut order from the server amount and renders the card field pa
         && $request['capture_mode'] === 'automatic');
 });
 
+// The order carries the reference code under merchant_order_data.reference (which
+// populates the transactions CSV's merchant_order_ext_ref column) plus metadata
+// mirroring the Stripe PaymentIntent — the correlation key for reconciliation.
+it('sends reference code and payment uuid in merchant_order_data', function () {
+    Http::fake([
+        '*/api/orders' => Http::response([
+            'id' => 'ord_meta',
+            'token' => 'tok_meta',
+            'state' => 'pending',
+        ], 201),
+    ]);
+
+    $account = RevolutAccount::factory()->create();
+    $payment = Payment::factory()->revolut()->create([
+        'revolut_account_id' => $account->id,
+        'revolut_order_id' => null,
+        'status' => 'pending',
+        'reference_code' => 123,
+    ]);
+
+    $this->get("/pay/{$payment->uuid}")->assertOk();
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/api/orders')
+        && $request['merchant_order_data']['reference'] === '#000123'
+        && $request['merchant_order_data']['metadata']['reference_code'] === '#000123'
+        && $request['merchant_order_data']['metadata']['payment_uuid'] === $payment->uuid);
+});
+
 // An order already awaiting payment is reused — no duplicate order is created.
 it('reuses an existing payable revolut order', function () {
     Http::fake([

@@ -27,6 +27,7 @@ class ClientPaymentController extends Controller
             return Inertia::render('ClientPayment/Unavailable', [
                 'status' => $payment->status,
                 'brand' => $this->brandProps($payment->brand),
+                'provider' => $payment->provider->value,
             ]);
         }
 
@@ -146,8 +147,20 @@ class ClientPaymentController extends Controller
             'amount' => $payment->amount,                  // integer minor units — SEC-02
             'currency' => strtoupper($payment->currency),  // Revolut expects ISO 4217 (GBP/USD)
             'capture_mode' => 'automatic',                 // auto-capture → ORDER_COMPLETED is the success signal
-            'merchant_order_ext_ref' => $this->formatReferenceCode($payment->reference_code),
             'description' => $this->buildDescription($payment),
+            // Correlate the Revolut order with our system. For Merchant API 2024-09-01
+            // the external reference + metadata live under merchant_order_data — the
+            // legacy top-level merchant_order_ext_ref is ignored (blank in exports).
+            // `reference` surfaces in the transactions CSV's merchant_order_ext_ref
+            // column; metadata mirrors the Stripe PaymentIntent (string values, keys
+            // starting with a letter).
+            'merchant_order_data' => [
+                'reference' => $this->formatReferenceCode($payment->reference_code),
+                'metadata' => [
+                    'reference_code' => $this->formatReferenceCode($payment->reference_code),
+                    'payment_uuid' => $payment->uuid,
+                ],
+            ],
         ]);
     }
 
@@ -192,12 +205,14 @@ class ClientPaymentController extends Controller
             return Inertia::render('ClientPayment/Unavailable', [
                 'status' => $payment->status,
                 'brand' => $this->brandProps($payment->brand),
+                'provider' => $payment->provider->value,
             ]);
         }
 
         return Inertia::render('ClientPayment/Success', [
             'payment' => $this->paymentProps($payment),
             'brand' => $this->brandProps($payment->brand),
+            'provider' => $payment->provider->value,
         ]);
     }
 
@@ -212,6 +227,7 @@ class ClientPaymentController extends Controller
                 'currency' => $payment->currency,
             ],
             'brand' => $this->brandProps($payment->brand),
+            'provider' => $payment->provider->value,
         ]);
     }
 
