@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Head, useHttp } from '@inertiajs/vue3'
-import { AlertCircle, LockIcon, X } from 'lucide-vue-next'
+import { AlertCircle, CreditCard, LockIcon, X } from 'lucide-vue-next'
 import RevolutCheckout from '@revolut/checkout'
 import PaymentLayout from '@/layouts/PaymentLayout.vue'
 import { Button } from '@/components/ui/button'
@@ -88,13 +88,25 @@ onMounted(async () => {
     try {
         const instance = await RevolutCheckout(props.orderToken, props.mode)
 
+        // The card inputs render inside a FIXED-HEIGHT cross-origin iframe (~21px),
+        // so box chrome (border/padding/radius/focus-ring) must NOT go here — adding
+        // padding clips the text. Style only the inner TEXT here so it matches the
+        // shadcn name/email inputs; the visible box + focus/invalid ring live on the
+        // wrapper div via the .card-field-box CSS below (Revolut toggles
+        // .rc-card-field--focused / --invalid classes on that wrapper).
         cardField = instance.createCardField({
             target: cardFieldEl.value as HTMLElement,
             locale: 'en',
             theme: 'light',
             styles: {
-                default: { color: 'hsl(0, 0%, 3.9%)' },
-                focused: { border: `1px solid ${props.brand.primary_color || '#000000'}` },
+                default: {
+                    color: 'hsl(0, 0%, 3.9%)',
+                    fontFamily: '"Instrument Sans", ui-sans-serif, system-ui, sans-serif',
+                    fontSize: '14px',
+                },
+                invalid: {
+                    color: 'hsl(0, 84.2%, 60.2%)',
+                },
             },
             onValidation: (errors: unknown[]) => {
                 cardComplete.value = errors.length === 0
@@ -199,45 +211,61 @@ async function submit(): Promise<void> {
             </div>
 
             <form @submit.prevent="submit" class="space-y-5">
-                <!-- Cardholder name + email — required by Revolut on submit; prefilled when known -->
-                <div class="grid gap-2">
-                    <Label for="cardholder-name" class="text-sm text-slate-700">Cardholder name</Label>
-                    <Input
-                        id="cardholder-name"
-                        v-model="cardholderName"
-                        type="text"
-                        placeholder="Jane Smith"
-                        autocomplete="cc-name"
-                        required
-                    />
-                    <p class="text-xs text-slate-500">Full name as it appears on the card.</p>
-                </div>
+                <!-- Stripe-style payment panel: one white rounded container holding all
+                     card inputs, mirroring the Stripe Payment Element's card box. -->
+                <div
+                    class="card-panel"
+                    :style="{ '--brand-primary': brand.primary_color || '#000000' }"
+                >
+                    <div class="card-panel-header">
+                        <CreditCard class="size-4" />
+                        <span>Card</span>
+                    </div>
 
-                <div class="grid gap-2">
-                    <Label for="email" class="text-sm text-slate-700">Email</Label>
-                    <Input
-                        id="email"
-                        v-model="email"
-                        type="email"
-                        placeholder="you@example.com"
-                        autocomplete="email"
-                        required
-                    />
-                </div>
+                    <!-- Cardholder name + email — required by Revolut on submit; prefilled when known -->
+                    <div class="grid gap-2">
+                        <Label for="cardholder-name" class="text-sm text-slate-700">Cardholder name</Label>
+                        <Input
+                            id="cardholder-name"
+                            v-model="cardholderName"
+                            type="text"
+                            placeholder="Jane Smith"
+                            autocomplete="cc-name"
+                            class="h-11"
+                            required
+                        />
+                    </div>
 
-                <!-- Revolut Card Field mounts here -->
-                <div ref="cardFieldEl" class="min-h-[44px]"></div>
+                    <div class="grid gap-2">
+                        <Label for="email" class="text-sm text-slate-700">Email</Label>
+                        <Input
+                            id="email"
+                            v-model="email"
+                            type="email"
+                            placeholder="you@example.com"
+                            autocomplete="email"
+                            class="h-11"
+                            required
+                        />
+                    </div>
 
-                <!-- Loading skeleton until the field is ready -->
-                <template v-if="!cardLoaded">
-                    <div class="space-y-3">
-                        <div class="skeleton-row h-12 rounded-lg"></div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="skeleton-row h-12 rounded-lg"></div>
-                            <div class="skeleton-row h-12 rounded-lg"></div>
+                    <!-- Card details. Revolut's embedded Card Field is a single combined
+                         widget (number · expiry · CVV); box chrome + focus/invalid ring
+                         live on this wrapper, the iframe inside only carries the text.
+                         The box stays visible (never display:none) so Revolut measures a
+                         non-zero width at mount — hiding it clips the placeholders. A
+                         shimmer overlays it until the field paints. -->
+                    <div class="grid gap-2">
+                        <Label class="text-sm text-slate-700">Card details</Label>
+                        <div class="relative">
+                            <div
+                                v-if="!cardLoaded"
+                                class="skeleton-row absolute inset-0 z-10 rounded-md"
+                            ></div>
+                            <div ref="cardFieldEl" class="card-field-box"></div>
                         </div>
                     </div>
-                </template>
+                </div>
 
                 <Alert v-if="errorMessage" variant="destructive">
                     <AlertCircle class="size-4" />
@@ -329,6 +357,56 @@ async function submit(): Promise<void> {
 </template>
 
 <style scoped>
+/* Stripe-style payment panel — mirrors the white rounded card box the Stripe Payment
+   Element renders, so both providers' pay pages look the same: white surface, hairline
+   border, 12px radius, restrained shadow, with a brand-colored "Card" header. */
+.card-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: #fff;
+    border: 1px solid hsl(0, 0%, 92.8%);
+    border-radius: 12px;
+    box-shadow:
+        0 2px 4px -2px rgb(15 23 42 / 0.06),
+        0 1px 2px -1px rgb(15 23 42 / 0.04);
+}
+.card-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--brand-primary);
+}
+
+/* Revolut Card Field wrapper. The card inputs sit in a fixed-height iframe, so the
+   visible "input box" (border/radius/padding + brand focus ring) is rendered here to
+   match the shadcn Input above it (border hsl(0,0%,92.8%), radius 6px, h-9). Revolut
+   toggles .rc-card-field--focused / --invalid on this element for interactive states. */
+.card-field-box {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem; /* 44px — matches Stripe's input height */
+    padding: 0 0.75rem; /* 12px horizontal; flex centers the iframe vertically */
+    border: 1px solid hsl(0, 0%, 92.8%);
+    border-radius: 6px;
+    background: #fff;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); /* shadow-xs */
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.card-field-box :deep(iframe) {
+    width: 100%;
+}
+.card-field-box.rc-card-field--focused {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-primary) 20%, transparent);
+}
+.card-field-box.rc-card-field--invalid {
+    border-color: hsl(0, 84.2%, 60.2%);
+}
+
 .policy-link {
     color: inherit;
     cursor: pointer;
