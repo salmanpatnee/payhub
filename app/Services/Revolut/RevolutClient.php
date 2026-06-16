@@ -54,6 +54,40 @@ class RevolutClient
         $this->request()->get('/orders')->throw();
     }
 
+    /**
+     * Register a webhook. The returned `signing_secret` is shown ONCE on
+     * creation — store it on the account for signature verification.
+     *
+     * @param  list<string>  $events
+     * @return array<string, mixed>
+     */
+    public function createWebhook(string $url, array $events): array
+    {
+        return $this->request()->post('/webhooks', [
+            'url' => $url,
+            'events' => $events,
+        ])->throw()->json();
+    }
+
+    /**
+     * List the registered webhooks (used to clear stale duplicates before
+     * re-registering, since the signing secret is only returned on create).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listWebhooks(): array
+    {
+        return $this->request()->get('/webhooks')->throw()->json();
+    }
+
+    /**
+     * Delete a webhook by id.
+     */
+    public function deleteWebhook(string $webhookId): void
+    {
+        $this->request()->delete("/webhooks/{$webhookId}")->throw();
+    }
+
     private function request(): PendingRequest
     {
         return Http::baseUrl($this->baseUrl())
