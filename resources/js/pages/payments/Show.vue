@@ -8,6 +8,7 @@ import {
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
+import PaymentProviderBadge from '@/components/PaymentProviderBadge.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
 import {
     Card, CardContent, CardHeader, CardTitle,
@@ -270,6 +271,15 @@ const timeline = computed<TimelineStep[]>(() => {
                                 <Building2 class="size-3.5 shrink-0" />Brand
                             </dt>
                             <dd>{{ payment.brand_name }}</dd>
+                        </div>
+                        <div v-if="canViewStripeAccount">
+                            <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
+                                <CreditCard class="size-3.5 shrink-0" />Provider
+                            </dt>
+                            <dd class="flex items-center gap-1.5">
+                                <PaymentProviderBadge :provider="payment.provider" />
+                                {{ payment.provider_label }}
+                            </dd>
                         </div>
                         <div v-if="canViewStripeAccount">
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">

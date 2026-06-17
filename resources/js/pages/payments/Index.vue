@@ -480,12 +480,12 @@ async function copyLink(uuid: string): Promise<void> {
                         <th v-if="visibleColumns.client" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client</th>
                         <th v-if="visibleColumns.amount" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
                         <th v-if="visibleColumns.brand" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
-                        <th v-if="canViewStripeAccount && visibleColumns.provider" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Provider</th>
+                        <th v-if="canViewStripeAccount && visibleColumns.provider" class="text-center px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Provider</th>
                         <th v-if="canViewStripeAccount && visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account</th>
                         <th v-if="visibleColumns.relationship_manager_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</th>
-                        <th v-if="visibleColumns.status" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
+                        <th v-if="visibleColumns.status" class="text-center px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th v-if="visibleColumns.created" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
-                        <th v-if="!readOnly" class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
+                        <th v-if="!readOnly" class="text-center px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
                 <tbody v-if="refreshing">
@@ -511,48 +511,52 @@ async function copyLink(uuid: string): Promise<void> {
                         <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
                         <td v-if="canViewStripeAccount && visibleColumns.provider" class="px-5 py-3.5">
-                            <PaymentProviderBadge :provider="payment.provider" />
+                            <div class="flex justify-center">
+                                <PaymentProviderBadge :provider="payment.provider" />
+                            </div>
                         </td>
                         <td v-if="canViewStripeAccount && visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name ?? '—' }}</td>
                         <td v-if="visibleColumns.relationship_manager_name" class="px-5 py-3.5">{{ payment.relationship_manager_name ?? '—' }}</td>
                         <td v-if="visibleColumns.status" class="px-5 py-3.5">
-                            <PaymentStatusBadge :status="payment.status" />
+                            <div class="flex justify-center">
+                                <PaymentStatusBadge :status="payment.status" icon-only />
+                            </div>
                         </td>
                         <td v-if="visibleColumns.created" class="px-5 py-3.5 text-muted-foreground">
                             {{ formatDate(payment.created_at) }}
                         </td>
                         <td v-if="!readOnly" class="px-5 py-3.5 text-right">
-                            <div class="flex items-center justify-end gap-1">
-                                <Button v-if="!readOnly" variant="ghost" size="sm" as-child title="View payment details">
+                            <div class="flex items-center justify-end gap-0.5">
+                                <Button v-if="!readOnly" variant="ghost" size="icon-sm" as-child title="View payment details">
                                     <Link :href="`/payments/${payment.uuid}`">
-                                        <Eye class="size-4" />
+                                        <Eye class="size-3.5" />
                                     </Link>
                                 </Button>
-                                <Button v-if="!readOnly" variant="ghost" size="sm" title="Copy payment link" @click="copyLink(payment.uuid)">
-                                    <Check v-if="copiedUuid === payment.uuid" class="size-4 text-green-600" />
-                                    <Copy v-else class="size-4" />
+                                <Button v-if="!readOnly" variant="ghost" size="icon-sm" title="Copy payment link" @click="copyLink(payment.uuid)">
+                                    <Check v-if="copiedUuid === payment.uuid" class="size-3.5 text-green-600" />
+                                    <Copy v-else class="size-3.5" />
                                 </Button>
                                 <Button
                                     v-if="!readOnly && payment.status === 'pending'"
                                     variant="ghost"
-                                    size="sm"
+                                    size="icon-sm"
                                     as-child
                                     title="Edit payment"
                                 >
                                     <Link :href="`/payments/${payment.uuid}/edit`">
-                                        <Pencil class="size-4" />
+                                        <Pencil class="size-3.5" />
                                     </Link>
                                 </Button>
                                 <Button
                                     v-if="isAdmin"
                                     variant="ghost"
-                                    size="sm"
+                                    size="icon-sm"
                                     class="cursor-pointer"
                                     title="Delete payment"
                                     :disabled="deleteForm.processing && deleteTarget?.uuid === payment.uuid"
                                     @click="confirmDelete(payment)"
                                 >
-                                    <Trash2 class="size-4 text-destructive" />
+                                    <Trash2 class="size-3.5 text-destructive" />
                                 </Button>
                             </div>
                         </td>
