@@ -5,6 +5,7 @@ import { useLocalStorage } from '@vueuse/core';
 import { Check, Columns, Copy, Download, Eye, Filter, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
+import PaymentProviderBadge from '@/components/PaymentProviderBadge.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
 import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,7 @@ type PaymentRow = {
     amount: number;
     currency: string;
     brand_name: string;
+    provider: string;
     account_name: string | null;
     relationship_manager_name: string | null;
     status: string;
@@ -44,6 +46,7 @@ type PaymentRow = {
 type FilterState = {
     brand_id: string;
     stripe_account_id: string;
+    provider: string;
     relationship_manager_id: string;
     status: string;
     from: string;
@@ -96,10 +99,11 @@ function executeDelete() {
 }
 
 const COLUMN_DEFS = [
-    { key: 'reference_code', label: 'Reference Code' },
+    { key: 'reference_code', label: 'Reference' },
     { key: 'client', label: 'Client' },
     { key: 'amount', label: 'Amount' },
     { key: 'brand', label: 'Brand' },
+    { key: 'provider', label: 'Provider' },
     { key: 'account_name', label: 'Account' },
     { key: 'relationship_manager_name', label: 'RM' },
     { key: 'status', label: 'Status' },
@@ -113,8 +117,9 @@ const visibleColumns = useLocalStorage<Record<string, boolean>>(
 );
 
 // The # column is always visible; the Actions column only for non-read-only
-// roles. The Account column is excluded for roles that cannot view the Stripe
-// account, so the skeleton/colspan count always matches the rendered columns.
+// roles. The Provider and Account columns are excluded for roles that cannot
+// view the Stripe account, so the skeleton/colspan count always matches the
+// rendered columns.
 const visibleColumnCount = computed(
     () =>
         1 +
@@ -122,7 +127,7 @@ const visibleColumnCount = computed(
         COLUMN_DEFS.filter(
             (c) =>
                 visibleColumns.value[c.key] &&
-                (c.key !== 'account_name' || props.canViewStripeAccount),
+                ((c.key !== 'account_name' && c.key !== 'provider') || props.canViewStripeAccount),
         ).length,
 );
 
@@ -143,6 +148,7 @@ const accountOptions = computed(() =>
 const filters = reactive<FilterState>({
     brand_id: props.filters.brand_id || UNSET,
     stripe_account_id: props.filters.stripe_account_id || UNSET,
+    provider: props.filters.provider || UNSET,
     relationship_manager_id: props.filters.relationship_manager_id || UNSET,
     status: props.filters.status || UNSET,
     from: props.filters.from || '',
@@ -153,6 +159,7 @@ const filters = reactive<FilterState>({
 const hasActiveFilters = computed(() =>
     filters.brand_id !== UNSET ||
     filters.stripe_account_id !== UNSET ||
+    filters.provider !== UNSET ||
     filters.relationship_manager_id !== UNSET ||
     filters.status !== UNSET ||
     filters.from !== '' ||
@@ -164,6 +171,7 @@ const activeFilterCount = computed(() =>
     [
         filters.brand_id !== UNSET,
         filters.stripe_account_id !== UNSET,
+        filters.provider !== UNSET,
         filters.relationship_manager_id !== UNSET,
         filters.status !== UNSET,
         filters.from !== '',
@@ -212,6 +220,7 @@ const exportUrl = computed((): string => {
 function clearFilters(): void {
     filters.brand_id = UNSET;
     filters.stripe_account_id = UNSET;
+    filters.provider = UNSET;
     filters.relationship_manager_id = UNSET;
     filters.status = UNSET;
     filters.from = '';
@@ -371,6 +380,20 @@ async function copyLink(uuid: string): Promise<void> {
                     />
                 </div>
 
+                <div v-if="canViewStripeAccount" class="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Provider</Label>
+                    <Select v-model="filters.provider">
+                        <SelectTrigger class="w-full">
+                            <SelectValue placeholder="All providers" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All Providers</SelectItem>
+                            <SelectItem value="stripe">Stripe</SelectItem>
+                            <SelectItem value="revolut">Revolut</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
                 <div class="flex flex-col gap-1.5 flex-1 min-w-0">
                     <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</Label>
                     <SearchableSelect
@@ -453,10 +476,11 @@ async function copyLink(uuid: string): Promise<void> {
                 <thead>
                     <tr class="bg-[#F7F5F2] border-b border-border">
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">#</th>
-                        <th v-if="visibleColumns.reference_code" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Reference Code</th>
+                        <th v-if="visibleColumns.reference_code" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Reference</th>
                         <th v-if="visibleColumns.client" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client</th>
                         <th v-if="visibleColumns.amount" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
                         <th v-if="visibleColumns.brand" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
+                        <th v-if="canViewStripeAccount && visibleColumns.provider" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Provider</th>
                         <th v-if="canViewStripeAccount && visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account</th>
                         <th v-if="visibleColumns.relationship_manager_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</th>
                         <th v-if="visibleColumns.status" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
@@ -486,6 +510,9 @@ async function copyLink(uuid: string): Promise<void> {
                         <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
                         <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
+                        <td v-if="canViewStripeAccount && visibleColumns.provider" class="px-5 py-3.5">
+                            <PaymentProviderBadge :provider="payment.provider" />
+                        </td>
                         <td v-if="canViewStripeAccount && visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name ?? '—' }}</td>
                         <td v-if="visibleColumns.relationship_manager_name" class="px-5 py-3.5">{{ payment.relationship_manager_name ?? '—' }}</td>
                         <td v-if="visibleColumns.status" class="px-5 py-3.5">
