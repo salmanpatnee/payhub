@@ -109,6 +109,26 @@ it('admin can filter payments by brand', function () {
         );
 });
 
+// DASH-02: Admin can filter payments by provider
+it('admin can filter payments by provider', function () {
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    $brand = Brand::factory()->create();
+    $account = StripeAccount::factory()->create();
+
+    Payment::factory()->for($brand)->for($account, 'stripeAccount')->create();
+    Payment::factory()->for($brand)->revolut()->create();
+
+    $this->actingAs($admin)
+        ->get(route('payments.index', ['provider' => 'stripe']))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('payments.data', 1)
+            ->where('payments.data.0.provider', 'stripe')
+        );
+});
+
 // DASH-02: Admin can filter payments by date range
 it('admin can filter payments by date range', function () {
     $admin = User::factory()->create();

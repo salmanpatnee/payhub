@@ -40,6 +40,7 @@ class PaymentController extends Controller
                 'amount' => $p->amount,
                 'currency' => $p->currency,
                 'brand_name' => $p->brand->name,
+                'provider' => $p->provider->value,
                 'account_name' => $canViewAll ? $p->providerAccountName() : null,
                 'relationship_manager_name' => $p->relationshipManager?->name,
                 'status' => $p->status,
@@ -47,7 +48,7 @@ class PaymentController extends Controller
                 'client_email' => $p->client_email,
                 'client_name' => $p->client_name,
             ]),
-            'filters' => $request->only(['brand_id', 'stripe_account_id', 'relationship_manager_id', 'status', 'from', 'to', 'search']),
+            'filters' => $request->only(['brand_id', 'stripe_account_id', 'provider', 'relationship_manager_id', 'status', 'from', 'to', 'search']),
             'brands' => $canViewAll
                 ? Brand::orderBy('name')->get(['id', 'name'])
                 : [],
@@ -84,6 +85,7 @@ class PaymentController extends Controller
         return $query
             ->when($request->brand_id, fn ($q, $v) => $q->where('brand_id', $v))
             ->when($request->stripe_account_id, fn ($q, $v) => $q->where('stripe_account_id', $v))
+            ->when($request->provider, fn ($q, $v) => $q->where('provider', $v))
             ->when($request->relationship_manager_id, fn ($q, $v) => $q->where('relationship_manager_id', $v))
             ->when($request->status, fn ($q, $v) => $q->where('status', $v))
             ->when($request->from, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
