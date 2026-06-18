@@ -17,7 +17,7 @@ type Policy = { key: string; title: string; version: string; html: string }
 const props = defineProps<{
     payment: {
         uuid: string
-        reference_code: number | null
+        reference_code: string | null
         amount: number
         currency: string
         service: string | null

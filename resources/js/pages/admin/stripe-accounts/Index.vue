@@ -16,7 +16,7 @@ import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 type StripeAccountRow = {
     id: number;
     account_name: string;
-    publishable_key_preview: string;
+    prefix: string | null;
     is_active: boolean;
 };
 
@@ -106,22 +106,22 @@ function executeDelete() {
             <table class="w-full text-sm">
                 <thead>
                     <tr class="bg-[#F7F5F2] border-b border-border">
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">#</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account Name</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Publishable Key</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Prefix</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr
-                        v-for="account in stripeAccounts"
+                        v-for="(account, index) in stripeAccounts"
                         :key="account.id"
                         class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                     >
+                        <td class="px-5 py-3.5 text-muted-foreground tabular-nums">{{ index + 1 }}</td>
                         <td class="px-5 py-3.5 font-medium">{{ account.account_name }}</td>
-                        <td class="px-5 py-3.5 font-mono text-xs text-muted-foreground">
-                            {{ account.publishable_key_preview }}
-                        </td>
+                        <td class="px-5 py-3.5 font-mono text-xs text-muted-foreground">{{ account.prefix ?? '—' }}</td>
                         <td class="px-5 py-3.5">
                             <div v-if="account.is_active" class="inline-flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-500">
                                 <CheckCircle2 class="size-4" />
@@ -177,7 +177,7 @@ function executeDelete() {
                     </tr>
 
                     <tr v-if="stripeAccounts.length === 0">
-                        <td colspan="4" class="px-5 py-16 text-center text-muted-foreground text-sm">
+                        <td colspan="5" class="px-5 py-16 text-center text-muted-foreground text-sm">
                             No Stripe accounts yet. Add an account to enable payment collection.
                         </td>
                     </tr>

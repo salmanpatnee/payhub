@@ -59,9 +59,7 @@ class PaymentsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMap
     public function map($payment): array
     {
         return [
-            $payment->reference_code !== null
-                ? '#'.str_pad((string) $payment->reference_code, 6, '0', STR_PAD_LEFT)
-                : '—',
+            $payment->formattedReferenceCode(),
             $payment->client_name,
             $payment->client_email,
             number_format($payment->amount / 100, 2, '.', ''),

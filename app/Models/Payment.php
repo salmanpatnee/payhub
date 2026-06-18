@@ -77,6 +77,16 @@ class Payment extends Model
      * Display name of the payment account that processed (or will process) this
      * payment, resolved by provider. Null if the account is missing.
      */
+    public function formattedReferenceCode(): string
+    {
+        $prefix = $this->provider === PaymentProvider::Revolut
+            ? $this->revolutAccount?->prefix
+            : $this->stripeAccount?->prefix;
+        $number = str_pad((string) ($this->reference_code ?? 0), 6, '0', STR_PAD_LEFT);
+
+        return $prefix ? "{$prefix}-{$number}" : "#{$number}";
+    }
+
     public function providerAccountName(): ?string
     {
         return $this->provider === PaymentProvider::Revolut

@@ -30,7 +30,7 @@ import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentCo
 type PaymentRow = {
     id: number;
     uuid: string;
-    reference_code: number | null;
+    reference_code: string | null;
     amount: number;
     currency: string;
     brand_name: string;
@@ -506,7 +506,7 @@ async function copyLink(uuid: string): Promise<void> {
                         class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                     >
                         <td class="px-5 py-3.5 text-muted-foreground tabular-nums">{{ (payments.from ?? 1) + index }}</td>
-                        <td v-if="visibleColumns.reference_code" class="px-5 py-3.5 font-mono text-muted-foreground">{{ payment.reference_code != null ? '#' + String(payment.reference_code).padStart(6, '0') : '—' }}</td>
+                        <td v-if="visibleColumns.reference_code" class="px-5 py-3.5 font-mono text-muted-foreground">{{ payment.reference_code ?? '—' }}</td>
                         <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
                         <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatAmount(payment.amount, payment.currency) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
@@ -632,7 +632,7 @@ async function copyLink(uuid: string): Promise<void> {
 
     <ConfirmDeleteDialog
         v-model:open="deleteOpen"
-        :title="`Delete payment ${deleteTarget?.reference_code != null ? '#' + String(deleteTarget.reference_code).padStart(6, '0') : ''}?`"
+        :title="`Delete payment ${deleteTarget?.reference_code ?? ''}?`"
         description="This will remove the payment from the list. The payment link will no longer be accessible."
         :processing="deleteForm.processing"
         @confirm="executeDelete"

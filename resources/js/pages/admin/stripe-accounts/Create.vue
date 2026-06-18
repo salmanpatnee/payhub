@@ -28,6 +28,7 @@ const form = useForm({
     account_name:    '',
     publishable_key: '',
     secret_key:      '',
+    prefix:          '',
 });
 
 const testStatus = ref<'idle' | 'testing' | 'ok' | 'fail'>('idle');
@@ -92,6 +93,23 @@ function submit() {
                             A label to identify this account in the admin panel.
                         </p>
                         <InputError :message="form.errors.account_name" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="prefix">Reference Prefix</Label>
+                        <Input
+                            id="prefix"
+                            v-model="form.prefix"
+                            type="text"
+                            placeholder="e.g. SPER"
+                            maxlength="10"
+                            style="text-transform: uppercase"
+                            @input="form.prefix = (form.prefix as string).toUpperCase()"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            Optional. Uppercase letters and digits only, max 10 chars. Used in payment reference codes (e.g. SPER-001254).
+                        </p>
+                        <InputError :message="form.errors.prefix" />
                     </div>
 
                     <div class="grid gap-2">

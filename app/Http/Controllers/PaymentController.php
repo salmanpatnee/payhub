@@ -36,7 +36,7 @@ class PaymentController extends Controller
             'payments' => $query->paginate(20)->through(fn (Payment $p) => [
                 'id' => $p->id,
                 'uuid' => $p->uuid,
-                'reference_code' => $p->reference_code,
+                'reference_code' => $p->formattedReferenceCode(),
                 'amount' => $p->amount,
                 'currency' => $p->currency,
                 'brand_name' => $p->brand->name,
@@ -95,7 +95,12 @@ class PaymentController extends Controller
                     ->orWhere('client_email', 'LIKE', "%{$v}%")
                     ->orWhere('uuid', 'LIKE', strtolower($v).'%');
 
-                $refSearch = ltrim(ltrim(trim($v), '#'), '0');
+                $refSearch = trim($v);
+                // Strip account prefix (e.g. "SPER-001254" → "001254")
+                if (str_contains($refSearch, '-')) {
+                    $refSearch = substr($refSearch, strpos($refSearch, '-') + 1);
+                }
+                $refSearch = ltrim(ltrim($refSearch, '#'), '0');
                 if ($refSearch !== '' && ctype_digit($refSearch)) {
                     $inner->orWhere('reference_code', (int) $refSearch);
                 }
@@ -323,7 +328,7 @@ class PaymentController extends Controller
             'canViewStripeAccount' => $canViewStripeAccount,
             'payment' => [
                 'uuid' => $payment->uuid,
-                'reference_code' => $payment->reference_code,
+                'reference_code' => $payment->formattedReferenceCode(),
                 'amount' => $payment->amount,
                 'currency' => $payment->currency,
                 'status' => $payment->status,

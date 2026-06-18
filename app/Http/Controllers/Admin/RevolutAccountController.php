@@ -24,9 +24,7 @@ class RevolutAccountController extends Controller
                 ->map(fn (RevolutAccount $account) => [
                     'id' => $account->id,
                     'account_name' => $account->account_name,
-                    'public_key_preview' => $account->public_key
-                        ? substr($account->public_key, 0, 12).'••••••••'
-                        : '—',
+                    'prefix' => $account->prefix,
                     'is_active' => $account->is_active,
                 ]),
         ]);
@@ -55,6 +53,7 @@ class RevolutAccountController extends Controller
                 'account_name' => $revolutAccount->account_name,
                 'public_key' => $revolutAccount->public_key,
                 'is_active' => $revolutAccount->is_active,
+                'prefix' => $revolutAccount->prefix,
                 'has_webhook_secret' => ! empty($revolutAccount->webhook_secret),
                 'webhook_endpoint_url' => route('webhook.revolut', $revolutAccount),
                 // secret_key: NEVER included — not even masked
