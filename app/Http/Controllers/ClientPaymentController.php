@@ -61,7 +61,7 @@ class ClientPaymentController extends Controller
                     'automatic_payment_methods' => ['enabled' => true],
                     'description' => $this->buildDescription($payment),
                     'metadata' => [
-                        'reference_code' => $this->formatReferenceCode($payment->reference_code),
+                        'reference_code' => $payment->formattedReferenceCode(),
                         'payment_uuid' => $payment->uuid,
                     ],
                 ], ['idempotency_key' => 'pi-recreate-'.$payment->uuid.'-'.substr(md5($payment->stripe_payment_intent_id ?? ''), 0, 8)]);
@@ -76,7 +76,7 @@ class ClientPaymentController extends Controller
                 'automatic_payment_methods' => ['enabled' => true], // handles 3DS automatically — CLIENT-05
                 'description' => $this->buildDescription($payment),
                 'metadata' => [
-                    'reference_code' => $this->formatReferenceCode($payment->reference_code),
+                    'reference_code' => $payment->formattedReferenceCode(),
                     'payment_uuid' => $payment->uuid,
                 ],
             ], ['idempotency_key' => 'pi-create-'.$payment->uuid]);
@@ -155,9 +155,9 @@ class ClientPaymentController extends Controller
             // column; metadata mirrors the Stripe PaymentIntent (string values, keys
             // starting with a letter).
             'merchant_order_data' => [
-                'reference' => $this->formatReferenceCode($payment->reference_code),
+                'reference' => $payment->formattedReferenceCode(),
                 'metadata' => [
-                    'reference_code' => $this->formatReferenceCode($payment->reference_code),
+                    'reference_code' => $payment->formattedReferenceCode(),
                     'payment_uuid' => $payment->uuid,
                 ],
             ],
@@ -196,7 +196,7 @@ class ClientPaymentController extends Controller
             return redirect()->route('pay.failed', $payment->uuid);
         }
 
-        $payment->loadMissing('brand');
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount']);
 
         // CR-02 fix: block cancelled payments from showing success via crafted URLs.
         // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,
@@ -231,18 +231,9 @@ class ClientPaymentController extends Controller
         ]);
     }
 
-    private function formatReferenceCode(?int $code): string
-    {
-        return '#'.str_pad((string) ($code ?? 0), 6, '0', STR_PAD_LEFT);
-    }
-
-    /**
-     * Human-readable PaymentIntent description shown in the Stripe dashboard.
-     * Example: "Reference code for this order is: #000123"
-     */
     private function buildDescription(Payment $payment): string
     {
-        return 'Reference code for this order is: '.$this->formatReferenceCode($payment->reference_code);
+        return 'Reference code for this order is: '.$payment->formattedReferenceCode();
     }
 
     /**
@@ -291,7 +282,7 @@ class ClientPaymentController extends Controller
     {
         return [
             'uuid' => $payment->uuid,
-            'reference_code' => $payment->reference_code,
+            'reference_code' => $payment->formattedReferenceCode(),
             'amount' => $payment->amount,   // integer cents
             'currency' => $payment->currency, // 'usd' or 'gbp'
             'service' => $payment->service,  // nullable

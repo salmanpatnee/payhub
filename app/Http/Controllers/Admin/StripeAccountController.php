@@ -25,7 +25,7 @@ class StripeAccountController extends Controller
                 ->map(fn (StripeAccount $account) => [
                     'id' => $account->id,
                     'account_name' => $account->account_name,
-                    'publishable_key_preview' => substr($account->publishable_key, 0, 12).'••••••••',
+                    'prefix' => $account->prefix,
                     'is_active' => $account->is_active,
                 ]),
         ]);
@@ -54,6 +54,7 @@ class StripeAccountController extends Controller
                 'account_name' => $stripeAccount->account_name,
                 'publishable_key' => $stripeAccount->publishable_key,
                 'is_active' => $stripeAccount->is_active,
+                'prefix' => $stripeAccount->prefix,
                 'has_webhook_secret' => ! empty($stripeAccount->webhook_secret),
                 'webhook_endpoint_url' => route('webhook.stripe', $stripeAccount),
                 // secret_key: NEVER included — not even masked
