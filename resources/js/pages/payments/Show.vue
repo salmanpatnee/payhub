@@ -16,7 +16,7 @@ import {
 
 type PaymentDetail = {
     uuid: string;
-    reference_code: number | null;
+    reference_code: string | null;
     amount: number;
     currency: string;
     status: string;
@@ -95,11 +95,7 @@ function titleCase(str: string | null): string {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-const referenceLabel = computed(() =>
-    props.payment.reference_code != null
-        ? '#' + String(props.payment.reference_code).padStart(6, '0')
-        : 'NO REFERENCE'
-);
+const referenceLabel = computed(() => props.payment.reference_code ?? 'NO REFERENCE');
 
 type Tone = 'done' | 'pending' | 'failed' | 'muted';
 type TimelineStep = { label: string; date: string; tone: Tone; icon: Component };
@@ -359,7 +355,7 @@ const timeline = computed<TimelineStep[]>(() => {
 
     <ConfirmDeleteDialog
         v-model:open="deleteOpen"
-        :title="`Delete payment ${payment.reference_code != null ? '#' + String(payment.reference_code).padStart(6, '0') : ''}?`"
+        :title="`Delete payment ${payment.reference_code ?? ''}?`"
         description="This will remove the payment from the list. The payment link will no longer be accessible."
         :processing="deleteForm.processing"
         @confirm="executeDelete"

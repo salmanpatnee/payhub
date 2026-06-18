@@ -20,6 +20,7 @@ type StripeAccountProp = {
     account_name: string;
     publishable_key: string;
     is_active: boolean;
+    prefix: string | null;
     has_webhook_secret: boolean;        // boolean — never the raw secret value
     webhook_endpoint_url: string;       // assembled server-side: config('app.url') + '/webhook/stripe/' + id
 };
@@ -41,6 +42,7 @@ const form = useForm({
     publishable_key: props.stripeAccount.publishable_key,
     secret_key:      '',
     webhook_secret:  '',   // blank = preserve existing (D-04)
+    prefix:          props.stripeAccount.prefix ?? '',
 });
 
 const testStatus = ref<'idle' | 'testing' | 'ok' | 'fail'>('idle');
@@ -125,6 +127,23 @@ function submit() {
                             A label to identify this account in the admin panel.
                         </p>
                         <InputError :message="form.errors.account_name" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="prefix">Reference Prefix</Label>
+                        <Input
+                            id="prefix"
+                            v-model="form.prefix"
+                            type="text"
+                            placeholder="e.g. SPER"
+                            maxlength="10"
+                            style="text-transform: uppercase"
+                            @input="form.prefix = (form.prefix as string).toUpperCase()"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            Optional. Uppercase letters and digits only, max 10 chars. Used in payment reference codes (e.g. SPER-001254).
+                        </p>
+                        <InputError :message="form.errors.prefix" />
                     </div>
 
                     <div class="grid gap-2">

@@ -15,6 +15,7 @@ class StoreRevolutAccountRequest extends FormRequest
     {
         return [
             'account_name' => ['required', 'string', 'max:255'],
+            'prefix'       => ['nullable', 'string', 'max:10', 'regex:/^[A-Z0-9]+$/'],
             // Revolut's Card Field is driven by the per-order token, so the public
             // key is optional. Kept for parity / future SDK init paths.
             'public_key' => ['nullable', 'string', 'max:255'],

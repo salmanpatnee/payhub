@@ -11,7 +11,7 @@ class RevolutAccount extends Model
     use HasFactory;
 
     protected $fillable = [
-        'account_name', 'public_key', 'is_active',
+        'account_name', 'public_key', 'is_active', 'prefix',
         // secret_key and webhook_secret are NOT mass-assignable — assign explicitly only
     ];
 

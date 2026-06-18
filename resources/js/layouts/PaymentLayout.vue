@@ -12,7 +12,7 @@ const props = defineProps<{
     }
     payment?: {
         uuid?: string
-        reference_code?: number | null
+        reference_code?: string | null
         amount?: number
         currency?: string
         service?: string | null
@@ -95,7 +95,7 @@ const statusConfig = computed(() => {
                         <div v-if="payment.reference_code != null || payment.uuid">
                             <p class="field-label">Order Code</p>
                             <p class="field-value ref-code mt-1">
-                                <template v-if="payment.reference_code != null">#{{ String(payment.reference_code).padStart(6, '0') }}</template>
+                                <template v-if="payment.reference_code != null">{{ payment.reference_code }}</template>
                                 <template v-else>{{ payment.uuid!.slice(0, 8).toUpperCase() }}</template>
                             </p>
                         </div>

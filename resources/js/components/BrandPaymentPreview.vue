@@ -40,7 +40,7 @@ const open = defineModel<boolean>('open')
                     secondary_color: secondaryColor,
                 }"
                 :payment="{
-                    reference_code: 123456,
+                    reference_code: '#123456',
                     amount: 9999,
                     currency: 'usd',
                     service: 'Website Design',

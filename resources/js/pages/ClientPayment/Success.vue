@@ -5,7 +5,7 @@ import PaymentLayout from '@/layouts/PaymentLayout.vue'
 const props = defineProps<{
     payment: {
         uuid: string
-        reference_code: number | null
+        reference_code: string | null
         amount: number
         currency: string
         service: string | null
@@ -82,7 +82,7 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
             <div v-if="payment.reference_code !== null" class="ref-hero" aria-label="Your order code">
                 <span class="ref-hero-label">Your Order Code</span>
                 <div class="ref-hero-value">
-                    <span class="ref-hero-hash">#</span><span class="ref-hero-number">{{ String(payment.reference_code).padStart(6, '0') }}</span>
+                    <span class="ref-hero-number">{{ payment.reference_code }}</span>
                 </div>
                 <span class="ref-hero-hint">Keep this number for your records</span>
             </div>
