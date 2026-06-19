@@ -35,6 +35,17 @@ it('never assigns duplicate reference codes across many creates', function () {
         ->and($codes->max())->toBe(1020);
 });
 
+it('does not reuse a soft-deleted reference code', function () {
+    $deleted = Payment::factory()->create();
+    expect($deleted->reference_code)->toBe(1001);
+    $deleted->delete(); // soft delete — row + unique index entry remain
+
+    // The unique index still holds 1001, so the next code must skip past it.
+    $next = Payment::factory()->create();
+
+    expect($next->reference_code)->toBe(1002);
+});
+
 it('creates payments with consecutive reference codes through the controller', function () {
     $user = User::factory()->create();
     $user->assignRole('user');
