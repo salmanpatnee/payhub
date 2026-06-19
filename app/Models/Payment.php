@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class Payment extends Model
@@ -32,11 +31,11 @@ class Payment extends Model
                 $payment->uuid = (string) Str::uuid();
             }
             if (empty($payment->reference_code)) {
-                $payment->reference_code = DB::transaction(function () {
-                    $max = max(Payment::lockForUpdate()->max('reference_code') ?? 0, 1000);
-
-                    return $max + 1;
-                });
+                // Lock held until the enclosing transaction commits (which includes
+                // the INSERT) so concurrent creates can't compute the same code.
+                // The create call must run inside a DB transaction — see
+                // PaymentController::createPaymentWithRetry().
+                $payment->reference_code = max(Payment::lockForUpdate()->max('reference_code') ?? 0, 1000) + 1;
             }
         });
     }
