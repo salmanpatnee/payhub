@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\StoreBrandRequest;
 use App\Http\Requests\Admin\UpdateBrandRequest;
 use App\Models\Brand;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -14,20 +15,27 @@ use Inertia\Response;
 
 class BrandController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $search = $request->string('search')->trim()->value();
+
+        $brands = Brand::query()
+            ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%"))
+            ->orderBy('name')
+            ->paginate(15)
+            ->through(fn (Brand $brand) => [
+                'id'              => $brand->id,
+                'name'            => $brand->name,
+                'slug'            => $brand->slug,
+                'website_url'     => $brand->website_url,
+                'logo_url'        => $brand->logo_path ? '/storage/'.$brand->logo_path : null,
+                'primary_color'   => $brand->primary_color,
+                'secondary_color' => $brand->secondary_color,
+            ]);
+
         return Inertia::render('admin/brands/Index', [
-            'brands' => Brand::orderBy('name')
-                ->get()
-                ->map(fn (Brand $brand) => [
-                    'id' => $brand->id,
-                    'name' => $brand->name,
-                    'slug' => $brand->slug,
-                    'website_url' => $brand->website_url,
-                    'logo_url' => $brand->logo_path ? '/storage/'.$brand->logo_path : null,
-                    'primary_color' => $brand->primary_color,
-                    'secondary_color' => $brand->secondary_color,
-                ]),
+            'brands'  => $brands,
+            'filters' => ['search' => $search ?: null],
         ]);
     }
 
