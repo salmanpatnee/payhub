@@ -9,6 +9,7 @@ use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RevolutWebhookController;
 use App\Http\Controllers\StripeWebhookController;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -125,5 +126,23 @@ Route::post('/webhook/stripe/{stripeAccount}', [StripeWebhookController::class, 
 Route::post('/webhook/revolut/{revolutAccount}', [RevolutWebhookController::class, 'handle'])
     ->name('webhook.revolut')
     ->middleware('throttle:120,1');
+
+// TEMPORARY deploy hatch — clears app caches AND resets PHP opcache so freshly
+// deployed code takes effect without a php-fpm restart. Token-gated to avoid a
+// public DoS/abuse vector. CHANGE the token below, and REMOVE this route once
+// the deploy is confirmed.
+Route::get('/__maint/clear-cache/{token}', function (string $token) {
+    abort_unless(hash_equals('f94ce57632357dbf9b69d7c8022d2b85c2d04ba09feeba63e58cb44233fdfce5', $token), 404);
+
+    Artisan::call('optimize:clear'); // config, route, view, event, compiled, cache
+
+    $opcache = function_exists('opcache_reset') ? opcache_reset() : null;
+
+    return response()->json([
+        'optimize_clear' => trim(Artisan::output()),
+        'opcache_reset' => $opcache,
+        'at' => now()->toIso8601String(),
+    ]);
+})->middleware('throttle:5,1')->name('maint.clear-cache');
 
 require __DIR__.'/settings.php';
