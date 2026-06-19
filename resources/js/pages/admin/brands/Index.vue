@@ -299,7 +299,7 @@ function executeDelete() {
         v-model:open="previewOpen"
         :name="previewTarget?.name ?? ''"
         :primary-color="previewTarget?.primary_color ?? '#000000'"
-        :secondary-color="previewTarget?.secondary_color ?? '#cccccc'"
+        :secondary-color="previewTarget?.secondary_color ?? ''"
         :logo-url="previewTarget?.logo_url ?? null"
     />
 </template>
