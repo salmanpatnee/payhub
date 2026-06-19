@@ -87,7 +87,7 @@ function executeDelete() {
                         <td class="px-5 py-3">
                             <div
                                 class="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/60 shadow-xs"
-                                style="background-color:#fff;background-image:linear-gradient(45deg,#f1f1f1 25%,transparent 25%),linear-gradient(-45deg,#f1f1f1 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#f1f1f1 75%),linear-gradient(-45deg,transparent 75%,#f1f1f1 75%);background-size:8px 8px;background-position:0 0,0 4px,4px -4px,-4px 0"
+                                :style="{ backgroundColor: brand.primary_color }"
                             >
                                 <img
                                     v-if="brand.logo_url"

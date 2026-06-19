@@ -73,7 +73,7 @@ const open = defineModel<boolean>('open')
                         type="button"
                         disabled
                         class="w-full rounded-md py-3 text-sm font-semibold tracking-wide text-white opacity-90"
-                        :style="{ backgroundColor: primaryColor }"
+                        :style="{ backgroundColor: secondaryColor || primaryColor }"
                     >
                         Pay $99.99
                     </button>

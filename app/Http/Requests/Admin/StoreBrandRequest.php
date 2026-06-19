@@ -23,7 +23,7 @@ class StoreBrandRequest extends FormRequest
                     ->max(2 * 1024),
             ],
             'primary_color'   => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
-            'secondary_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'secondary_color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ];
     }
 }
