@@ -35,7 +35,11 @@ class Payment extends Model
                 // the INSERT) so concurrent creates can't compute the same code.
                 // The create call must run inside a DB transaction — see
                 // PaymentController::createPaymentWithRetry().
-                $payment->reference_code = max(Payment::lockForUpdate()->max('reference_code') ?? 0, 1000) + 1;
+                //
+                // withTrashed(): the reference_code unique index covers soft-deleted
+                // rows too, so the max MUST include trashed rows — otherwise a deleted
+                // payment's code gets regenerated and collides with the dead row.
+                $payment->reference_code = max(Payment::withTrashed()->lockForUpdate()->max('reference_code') ?? 0, 1000) + 1;
             }
         });
     }
