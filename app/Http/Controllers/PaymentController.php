@@ -12,9 +12,11 @@ use App\Models\RevolutAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -238,7 +240,7 @@ class PaymentController extends Controller
             $data = [...$data, ...$this->agentAccountData($user)];
         }
 
-        $payment = Payment::create([
+        $payment = $this->createPaymentWithRetry([
             ...$data,
             'user_id' => $user->id,
             'status' => 'pending',
@@ -246,6 +248,25 @@ class PaymentController extends Controller
         ]);
 
         return redirect()->route('payments.show', $payment);
+    }
+
+    /**
+     * Create a payment inside a transaction so the reference_code lock
+     * (Payment::creating) is held through the INSERT. Retries on the rare
+     * residual reference_code collision, regenerating the code each attempt.
+     */
+    private function createPaymentWithRetry(array $attributes, int $maxAttempts = 5): Payment
+    {
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                return DB::transaction(fn () => Payment::create($attributes));
+            } catch (UniqueConstraintViolationException $e) {
+                if ($attempt >= $maxAttempts || ! str_contains($e->getMessage(), 'payments_reference_code_unique')) {
+                    throw $e;
+                }
+                unset($attributes['reference_code']); // force regeneration by the creating hook
+            }
+        }
     }
 
     public function edit(Payment $payment): Response|RedirectResponse
