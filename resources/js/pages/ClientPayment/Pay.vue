@@ -215,7 +215,8 @@ async function submit(instance: any, elements: any): Promise<void> {
                             <Button
                                 type="submit"
                                 size="lg"
-                                class="w-full bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary)]/90 focus-visible:ring-[var(--brand-primary)]/50 font-semibold tracking-wide cursor-pointer"
+                                class="w-full bg-[var(--btn-color)] text-white hover:bg-[var(--btn-color)]/90 focus-visible:ring-[var(--btn-color)]/50 font-semibold tracking-wide cursor-pointer"
+                                :style="{ '--btn-color': brand.secondary_color || brand.primary_color }"
                                 :disabled="processing"
                             >
                                 <Spinner v-if="processing" class="size-4 mr-2" />

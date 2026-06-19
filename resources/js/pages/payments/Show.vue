@@ -224,7 +224,7 @@ const timeline = computed<TimelineStep[]>(() => {
                 </div>
 
                 <!-- Shareable link -->
-                <div class="flex flex-col justify-center gap-3 bg-[#F7F5F2] p-6 sm:p-8 dark:bg-muted/30">
+                <div class="flex flex-col justify-center gap-3 bg-[#F7F5F2] p-6 sm:p-8 dark:bg-muted/30 min-w-0">
                     <div class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                         <Link2 class="size-3.5" />
                         Payment link

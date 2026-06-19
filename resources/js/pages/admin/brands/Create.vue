@@ -29,7 +29,7 @@ const form = useForm({
     name:            '',
     website_url:     '',
     primary_color:   '#000000',
-    secondary_color: '#cccccc',
+    secondary_color: '',
     logo:            null as File | null,
 });
 
@@ -162,45 +162,71 @@ function submit() {
                             <InputError :message="form.errors.logo" />
                         </div>
 
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="grid gap-2">
-                                <Label>Primary color</Label>
-                                <div class="flex items-center gap-2">
-                                    <input
-                                        type="color"
-                                        v-model="form.primary_color"
-                                        class="size-9 rounded border border-input cursor-pointer p-0.5 bg-background"
-                                        aria-label="Pick primary color"
-                                    />
-                                    <Input
-                                        v-model="form.primary_color"
-                                        type="text"
-                                        placeholder="#000000"
-                                        class="font-mono uppercase"
-                                        maxlength="7"
-                                    />
-                                </div>
-                                <InputError :message="form.errors.primary_color" />
+                        <div class="grid gap-2">
+                            <Label>Primary color</Label>
+                            <div class="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    v-model="form.primary_color"
+                                    class="size-9 rounded border border-input cursor-pointer p-0.5 bg-background"
+                                    aria-label="Pick primary color"
+                                />
+                                <Input
+                                    v-model="form.primary_color"
+                                    type="text"
+                                    placeholder="#000000"
+                                    class="font-mono uppercase"
+                                    maxlength="7"
+                                />
                             </div>
-                            <div class="grid gap-2">
-                                <Label>Secondary color</Label>
-                                <div class="flex items-center gap-2">
-                                    <input
-                                        type="color"
-                                        v-model="form.secondary_color"
-                                        class="size-9 rounded border border-input cursor-pointer p-0.5 bg-background"
-                                        aria-label="Pick secondary color"
-                                    />
-                                    <Input
-                                        v-model="form.secondary_color"
-                                        type="text"
-                                        placeholder="#000000"
-                                        class="font-mono uppercase"
-                                        maxlength="7"
-                                    />
-                                </div>
-                                <InputError :message="form.errors.secondary_color" />
+                            <InputError :message="form.errors.primary_color" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label>Pay button color</Label>
+                            <p class="text-xs text-muted-foreground -mt-1">
+                                Overrides the primary color on the pay button. Leave empty to use the primary color.
+                            </p>
+
+                            <div v-if="form.secondary_color" class="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    v-model="form.secondary_color"
+                                    class="size-9 rounded border border-input cursor-pointer p-0.5 bg-background"
+                                    aria-label="Pick pay button color"
+                                />
+                                <Input
+                                    v-model="form.secondary_color"
+                                    type="text"
+                                    placeholder="#000000"
+                                    class="font-mono uppercase"
+                                    maxlength="7"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    class="shrink-0 text-muted-foreground hover:text-foreground"
+                                    aria-label="Clear button color"
+                                    @click="form.secondary_color = ''"
+                                >
+                                    <X class="size-4" />
+                                </Button>
                             </div>
+
+                            <div v-else class="flex items-center gap-2">
+                                <span class="text-sm text-muted-foreground italic flex-1">Using primary color</span>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    @click="form.secondary_color = form.primary_color"
+                                >
+                                    Customize
+                                </Button>
+                            </div>
+
+                            <InputError :message="form.errors.secondary_color" />
                         </div>
                     </form>
                 </CardContent>
