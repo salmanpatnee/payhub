@@ -1,3 +1,5 @@
+import { createApp, h } from 'vue';
+import * as Sentry from '@sentry/vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { initializeTheme } from '@/composables/useAppearance';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -25,6 +27,27 @@ createInertiaApp({
     },
     progress: {
         color: '#FF6700',
+    },
+    setup({ el, App, props, plugin }) {
+        const app = createApp({ render: () => h(App, props) }).use(plugin);
+
+        if (import.meta.env.VITE_SENTRY_DSN) {
+            Sentry.init({
+                app,
+                dsn: import.meta.env.VITE_SENTRY_DSN as string,
+                environment: import.meta.env.MODE,
+                integrations: [
+                    Sentry.browserTracingIntegration(),
+                    Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
+                ],
+                tracesSampleRate: 0.2,
+                replaysSessionSampleRate: 0.1,
+                replaysOnErrorSampleRate: 1.0,
+                sendDefaultPii: false,
+            });
+        }
+
+        app.mount(el!);
     },
 });
 

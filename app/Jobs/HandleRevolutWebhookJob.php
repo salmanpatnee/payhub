@@ -59,5 +59,20 @@ class HandleRevolutWebhookJob implements ShouldQueue
             'order_id' => $this->orderId,
             'error' => $exception?->getMessage(),
         ]);
+
+        if ($exception === null) {
+            return;
+        }
+
+        \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($exception): void {
+            $scope->setTag('payment.provider', 'revolut');
+            $scope->setTag('payment.event_type', $this->eventType);
+            $scope->setContext('payment', [
+                'revolut_account_id' => $this->revolutAccountId,
+                'order_id' => $this->orderId,
+                'event_type' => $this->eventType,
+            ]);
+            \Sentry\captureException($exception);
+        });
     }
 }
