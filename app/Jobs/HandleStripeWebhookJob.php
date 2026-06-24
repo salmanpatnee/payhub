@@ -64,5 +64,20 @@ class HandleStripeWebhookJob implements ShouldQueue
             'error' => $exception?->getMessage(),
             // NEVER log full $this->eventData — may contain client_secret (CLAUDE.md rule)
         ]);
+
+        if ($exception === null) {
+            return;
+        }
+
+        \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($exception): void {
+            $scope->setTag('payment.provider', 'stripe');
+            $scope->setTag('payment.event_type', $this->eventType);
+            $scope->setContext('payment', [
+                'stripe_account_id' => $this->stripeAccountId,
+                'payment_intent_id' => $this->eventData['id'] ?? null,
+                'event_type' => $this->eventType,
+            ]);
+            \Sentry\captureException($exception);
+        });
     }
 }
