@@ -6,21 +6,25 @@ use App\Http\Controllers\Admin\RevolutAccountController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ClientPaymentController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RevolutWebhookController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Support\Navigation;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return Auth::check()
-        ? redirect()->route('payments.index')
+        ? redirect(Navigation::homePathFor(Auth::user()))
         : redirect()->route('login');
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    Route::get('dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard')
+        ->middleware('role:admin|account');
     // Must be registered before the resource route — otherwise `payments/export`
     // is captured by the `payments/{payment}` show route (payment = "export").
     Route::get('payments/export', [PaymentController::class, 'export'])

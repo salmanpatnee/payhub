@@ -37,6 +37,7 @@ class SessionPersistenceTest extends TestCase
     public function test_authenticated_user_can_reach_dashboard_across_requests(): void
     {
         $user = User::factory()->create(['email_verified_at' => now()]);
+        $user->syncRoles(['admin']);
 
         $this->actingAs($user)
             ->get(route('dashboard'))
