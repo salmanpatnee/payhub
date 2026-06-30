@@ -99,16 +99,11 @@
       "Bash(python -c \"import sys,json; d=json.loads\\(sys.stdin.read\\(\\)\\); print\\(d.get\\('result'\\), d.get\\('tests'\\), 'tests', d.get\\('passed'\\), 'pass', d.get\\('failed',0\\), 'fail'\\); [print\\('FAIL:', f['test'][:80], '\\\\n  ', f['message'][:100]\\) for f in d.get\\('failures',[]\\)]\")",
       "Bash(python -c \"import sys,json; d=json.loads\\(sys.stdin.read\\(\\)\\); print\\(json.dumps\\({k:v for k,v in d.items\\(\\) if k not in ['failures','errors','warnings']}, indent=2\\)\\); errs=d.get\\('errors',[]\\); [print\\('ERROR:', e['test'][:80], '\\\\n  ', e.get\\('message',''\\)[:150]\\) for e in errs]\")",
       "Bash(python -c \"import sys,json; d=json.loads\\(sys.stdin.read\\(\\)\\); print\\(d.get\\('result'\\), d.get\\('tests'\\), 'tests,', d.get\\('passed'\\), 'pass,', len\\(d.get\\('failures',[]\\)\\), 'fail,', len\\(d.get\\('error_details',[]\\)\\), 'errors'\\); [print\\('FAIL:', f['test'][:70], '\\\\n  ', f['message'][:100]\\) for f in d.get\\('failures',[]\\)]; [print\\('ERR:', e['test'][:70], '\\\\n  ', e['message'][:100]\\) for e in d.get\\('error_details',[]\\)]\")",
-      "WebFetch(domain:developer.revolut.com)",
-      "WebSearch",
-      "mcp__context7__query-docs",
-      "Read(//c/Users/salmanabdul.ghani/AppData/Local/npm-cache/_npx/**)",
-      "Bash(node tmp_revolut_shot.cjs)",
-      "Bash(node tmp_compare.cjs)",
-      "Bash(node tmp_inspect.cjs)",
-      "Bash(node tmp_heights.cjs)",
-      "Bash(node tmp_final.cjs)",
-      "Bash(node tmp_footer.cjs)"
+      "PowerShell(npm install *)",
+      "mcp__laravel-boost__get-absolute-url",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_console_messages"
     ]
   },
   "enableAllProjectMcpServers": true,
