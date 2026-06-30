@@ -10,6 +10,8 @@ defineProps<{
     sublines?: string[];
     /** Optional accent color for the value, e.g. 'text-amber-600'. */
     accent?: string;
+    /** Larger value text for the headline cards. */
+    hero?: boolean;
 }>();
 </script>
 
@@ -21,7 +23,10 @@ defineProps<{
             </span>
             <component :is="icon" v-if="icon" class="size-4 text-muted-foreground/70" />
         </div>
-        <div class="mt-2 text-2xl font-semibold tracking-tight" :class="accent">
+        <div
+            class="mt-2 font-semibold tracking-tight"
+            :class="[accent, hero ? 'text-3xl' : 'text-2xl']"
+        >
             {{ value }}
         </div>
         <div v-if="sublines?.length" class="mt-1 space-y-0.5">

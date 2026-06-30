@@ -54,6 +54,7 @@ class DashboardMetrics
             'brandPerformance' => $this->brandPerformance(),
             'rmLeaderboard' => $this->rmLeaderboard(),
             'currencySplit' => $this->currencySplit(),
+            'accountsToday' => $this->accountsToday(),
             'worklist' => $this->worklist(),
             'insights' => $this->insights(),
             'filters' => $this->resolvedFilters(),
@@ -279,6 +280,62 @@ class DashboardMetrics
     private function currencySplit(): array
     {
         return $this->revenueByCurrency(self::COMPLETED);
+    }
+
+    /**
+     * Per-account "right now" intake, independent of the dashboard filters.
+     *
+     * Accepted = completed payments paid today. Pending = pending links created
+     * today or yesterday (still live, may convert). Currencies never merged.
+     *
+     * @return array<int, array{id: int, name: string, accepted: array<string, int>, pending: array<string, int>}>
+     */
+    private function accountsToday(): array
+    {
+        $accepted = $this->accountCurrencyTotals(
+            Payment::query()
+                ->where('status', self::COMPLETED)
+                ->whereNotNull('paid_at')
+                ->whereDate('paid_at', Carbon::today())
+        );
+
+        $pending = $this->accountCurrencyTotals(
+            Payment::query()
+                ->where('status', self::PENDING)
+                ->whereDate('created_at', '>=', Carbon::yesterday()->toDateString())
+        );
+
+        $names = StripeAccount::query()->pluck('account_name', 'id');
+
+        return collect(array_keys($accepted + $pending))
+            ->map(fn (int $id) => [
+                'id' => $id,
+                'name' => $names[$id] ?? "Account #{$id}",
+                'accepted' => $accepted[$id] ?? [],
+                'pending' => $pending[$id] ?? [],
+            ])
+            ->sortByDesc(fn (array $row) => $this->primaryRevenue($row['accepted']) + $this->primaryRevenue($row['pending']))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Reduce a grouped query to [accountId => [currency => cents]].
+     *
+     * @return array<int, array<string, int>>
+     */
+    private function accountCurrencyTotals(Builder $query): array
+    {
+        $totals = [];
+
+        $query->selectRaw('stripe_account_id, currency, sum(amount) as s')
+            ->groupBy('stripe_account_id', 'currency')
+            ->get()
+            ->each(function ($r) use (&$totals) {
+                $totals[(int) $r->stripe_account_id][$r->currency] = (int) $r->s;
+            });
+
+        return $totals;
     }
 
     /**

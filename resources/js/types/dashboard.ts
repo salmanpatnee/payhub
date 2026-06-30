@@ -49,6 +49,13 @@ export interface WorklistRow {
     created_at: string | null;
 }
 
+export interface AccountTodayRow {
+    id: number;
+    name: string;
+    accepted: MoneyByCurrency;
+    pending: MoneyByCurrency;
+}
+
 export interface DashboardFilterValues {
     from: string | null;
     to: string | null;
@@ -71,6 +78,7 @@ export interface DashboardData {
     brandPerformance: PerformanceRow[];
     rmLeaderboard: PerformanceRow[];
     currencySplit: MoneyByCurrency;
+    accountsToday: AccountTodayRow[];
     worklist: { stalePending: WorklistRow[]; highValue: WorklistRow[] };
     insights: string[];
     filters: DashboardFilterValues;

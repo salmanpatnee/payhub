@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { VisArea, VisAxis, VisLine, VisXYContainer } from '@unovis/vue';
+import { VisArea, VisAxis, VisCrosshair, VisLine, VisTooltip, VisXYContainer } from '@unovis/vue';
 import { computed } from 'vue';
 import { formatMoney } from '@/lib/utils';
 import type { RevenueTrendPoint } from '@/types/dashboard';
@@ -36,6 +36,27 @@ const yGbp = (d: Row) => d.gbp / 100;
 function formatDate(t: number): string {
     return new Date(t).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
+
+function tooltipTemplate(d: Row): string {
+    const tooltipRows = [
+        `<span style="display:flex;align-items:center;gap:6px">
+           <span style="width:8px;height:8px;border-radius:9999px;background:var(--chart-1)"></span>
+           USD <strong style="margin-left:auto">${formatMoney(d.usd, 'usd')}</strong>
+         </span>`,
+    ];
+    if (hasGbp.value) {
+        tooltipRows.push(
+            `<span style="display:flex;align-items:center;gap:6px">
+               <span style="width:8px;height:8px;border-radius:9999px;background:var(--chart-2)"></span>
+               GBP <strong style="margin-left:auto">${formatMoney(d.gbp, 'gbp')}</strong>
+             </span>`,
+        );
+    }
+    return `<div style="display:flex;flex-direction:column;gap:4px;min-width:120px">
+              <div style="font-weight:600">${formatDate(d.t)}</div>
+              ${tooltipRows.join('')}
+            </div>`;
+}
 </script>
 
 <template>
@@ -54,6 +75,8 @@ function formatDate(t: number): string {
             <VisArea :x="x" :y="yUsd" color="var(--chart-1)" :opacity="0.12" />
             <VisLine :x="x" :y="yUsd" color="var(--chart-1)" />
             <VisLine v-if="hasGbp" :x="x" :y="yGbp" color="var(--chart-2)" />
+            <VisCrosshair :template="tooltipTemplate" color="var(--chart-1)" />
+            <VisTooltip />
             <VisAxis
                 type="x"
                 :tick-line="false"

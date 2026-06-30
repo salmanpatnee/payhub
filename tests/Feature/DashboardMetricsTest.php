@@ -134,6 +134,45 @@ it('surfaces the high-value payment in the worklist', function () {
     expect($worklist['stalePending'][0]['status'])->toBe('pending');
 });
 
+it('summarises accepted and pending per account for today', function () {
+    seedDashboardPayments();
+
+    $accounts = DashboardMetrics::for([])['accountsToday'];
+
+    expect($accounts)->toHaveCount(1);
+    expect($accounts[0]['accepted'])->toEqualCanonicalizing(['usd' => 15000, 'gbp' => 8000]);
+    expect($accounts[0]['pending'])->toEqualCanonicalizing(['usd' => 7000]);
+});
+
+it('ignores dashboard filters for the accounts-today panel', function () {
+    $ids = seedDashboardPayments();
+
+    $accounts = DashboardMetrics::for([
+        'brand_id' => $ids['brandB']->id,
+        'from' => '2020-01-01',
+        'to' => '2020-01-02',
+    ])['accountsToday'];
+
+    expect($accounts)->toHaveCount(1);
+    expect($accounts[0]['accepted'])->toEqualCanonicalizing(['usd' => 15000, 'gbp' => 8000]);
+    expect($accounts[0]['pending'])->toEqualCanonicalizing(['usd' => 7000]);
+});
+
+it('excludes stale pending links older than yesterday', function () {
+    $ids = seedDashboardPayments();
+
+    Payment::factory()->for($ids['brandA'])->create([
+        'amount' => 9999,
+        'currency' => 'usd',
+        'status' => 'pending',
+        'created_at' => now()->subDays(3),
+    ]);
+
+    $accounts = DashboardMetrics::for([])['accountsToday'];
+
+    expect($accounts[0]['pending'])->toEqualCanonicalizing(['usd' => 7000]);
+});
+
 it('passes metrics props to the dashboard page', function () {
     seedDashboardPayments();
     $admin = User::factory()->create();
@@ -147,6 +186,7 @@ it('passes metrics props to the dashboard page', function () {
             ->has('kpis')
             ->has('revenueTrend')
             ->has('brandPerformance')
+            ->has('accountsToday')
             ->has('filterOptions.brands')
         );
 });

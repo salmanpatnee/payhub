@@ -10,6 +10,8 @@ defineProps<{
     rows: WorklistRow[];
     /** Show the expiry column (stale-pending list). */
     showExpiry?: boolean;
+    /** Optional "View all" footer link target. */
+    viewAllHref?: string;
 }>();
 
 function expiryLabel(iso: string | null): string {
@@ -65,5 +67,10 @@ function expiryLabel(iso: string | null): string {
                 </tr>
             </tbody>
         </table>
+        <div v-if="viewAllHref && rows.length > 0" class="border-t border-border/60 px-4 py-2.5 text-right">
+            <Link :href="viewAllHref" class="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline">
+                View all →
+            </Link>
+        </div>
     </div>
 </template>
