@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { RefreshCw, X } from 'lucide-vue-next';
-import { reactive, ref, watch } from 'vue';
+import { X } from 'lucide-vue-next';
+import { computed, reactive, watch } from 'vue';
 import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,21 +25,18 @@ const ALL = '__all';
 
 const state = reactive({
     brand_id: props.filters.brand_id != null ? String(props.filters.brand_id) : ALL,
-    relationship_manager_id:
-        props.filters.relationship_manager_id != null ? String(props.filters.relationship_manager_id) : ALL,
-    stripe_account_id: props.filters.stripe_account_id != null ? String(props.filters.stripe_account_id) : ALL,
+    provider: props.filters.provider ?? ALL,
+    account: props.filters.account ?? ALL,
     currency: props.filters.currency ?? ALL,
     from: props.filters.from ?? '',
     to: props.filters.to ?? '',
 });
 
-const refreshing = ref(false);
-
 function buildQuery(): Record<string, string> {
     const query: Record<string, string> = {};
     if (state.brand_id !== ALL) query.brand_id = state.brand_id;
-    if (state.relationship_manager_id !== ALL) query.relationship_manager_id = state.relationship_manager_id;
-    if (state.stripe_account_id !== ALL) query.stripe_account_id = state.stripe_account_id;
+    if (state.provider !== ALL) query.provider = state.provider;
+    if (state.account !== ALL) query.account = state.account;
     if (state.currency !== ALL) query.currency = state.currency;
     if (state.from) query.from = state.from;
     if (state.to) query.to = state.to;
@@ -63,19 +60,28 @@ watch(
 
 function clearFilters(): void {
     state.brand_id = ALL;
-    state.relationship_manager_id = ALL;
-    state.stripe_account_id = ALL;
+    state.provider = ALL;
+    state.account = ALL;
     state.currency = ALL;
     state.from = '';
     state.to = '';
 }
 
-function refresh(): void {
-    refreshing.value = true;
-    router.reload({ onFinish: () => { refreshing.value = false; } });
-}
+// Account options narrow to the chosen provider; clear a now-incompatible account.
+const accountOptions = computed(() =>
+    props.options.accounts
+        .filter((a) => state.provider === ALL || a.provider === state.provider)
+        .map((a) => ({ id: a.value, name: a.name })),
+);
 
-const accountOptions = props.options.stripeAccounts.map((a) => ({ id: a.id, name: a.account_name }));
+watch(
+    () => state.provider,
+    () => {
+        if (state.account !== ALL && !accountOptions.value.some((a) => a.id === state.account)) {
+            state.account = ALL;
+        }
+    },
+);
 </script>
 
 <template>
@@ -100,19 +106,20 @@ const accountOptions = props.options.stripeAccounts.map((a) => ({ id: a.id, name
                 />
             </div>
             <div class="space-y-1">
-                <Label class="text-[11px] uppercase tracking-wider text-muted-foreground">RM</Label>
-                <SearchableSelect
-                    v-model="state.relationship_manager_id"
-                    :options="options.relationshipManagers"
-                    all-label="All RMs"
-                    :all-value="ALL"
-                    placeholder="All RMs"
-                />
+                <Label class="text-[11px] uppercase tracking-wider text-muted-foreground">Provider</Label>
+                <Select v-model="state.provider">
+                    <SelectTrigger class="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem :value="ALL">All providers</SelectItem>
+                        <SelectItem value="stripe">Stripe</SelectItem>
+                        <SelectItem value="revolut">Revolut</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
             <div class="space-y-1">
                 <Label class="text-[11px] uppercase tracking-wider text-muted-foreground">Account</Label>
                 <SearchableSelect
-                    v-model="state.stripe_account_id"
+                    v-model="state.account"
                     :options="accountOptions"
                     all-label="All accounts"
                     :all-value="ALL"
@@ -130,13 +137,10 @@ const accountOptions = props.options.stripeAccounts.map((a) => ({ id: a.id, name
                     </SelectContent>
                 </Select>
             </div>
-            <div class="flex items-end gap-2">
-                <Button variant="outline" size="sm" class="h-9" @click="clearFilters">
+            <div class="flex items-end">
+                <Button variant="outline" size="sm" class="h-9 w-full" @click="clearFilters">
                     <X class="size-4" />
                     <span class="sr-only md:not-sr-only md:ml-1">Clear</span>
-                </Button>
-                <Button variant="outline" size="sm" class="h-9" :disabled="refreshing" @click="refresh">
-                    <RefreshCw class="size-4" :class="{ 'animate-spin': refreshing }" />
                 </Button>
             </div>
         </div>

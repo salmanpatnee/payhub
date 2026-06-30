@@ -10,6 +10,7 @@ const props = defineProps<{
 interface AccountBar {
     key: string;
     name: string;
+    provider: string;
     currency: string;
     accepted: number;
     pending: number;
@@ -29,8 +30,9 @@ const bars = computed<AccountBar[]>(() => {
             const pending = account.pending[currency] ?? 0;
 
             return {
-                key: `${account.id}-${currency}`,
+                key: `${account.provider}-${account.id}-${currency}`,
                 name: account.name,
+                provider: account.provider,
                 currency,
                 accepted,
                 pending,
@@ -52,6 +54,7 @@ const bars = computed<AccountBar[]>(() => {
         return {
             key: r.key,
             name: r.name,
+            provider: r.provider,
             currency: r.currency,
             accepted: r.accepted,
             pending: r.pending,
@@ -87,8 +90,11 @@ const bars = computed<AccountBar[]>(() => {
         <div v-else class="space-y-3">
             <div v-for="bar in bars" :key="bar.key">
                 <div class="mb-1 flex items-center justify-between gap-2 text-xs">
-                    <span class="flex items-center gap-1.5 truncate font-medium" :title="bar.name">
+                    <span class="flex items-center gap-1.5 truncate font-medium" :title="`${bar.name} · ${bar.provider}`">
                         {{ bar.name }}
+                        <span class="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                            {{ bar.provider }}
+                        </span>
                         <span class="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
                             {{ bar.currency }}
                         </span>

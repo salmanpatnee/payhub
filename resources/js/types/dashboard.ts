@@ -51,6 +51,7 @@ export interface WorklistRow {
 
 export interface AccountTodayRow {
     id: number;
+    provider: string;
     name: string;
     accepted: MoneyByCurrency;
     pending: MoneyByCurrency;
@@ -61,14 +62,15 @@ export interface DashboardFilterValues {
     to: string | null;
     brand_id: number | null;
     relationship_manager_id: number | null;
-    stripe_account_id: number | null;
+    provider: string | null;
+    account: string | null;
     currency: string | null;
 }
 
 export interface DashboardFilterOptions {
     brands: { id: number; name: string }[];
     relationshipManagers: { id: number; name: string }[];
-    stripeAccounts: { id: number; account_name: string }[];
+    accounts: { value: string; name: string; provider: string }[];
 }
 
 export interface DashboardData {

@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Enums\PaymentProvider;
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
+use App\Models\RevolutAccount;
 use App\Models\StripeAccount;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -16,7 +18,7 @@ use Illuminate\Support\Collection;
  * All money is kept as integer cents and never summed across currencies —
  * USD and GBP are reported on separate keys. Formatting happens on the client.
  *
- * @phpstan-type Filters array{from?: string|null, to?: string|null, brand_id?: int|string|null, relationship_manager_id?: int|string|null, stripe_account_id?: int|string|null, currency?: string|null}
+ * @phpstan-type Filters array{from?: string|null, to?: string|null, brand_id?: int|string|null, relationship_manager_id?: int|string|null, provider?: string|null, account?: string|null, currency?: string|null}
  */
 class DashboardMetrics
 {
@@ -67,13 +69,38 @@ class DashboardMetrics
      */
     private function baseQuery(): Builder
     {
+        [$accountProvider, $accountId] = $this->parsedAccountFilter();
+
         return Payment::query()
             ->when($this->filters['brand_id'] ?? null, fn ($q, $v) => $q->where('brand_id', $v))
             ->when($this->filters['relationship_manager_id'] ?? null, fn ($q, $v) => $q->where('relationship_manager_id', $v))
-            ->when($this->filters['stripe_account_id'] ?? null, fn ($q, $v) => $q->where('stripe_account_id', $v))
+            ->when($this->filters['provider'] ?? null, fn ($q, $v) => $q->where('provider', $v))
+            ->when($accountProvider === 'stripe', fn ($q) => $q->where('stripe_account_id', $accountId))
+            ->when($accountProvider === 'revolut', fn ($q) => $q->where('revolut_account_id', $accountId))
             ->when($this->filters['currency'] ?? null, fn ($q, $v) => $q->where('currency', $v))
             ->when($this->filters['from'] ?? null, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
             ->when($this->filters['to'] ?? null, fn ($q, $v) => $q->whereDate('created_at', '<=', $v));
+    }
+
+    /**
+     * Split the combined "{provider}:{id}" account filter into [provider, id].
+     * Returns [null, null] when no (or a malformed) account filter is set.
+     *
+     * @return array{0: ?string, 1: ?int}
+     */
+    private function parsedAccountFilter(): array
+    {
+        $value = $this->filters['account'] ?? null;
+
+        if (! is_string($value) || ! str_contains($value, ':')) {
+            return [null, null];
+        }
+
+        [$provider, $id] = explode(':', $value, 2);
+
+        return in_array($provider, ['stripe', 'revolut'], true) && ctype_digit($id)
+            ? [$provider, (int) $id]
+            : [null, null];
     }
 
     /**
@@ -288,7 +315,7 @@ class DashboardMetrics
      * Accepted = completed payments paid today. Pending = pending links created
      * today or yesterday (still live, may convert). Currencies never merged.
      *
-     * @return array<int, array{id: int, name: string, accepted: array<string, int>, pending: array<string, int>}>
+     * @return array<int, array{id: int, provider: string, name: string, accepted: array<string, int>, pending: array<string, int>}>
      */
     private function accountsToday(): array
     {
@@ -305,34 +332,52 @@ class DashboardMetrics
                 ->whereDate('created_at', '>=', Carbon::yesterday()->toDateString())
         );
 
-        $names = StripeAccount::query()->pluck('account_name', 'id');
+        $stripeNames = StripeAccount::query()->pluck('account_name', 'id');
+        $revolutNames = RevolutAccount::query()->pluck('account_name', 'id');
 
         return collect(array_keys($accepted + $pending))
-            ->map(fn (int $id) => [
-                'id' => $id,
-                'name' => $names[$id] ?? "Account #{$id}",
-                'accepted' => $accepted[$id] ?? [],
-                'pending' => $pending[$id] ?? [],
-            ])
+            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames) {
+                [$provider, $id] = explode(':', $key);
+                $id = (int) $id;
+                $name = $provider === 'revolut'
+                    ? ($revolutNames[$id] ?? "Account #{$id}")
+                    : ($stripeNames[$id] ?? "Account #{$id}");
+
+                return [
+                    'id' => $id,
+                    'provider' => $provider,
+                    'name' => $name,
+                    'accepted' => $accepted[$key] ?? [],
+                    'pending' => $pending[$key] ?? [],
+                ];
+            })
             ->sortByDesc(fn (array $row) => $this->primaryRevenue($row['accepted']) + $this->primaryRevenue($row['pending']))
             ->values()
             ->all();
     }
 
     /**
-     * Reduce a grouped query to [accountId => [currency => cents]].
+     * Reduce a grouped query to ["{provider}:{accountId}" => [currency => cents]].
+     * The account id is resolved per provider; rows with no account are skipped.
      *
-     * @return array<int, array<string, int>>
+     * @return array<string, array<string, int>>
      */
     private function accountCurrencyTotals(Builder $query): array
     {
         $totals = [];
 
-        $query->selectRaw('stripe_account_id, currency, sum(amount) as s')
-            ->groupBy('stripe_account_id', 'currency')
+        $query->selectRaw('provider, stripe_account_id, revolut_account_id, currency, sum(amount) as s')
+            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'currency')
             ->get()
             ->each(function ($r) use (&$totals) {
-                $totals[(int) $r->stripe_account_id][$r->currency] = (int) $r->s;
+                $provider = $r->provider instanceof PaymentProvider ? $r->provider->value : (string) $r->provider;
+                $id = $provider === 'revolut' ? $r->revolut_account_id : $r->stripe_account_id;
+
+                if ($id === null) {
+                    return;
+                }
+
+                $totals["{$provider}:".(int) $id][$r->currency] = (int) $r->s;
             });
 
         return $totals;
@@ -453,7 +498,8 @@ class DashboardMetrics
             'to' => $this->filters['to'] ?? null,
             'brand_id' => $this->filters['brand_id'] ?? null,
             'relationship_manager_id' => $this->filters['relationship_manager_id'] ?? null,
-            'stripe_account_id' => $this->filters['stripe_account_id'] ?? null,
+            'provider' => $this->filters['provider'] ?? null,
+            'account' => $this->filters['account'] ?? null,
             'currency' => $this->filters['currency'] ?? null,
         ];
     }
@@ -466,7 +512,33 @@ class DashboardMetrics
         return [
             'brands' => Brand::query()->orderBy('name')->get(['id', 'name']),
             'relationshipManagers' => RelationshipManager::query()->orderBy('name')->get(['id', 'name']),
-            'stripeAccounts' => StripeAccount::query()->orderBy('account_name')->get(['id', 'account_name']),
+            'accounts' => $this->accountOptions(),
         ];
+    }
+
+    /**
+     * Union of Stripe + Revolut accounts as { value, name, provider }, where
+     * value is the provider-qualified "{provider}:{id}" used by the account
+     * filter (ids collide across providers, so they must be namespaced).
+     *
+     * @return array<int, array{value: string, name: string, provider: string}>
+     */
+    private function accountOptions(): array
+    {
+        $stripe = StripeAccount::query()->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (StripeAccount $a) => [
+                'value' => "stripe:{$a->id}",
+                'name' => $a->account_name,
+                'provider' => 'stripe',
+            ]);
+
+        $revolut = RevolutAccount::query()->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (RevolutAccount $a) => [
+                'value' => "revolut:{$a->id}",
+                'name' => $a->account_name,
+                'provider' => 'revolut',
+            ]);
+
+        return $stripe->concat($revolut)->values()->all();
     }
 }

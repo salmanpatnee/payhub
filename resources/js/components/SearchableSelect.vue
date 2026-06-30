@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
-type Option = { id: number; name: string };
+type Option = { id: number | string; name: string };
 
 const props = withDefaults(
     defineProps<{
