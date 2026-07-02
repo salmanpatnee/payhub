@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Brand;
 use App\Models\RevolutAccount;
+use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -18,6 +19,8 @@ class PaymentFactory extends Factory
             'provider' => 'stripe',
             'brand_id' => Brand::factory(),
             'stripe_account_id' => StripeAccount::factory(),
+            'revolut_account_id' => null,
+            'square_account_id' => null,
             'user_id' => User::factory(),
             'amount' => $this->faker->numberBetween(500, 100000),
             'currency' => $this->faker->randomElement(['usd', 'gbp']),
@@ -31,6 +34,8 @@ class PaymentFactory extends Factory
             'note' => null,
             'status' => 'pending',
             'stripe_payment_intent_id' => null,
+            'revolut_order_id' => null,
+            'square_payment_id' => null,
             'expires_at' => null,
             'paid_at' => null,
         ];
@@ -45,6 +50,18 @@ class PaymentFactory extends Factory
             'provider' => 'revolut',
             'stripe_account_id' => null,
             'revolut_account_id' => RevolutAccount::factory(),
+        ]);
+    }
+
+    /**
+     * Square-provider payment: nulls the Stripe account and attaches a Square account.
+     */
+    public function square(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'provider' => 'square',
+            'stripe_account_id' => null,
+            'square_account_id' => SquareAccount::factory(),
         ]);
     }
 }

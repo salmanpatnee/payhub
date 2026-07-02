@@ -3,6 +3,7 @@
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
+use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -185,4 +186,79 @@ it('agent stripe_account is forced on update regardless of submitted value', fun
         ->assertRedirect();
 
     expect($payment->fresh()->stripe_account_id)->toBe($agentAccount->id);
+});
+
+function updateSquarePayload(Brand $brand, SquareAccount $account, RelationshipManager $rm): array
+{
+    return [
+        'brand_id' => $brand->id,
+        'provider' => 'square',
+        'account_id' => $account->id,
+        'relationship_manager_id' => $rm->id,
+        'currency' => $account->currency ?? 'usd',
+        'amount' => '42.50',
+        'client_name' => 'Updated Client',
+        'client_email' => 'updated@example.com',
+        'service' => 'Updated Service',
+        'package' => 'premium',
+        'note' => 'changed',
+    ];
+}
+
+// Fixed gap: UpdatePaymentRequest previously never supported 'square' as a
+// provider — editing a Square payment (or switching a payment to Square) was broken.
+it('admin can update a payment to use a square account', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+    $squareAccount = SquareAccount::factory()->create(['is_active' => true, 'currency' => 'usd']);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'stripe_account_id' => $stripeAccount->id,
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", updateSquarePayload($brand, $squareAccount, $rm))
+        ->assertRedirect("/payments/{$payment->uuid}")
+        ->assertSessionHasNoErrors();
+
+    $payment->refresh();
+    expect($payment->provider->value)->toBe('square');
+    expect($payment->square_account_id)->toBe($squareAccount->id);
+    expect($payment->stripe_account_id)->toBeNull();
+    expect($payment->currency)->toBe('usd');
+});
+
+// Square accounts are single-currency: updating to a mismatched currency is rejected.
+it('rejects updating a payment to a square account with a mismatched currency', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $squareAccount = SquareAccount::factory()->create(['is_active' => true, 'currency' => 'usd']);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'square_account_id' => $squareAccount->id,
+        'provider' => 'square',
+        'stripe_account_id' => null,
+        'status' => 'pending',
+    ]);
+
+    $payload = updateSquarePayload($brand, $squareAccount, $rm);
+    $payload['currency'] = 'gbp';
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", $payload)
+        ->assertSessionHasErrors(['currency' => 'This Square account only accepts usd payments.']);
+
+    expect($payment->fresh()->currency)->not()->toBe('gbp');
 });

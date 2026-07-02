@@ -26,7 +26,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentController';
-import { formatMoney, formatReferenceCode } from '@/lib/utils';
+import { formatMoney } from '@/lib/utils';
 
 type PaymentRow = {
     id: number;
@@ -383,6 +383,7 @@ async function copyLink(uuid: string): Promise<void> {
                             <SelectItem value="__all">All Providers</SelectItem>
                             <SelectItem value="stripe">Stripe</SelectItem>
                             <SelectItem value="revolut">Revolut</SelectItem>
+                            <SelectItem value="square">Square</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -499,7 +500,7 @@ async function copyLink(uuid: string): Promise<void> {
                         class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                     >
                         <td class="px-5 py-3.5 text-muted-foreground tabular-nums">{{ (payments.from ?? 1) + index }}</td>
-                        <td v-if="visibleColumns.reference_code" class="px-5 py-3.5 font-mono text-muted-foreground">{{ formatReferenceCode(payment.reference_code) }}</td>
+                        <td v-if="visibleColumns.reference_code" class="px-5 py-3.5 font-mono text-muted-foreground">{{ payment.reference_code ?? '—' }}</td>
                         <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
                         <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatMoney(payment.amount, payment.currency) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
@@ -625,7 +626,7 @@ async function copyLink(uuid: string): Promise<void> {
 
     <ConfirmDeleteDialog
         v-model:open="deleteOpen"
-        :title="`Delete payment ${deleteTarget?.reference_code != null ? formatReferenceCode(deleteTarget.reference_code) : ''}?`"
+        :title="`Delete payment ${deleteTarget?.reference_code ?? ''}?`"
         description="This will remove the payment from the list. The payment link will no longer be accessible."
         :processing="deleteForm.processing"
         @confirm="executeDelete"

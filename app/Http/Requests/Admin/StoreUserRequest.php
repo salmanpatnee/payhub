@@ -25,13 +25,13 @@ class StoreUserRequest extends FormRequest
                 Rule::requiredIf(fn () => $this->input('role') === 'agent'),
                 'nullable',
                 'string',
-                'in:stripe,revolut',
+                'in:stripe,revolut,square',
             ],
             'account_id' => [
                 Rule::requiredIf(fn () => $this->input('role') === 'agent'),
                 'nullable',
                 'integer',
-                Rule::exists($this->input('provider') === 'revolut' ? 'revolut_accounts' : 'stripe_accounts', 'id')->where('is_active', true),
+                Rule::exists($this->accountTable(), 'id')->where('is_active', true),
             ],
             'brand_ids' => [
                 Rule::requiredIf(fn () => $this->input('role') === 'agent'),
@@ -46,5 +46,14 @@ class StoreUserRequest extends FormRequest
             ],
             'relationship_manager_ids.*' => ['integer', 'exists:relationship_managers,id'],
         ];
+    }
+
+    private function accountTable(): string
+    {
+        return match ($this->input('provider')) {
+            'revolut' => 'revolut_accounts',
+            'square' => 'square_accounts',
+            default => 'stripe_accounts',
+        };
     }
 }

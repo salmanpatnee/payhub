@@ -113,6 +113,7 @@ watch(
                         <SelectItem :value="ALL">All providers</SelectItem>
                         <SelectItem value="stripe">Stripe</SelectItem>
                         <SelectItem value="revolut">Revolut</SelectItem>
+                        <SelectItem value="square">Square</SelectItem>
                     </SelectContent>
                 </Select>
             </div>

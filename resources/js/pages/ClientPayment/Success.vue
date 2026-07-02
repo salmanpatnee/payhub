@@ -18,7 +18,7 @@ const props = defineProps<{
         primary_color: string
         secondary_color: string
     }
-    provider?: 'stripe' | 'revolut'
+    provider?: 'stripe' | 'revolut' | 'square'
 }>()
 
 // 16 confetti particles — static positions computed once
@@ -107,11 +107,6 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
                     <dd>{{ payment.package }}</dd>
                 </div>
             </dl>
-
-            <!-- Footer note -->
-            <p class="footer-note">
-                A confirmation receipt has been sent to your email address.
-            </p>
 
         </div>
     </PaymentLayout>
@@ -366,14 +361,6 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
     color: #94a3b8;
     letter-spacing: 0.03em;
     margin-top: 3px;
-}
-
-/* ─── Footer ─────────────────────────────────────────── */
-.footer-note {
-    font-size: 0.72rem;
-    color: #475569;
-    line-height: 1.55;
-    animation: riseIn 0.48s ease-out 0.68s both;
 }
 
 /* ─── Shared keyframes ───────────────────────────────── */

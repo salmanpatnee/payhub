@@ -3,6 +3,7 @@
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
+use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use App\Services\DashboardMetrics;
@@ -173,6 +174,43 @@ it('excludes stale pending links older than yesterday', function () {
     expect($accounts[0]['pending'])->toEqualCanonicalizing(['usd' => 7000]);
 });
 
+it('includes square accounts in the accounts-today panel', function () {
+    seedDashboardPayments();
+    $square = SquareAccount::factory()->create(['account_name' => 'Square Main']);
+
+    Payment::factory()->square()->create([
+        'square_account_id' => $square->id,
+        'amount' => 4200,
+        'currency' => 'usd',
+        'status' => 'completed',
+        'paid_at' => now(),
+    ]);
+
+    $accounts = collect(DashboardMetrics::for([])['accountsToday']);
+    $squareRow = $accounts->firstWhere('provider', 'square');
+
+    expect($squareRow)->not->toBeNull();
+    expect($squareRow['name'])->toBe('Square Main');
+    expect($squareRow['accepted'])->toEqualCanonicalizing(['usd' => 4200]);
+});
+
+it('accepts a square provider filter without error', function () {
+    seedDashboardPayments();
+    $square = SquareAccount::factory()->create();
+
+    Payment::factory()->square()->create([
+        'square_account_id' => $square->id,
+        'amount' => 1500,
+        'currency' => 'usd',
+        'status' => 'completed',
+        'paid_at' => now(),
+    ]);
+
+    $kpis = DashboardMetrics::for(['provider' => 'square'])['kpis'];
+
+    expect($kpis['collected'])->toBe(['usd' => 1500]);
+});
+
 it('passes metrics props to the dashboard page', function () {
     seedDashboardPayments();
     $admin = User::factory()->create();
@@ -189,4 +227,14 @@ it('passes metrics props to the dashboard page', function () {
             ->has('accountsToday')
             ->has('filterOptions.brands')
         );
+});
+
+it('accepts provider=square on the dashboard route without a validation error', function () {
+    seedDashboardPayments();
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    $this->actingAs($admin)
+        ->get(route('dashboard', ['provider' => 'square']))
+        ->assertOk();
 });

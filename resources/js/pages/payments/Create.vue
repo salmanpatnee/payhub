@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { onMounted, ref, watch } from 'vue';
-import { ArrowLeft, Plus } from 'lucide-vue-next';
+import { computed, onMounted, ref, watch } from 'vue';
+import { ArrowLeft, Lock, Plus } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import {
     Card, CardContent, CardDescription,
@@ -18,7 +18,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 
 type BrandOption = { id: number; name: string };
-type AccountOption = { id: number; account_name?: string; provider: string };
+type AccountOption = { id: number; account_name?: string; provider: string; currency?: string };
 type RmOption = { id: number; name: string };
 
 const props = defineProps<{
@@ -51,14 +51,20 @@ const form = useForm({
     note:                      '',
 });
 
-const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut' };
+const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut', square: 'Square' };
 
 // The account selector encodes "provider:id" since ids collide across providers.
 const accountValue = ref('');
+const isCurrencyLocked = computed(() => props.accounts.find(a => `${a.provider}:${a.id}` === accountValue.value)?.currency != null);
 watch(accountValue, (val) => {
     const [provider, id] = val.split(':');
     form.provider = provider ?? '';
     form.account_id = id ?? '';
+
+    const account = props.accounts.find(a => `${a.provider}:${a.id}` === val);
+    if (account?.currency) {
+        form.currency = account.currency;
+    }
 });
 
 onMounted(() => {
@@ -91,7 +97,11 @@ function submit() {
                 <CardDescription>Create a payment link to send to your client.</CardDescription>
             </CardHeader>
             <CardContent>
-                <form id="create-payment-form" class="grid grid-cols-2 gap-4" @submit.prevent="submit">
+                <form id="create-payment-form" class="grid gap-x-6 gap-y-5 md:grid-cols-2 items-start" @submit.prevent="submit">
+
+                    <!-- Fields are listed in row-pair order (left, right, left, right…) in a
+                         single CSS grid so each row's height stays in sync across both columns —
+                         a real grid, not two independent flex-column stacks, so nothing drifts. -->
 
                     <!-- Brand -->
                     <div class="grid gap-2">
@@ -108,7 +118,7 @@ function submit() {
                     </div>
 
                     <!-- Payment account — hidden for agents (locked to their assigned account).
-                         Selecting an account sets the provider (Stripe or Revolut). -->
+                         Selecting an account sets the provider (Stripe, Revolut or Square). -->
                     <div v-if="!isAccountLocked" class="grid gap-2">
                         <Label for="account_id">Payment Account <span class="text-destructive">*</span></Label>
                         <Select v-model="accountValue">
@@ -140,10 +150,19 @@ function submit() {
                         <InputError class="mt-1" :message="form.errors.relationship_manager_id" />
                     </div>
 
-                    <!-- Currency -->
+                    <!-- Currency — locked when the selected account is single-currency (e.g. Square). -->
                     <div class="grid gap-2">
-                        <Label for="currency">Currency <span class="text-destructive">*</span></Label>
-                        <Select v-model="form.currency">
+                        <Label for="currency" class="gap-1.5">
+                            Currency <span class="text-destructive">*</span>
+                            <span
+                                v-if="isCurrencyLocked"
+                                class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-400"
+                            >
+                                <Lock class="size-3" />
+                                Locked to this account's currency
+                            </span>
+                        </Label>
+                        <Select v-model="form.currency" :disabled="isCurrencyLocked">
                             <SelectTrigger id="currency" class="w-full">
                                 <SelectValue placeholder="Select currency" />
                             </SelectTrigger>
@@ -212,7 +231,7 @@ function submit() {
                     </div>
 
                     <!-- Note — spans full width -->
-                    <div class="col-span-2 grid gap-2">
+                    <div class="md:col-span-2 grid gap-2">
                         <Label for="note">Note <span class="text-muted-foreground text-xs">(internal only)</span></Label>
                         <Textarea
                             id="note"

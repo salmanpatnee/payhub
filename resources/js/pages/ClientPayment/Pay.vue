@@ -12,10 +12,12 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
 import { storeConsent } from '@/actions/App/Http/Controllers/ClientPaymentController'
+import SquarePaymentForm from './SquarePaymentForm.vue'
 
 type Policy = { key: string; title: string; version: string; html: string }
 
 const props = defineProps<{
+    provider: 'stripe' | 'square'
     payment: {
         uuid: string
         reference_code: string | null
@@ -31,8 +33,13 @@ const props = defineProps<{
         primary_color: string
         secondary_color: string
     }
-    stripeAccount: { publishable_key: string }
-    clientSecret: string
+    stripeAccount?: { publishable_key: string }
+    clientSecret?: string
+    squareAccount?: {
+        application_id: string
+        location_id: string
+        environment: 'sandbox' | 'production'
+    }
     policies: Policy[]
 }>()
 
@@ -72,8 +79,12 @@ function blockCopyKeys(event: KeyboardEvent): void {
     }
 }
 
-// WR-01: Check return value — loadStripe() returns null if Stripe.js CDN fails to load
+// WR-01: Check return value — loadStripe() returns null if Stripe.js CDN fails to load.
+// Square renders its own embedded form (SquarePaymentForm) — no Stripe.js load needed.
 onMounted(async () => {
+    if (props.provider !== 'stripe' || !props.stripeAccount) {
+        return
+    }
     const stripe = await loadStripe(props.stripeAccount.publishable_key)
     if (stripe !== null) {
         stripeLoaded.value = true
@@ -94,7 +105,7 @@ function formatAmount(cents: number, currency: string): string {
 }
 
 const elementsOptions = computed(() => ({
-    clientSecret: props.clientSecret,
+    clientSecret: props.clientSecret ?? '',
     appearance: {
         theme: 'stripe' as const,
         variables: {
@@ -175,6 +186,7 @@ async function submit(instance: any, elements: any): Promise<void> {
 <template>
     <PaymentLayout
         :brand="props.brand"
+        :provider="provider"
         :payment="{
             uuid: payment.uuid,
             reference_code: payment.reference_code,
@@ -196,8 +208,16 @@ async function submit(instance: any, elements: any): Promise<void> {
                 </p>
             </div>
 
+            <!-- Square embedded form — tokenizes client-side and POSTs to chargeSquare -->
+            <SquarePaymentForm
+                v-if="provider === 'square' && squareAccount"
+                :payment="{ uuid: payment.uuid, amount: payment.amount, currency: payment.currency }"
+                :brand="{ name: brand.name, primary_color: brand.primary_color }"
+                :square-account="squareAccount"
+            />
+
             <!-- Stripe Elements — gated on stripeLoaded -->
-            <template v-if="stripeLoaded">
+            <template v-else-if="stripeLoaded && stripeAccount">
                 <StripeElements
                     :stripe-key="stripeAccount.publishable_key"
                     :elements-options="elementsOptions"

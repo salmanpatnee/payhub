@@ -46,7 +46,7 @@ const form = useForm({
     relationship_manager_ids:   [] as number[],
 });
 
-const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut' };
+const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut', square: 'Square' };
 
 // The account selector encodes "provider:id" since ids collide across providers.
 const accountValue = ref('');
