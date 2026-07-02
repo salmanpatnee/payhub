@@ -4,6 +4,7 @@ use App\Exports\PaymentsExport;
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RevolutAccount;
+use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -71,7 +72,7 @@ it('maps provider-aware account columns for stripe and revolut rows', function (
     expect($headings)->toContain('Provider', 'Payment Account', 'Provider Reference');
     expect($headings)->not->toContain('Stripe Account');
 
-    $with = ['brand', 'stripeAccount', 'revolutAccount', 'relationshipManager'];
+    $with = ['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'relationshipManager'];
     $export = new PaymentsExport(Payment::query());
 
     $stripeAccount = StripeAccount::factory()->create(['account_name' => 'Acme Stripe']);
@@ -95,6 +96,17 @@ it('maps provider-aware account columns for stripe and revolut rows', function (
     expect($revolutRow[6])->toBe('Revolut');
     expect($revolutRow[7])->toBe('Acme Revolut');
     expect($revolutRow[8])->toBe('ord_999');
+
+    $squareAccount = SquareAccount::factory()->create(['account_name' => 'Acme Square']);
+    $squarePayment = Payment::factory()->square()->create([
+        'square_account_id' => $squareAccount->id,
+        'square_payment_id' => 'sq_pay_777',
+    ]);
+
+    $squareRow = $export->map($squarePayment->load($with));
+    expect($squareRow[6])->toBe('Square');
+    expect($squareRow[7])->toBe('Acme Square');
+    expect($squareRow[8])->toBe('sq_pay_777');
 });
 
 it('scopes the export to the active brand filter', function () {
