@@ -186,6 +186,7 @@ async function submit(instance: any, elements: any): Promise<void> {
 <template>
     <PaymentLayout
         :brand="props.brand"
+        :provider="provider"
         :payment="{
             uuid: payment.uuid,
             reference_code: payment.reference_code,

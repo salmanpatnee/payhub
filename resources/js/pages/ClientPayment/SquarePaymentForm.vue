@@ -205,7 +205,7 @@ async function submit(): Promise<void> {
              beneath the input line — the app already surfaces errors via the Alert below. -->
         <form v-show="sdkLoaded" @submit.prevent="submit" class="space-y-5">
             <div
-                class="rounded-xl border bg-white transition-colors duration-150"
+                class="rounded-xl border bg-white overflow-hidden transition-colors duration-150"
                 :class="cardInvalid || errorMessage
                     ? 'border-red-300 ring-2 ring-red-100'
                     : cardFocused
