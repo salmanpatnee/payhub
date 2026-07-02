@@ -20,7 +20,7 @@ const props = defineProps<{
         status?: 'pending' | 'completed' | 'failed'
     }
     /** Payment processor shown in the trust footer. Defaults to Stripe. */
-    provider?: 'stripe' | 'revolut'
+    provider?: 'stripe' | 'revolut' | 'square'
 }>()
 
 function formatAmount(cents: number, currency: string): string {
@@ -133,11 +133,15 @@ const statusConfig = computed(() => {
                     </div>
                     <div class="trust-row">
                         <!-- Stripe S mark -->
-                        <svg v-if="provider !== 'revolut'" class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <svg v-if="provider !== 'revolut' && provider !== 'square'" class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                             <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z"/>
                         </svg>
+                        <!-- Square mark -->
+                        <svg v-else-if="provider === 'square'" class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M4.01 3.5A2.51 2.51 0 0 0 1.5 6.01v11.98A2.51 2.51 0 0 0 4.01 20.5h15.98a2.51 2.51 0 0 0 2.51-2.51V6.01a2.51 2.51 0 0 0-2.51-2.51H4.01zM5 6.5h14v11H5v-11zm4 3a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1H9z"/>
+                        </svg>
                         <Landmark v-else class="size-3.5 shrink-0" />
-                        <span>Powered by {{ provider === 'revolut' ? 'Revolut' : 'Stripe' }}</span>
+                        <span>Powered by {{ provider === 'revolut' ? 'Revolut' : provider === 'square' ? 'Square' : 'Stripe' }}</span>
                     </div>
                     <p class="safe-copy">Your card details are never stored on our servers</p>
                 </footer>

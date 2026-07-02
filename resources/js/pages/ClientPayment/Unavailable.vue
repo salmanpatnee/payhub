@@ -13,7 +13,7 @@ const props = defineProps<{
         primary_color: string
         secondary_color: string
     }
-    provider?: 'stripe' | 'revolut'
+    provider?: 'stripe' | 'revolut' | 'square'
 }>()
 
 const content = computed(() => {
