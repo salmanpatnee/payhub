@@ -108,11 +108,6 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
                 </div>
             </dl>
 
-            <!-- Footer note -->
-            <p class="footer-note">
-                A confirmation receipt has been sent to your email address.
-            </p>
-
         </div>
     </PaymentLayout>
 </template>
@@ -366,14 +361,6 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
     color: #94a3b8;
     letter-spacing: 0.03em;
     margin-top: 3px;
-}
-
-/* ─── Footer ─────────────────────────────────────────── */
-.footer-note {
-    font-size: 0.72rem;
-    color: #475569;
-    line-height: 1.55;
-    animation: riseIn 0.48s ease-out 0.68s both;
 }
 
 /* ─── Shared keyframes ───────────────────────────────── */
