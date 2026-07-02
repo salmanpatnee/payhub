@@ -257,8 +257,8 @@ class ClientPaymentController extends Controller
                     'currency' => strtoupper($payment->currency), // 'USD' | 'GBP'
                 ]),
                 'locationId' => $payment->squareAccount->location_id,
-                'referenceId' => (string) $payment->reference_code,
-                'note' => $payment->uuid,
+                'referenceId' => (string) $payment->formattedReferenceCode(),
+                'note' => $this->buildDescription($payment),
             ]));
         } catch (SquareApiException) {
             // Sanitized — never surface card data, tokens, or raw processor errors.
