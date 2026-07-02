@@ -103,7 +103,12 @@
       "mcp__laravel-boost__get-absolute-url",
       "mcp__playwright__browser_snapshot",
       "mcp__playwright__browser_take_screenshot",
-      "mcp__playwright__browser_console_messages"
+      "mcp__playwright__browser_console_messages",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(composer update *)",
+      "Bash(echo \"=== exit: $? ===\")",
+      "Bash(vendor/bin/pint --dirty --format agent)"
     ]
   },
   "enableAllProjectMcpServers": true,
