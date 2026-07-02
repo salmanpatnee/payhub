@@ -7,6 +7,7 @@ use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
+use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -77,6 +78,7 @@ class DashboardMetrics
             ->when($this->filters['provider'] ?? null, fn ($q, $v) => $q->where('provider', $v))
             ->when($accountProvider === 'stripe', fn ($q) => $q->where('stripe_account_id', $accountId))
             ->when($accountProvider === 'revolut', fn ($q) => $q->where('revolut_account_id', $accountId))
+            ->when($accountProvider === 'square', fn ($q) => $q->where('square_account_id', $accountId))
             ->when($this->filters['currency'] ?? null, fn ($q, $v) => $q->where('currency', $v))
             ->when($this->filters['from'] ?? null, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
             ->when($this->filters['to'] ?? null, fn ($q, $v) => $q->whereDate('created_at', '<=', $v));
@@ -98,7 +100,7 @@ class DashboardMetrics
 
         [$provider, $id] = explode(':', $value, 2);
 
-        return in_array($provider, ['stripe', 'revolut'], true) && ctype_digit($id)
+        return in_array($provider, ['stripe', 'revolut', 'square'], true) && ctype_digit($id)
             ? [$provider, (int) $id]
             : [null, null];
     }
@@ -334,14 +336,17 @@ class DashboardMetrics
 
         $stripeNames = StripeAccount::query()->pluck('account_name', 'id');
         $revolutNames = RevolutAccount::query()->pluck('account_name', 'id');
+        $squareNames = SquareAccount::query()->pluck('account_name', 'id');
 
         return collect(array_keys($accepted + $pending))
-            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames) {
+            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames) {
                 [$provider, $id] = explode(':', $key);
                 $id = (int) $id;
-                $name = $provider === 'revolut'
-                    ? ($revolutNames[$id] ?? "Account #{$id}")
-                    : ($stripeNames[$id] ?? "Account #{$id}");
+                $name = match ($provider) {
+                    'revolut' => $revolutNames[$id] ?? "Account #{$id}",
+                    'square' => $squareNames[$id] ?? "Account #{$id}",
+                    default => $stripeNames[$id] ?? "Account #{$id}",
+                };
 
                 return [
                     'id' => $id,
@@ -366,12 +371,16 @@ class DashboardMetrics
     {
         $totals = [];
 
-        $query->selectRaw('provider, stripe_account_id, revolut_account_id, currency, sum(amount) as s')
-            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'currency')
+        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, currency, sum(amount) as s')
+            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'currency')
             ->get()
             ->each(function ($r) use (&$totals) {
                 $provider = $r->provider instanceof PaymentProvider ? $r->provider->value : (string) $r->provider;
-                $id = $provider === 'revolut' ? $r->revolut_account_id : $r->stripe_account_id;
+                $id = match ($provider) {
+                    'revolut' => $r->revolut_account_id,
+                    'square' => $r->square_account_id,
+                    default => $r->stripe_account_id,
+                };
 
                 if ($id === null) {
                     return;
@@ -539,6 +548,13 @@ class DashboardMetrics
                 'provider' => 'revolut',
             ]);
 
-        return $stripe->concat($revolut)->values()->all();
+        $square = SquareAccount::query()->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (SquareAccount $a) => [
+                'value' => "square:{$a->id}",
+                'name' => $a->account_name,
+                'provider' => 'square',
+            ]);
+
+        return $stripe->concat($revolut)->concat($square)->values()->all();
     }
 }

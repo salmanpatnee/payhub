@@ -309,7 +309,7 @@ const timeline = computed<TimelineStep[]>(() => {
                         </div>
                         <div v-if="payment.provider_reference" class="col-span-2">
                             <dt class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground/60">
-                                <Hash class="size-3.5 shrink-0" />{{ payment.provider === 'revolut' ? 'Revolut Order' : 'Stripe PI' }}
+                                <Hash class="size-3.5 shrink-0" />{{ payment.provider === 'revolut' ? 'Revolut Order' : payment.provider === 'square' ? 'Square Payment ID' : 'Stripe PI' }}
                             </dt>
                             <dd class="font-mono text-xs truncate">{{ payment.provider_reference }}</dd>
                         </div>
