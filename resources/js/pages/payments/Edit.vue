@@ -112,142 +112,137 @@ function submit() {
                 <CardDescription>Update the details of this pending payment link.</CardDescription>
             </CardHeader>
             <CardContent>
-                <form id="edit-payment-form" class="grid gap-x-6 gap-y-5 md:grid-cols-2" @submit.prevent="submit">
+                <form id="edit-payment-form" class="grid gap-x-6 gap-y-5 md:grid-cols-2 items-start" @submit.prevent="submit">
 
-                    <!-- Left column — each column stacks independently so a variable-height
-                         field (e.g. Currency's lock note) never disturbs its row-mate. -->
-                    <div class="flex flex-col gap-5">
+                    <!-- Fields are listed in row-pair order (left, right, left, right…) in a
+                         single CSS grid so each row's height stays in sync across both columns —
+                         a real grid, not two independent flex-column stacks, so nothing drifts. -->
 
-                        <!-- Brand -->
-                        <div class="grid gap-2">
-                            <Label for="brand_id">Brand <span class="text-destructive">*</span></Label>
-                            <SearchableSelect
-                                id="brand_id"
-                                v-model="form.brand_id"
-                                required
-                                :options="props.brands"
-                                placeholder="Select a brand"
-                                search-placeholder="Search brands…"
-                            />
-                            <InputError class="mt-1" :message="form.errors.brand_id" />
-                        </div>
-
-                        <!-- Relationship Manager -->
-                        <div class="grid gap-2">
-                            <Label for="relationship_manager_id">Relationship Manager <span class="text-destructive">*</span></Label>
-                            <SearchableSelect
-                                id="relationship_manager_id"
-                                v-model="form.relationship_manager_id"
-                                required
-                                :options="props.relationshipManagers"
-                                placeholder="Select a relationship manager"
-                                search-placeholder="Search relationship managers…"
-                            />
-                            <InputError class="mt-1" :message="form.errors.relationship_manager_id" />
-                        </div>
-
-                        <!-- Amount -->
-                        <div class="grid gap-2">
-                            <Label for="amount">Amount <span class="text-destructive">*</span></Label>
-                            <Input
-                                id="amount"
-                                v-model="form.amount"
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                placeholder="0.00"
-                            />
-                            <InputError class="mt-1" :message="form.errors.amount" />
-                        </div>
-
-                        <!-- Client Email -->
-                        <div class="grid gap-2">
-                            <Label for="client_email">Client Email</Label>
-                            <Input
-                                id="client_email"
-                                v-model="form.client_email"
-                                type="email"
-                                placeholder="jane@example.com"
-                            />
-                            <InputError class="mt-1" :message="form.errors.client_email" />
-                        </div>
-
+                    <!-- Brand -->
+                    <div class="grid gap-2">
+                        <Label for="brand_id">Brand <span class="text-destructive">*</span></Label>
+                        <SearchableSelect
+                            id="brand_id"
+                            v-model="form.brand_id"
+                            required
+                            :options="props.brands"
+                            placeholder="Select a brand"
+                            search-placeholder="Search brands…"
+                        />
+                        <InputError class="mt-1" :message="form.errors.brand_id" />
                     </div>
 
-                    <!-- Right column -->
-                    <div class="flex flex-col gap-5">
+                    <!-- Payment account — hidden for agents (locked to their assigned account).
+                         Selecting an account sets the provider (Stripe, Revolut or Square). -->
+                    <div v-if="!isAccountLocked" class="grid gap-2">
+                        <Label for="account_id">Payment Account <span class="text-destructive">*</span></Label>
+                        <Select v-model="accountValue">
+                            <SelectTrigger id="account_id" class="w-full">
+                                <SelectValue placeholder="Select a payment account" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="account in props.accounts"
+                                    :key="`${account.provider}:${account.id}`"
+                                    :value="`${account.provider}:${account.id}`"
+                                >{{ account.account_name }} ({{ providerLabel[account.provider] ?? account.provider }})</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError class="mt-1" :message="form.errors.account_id" />
+                    </div>
 
-                        <!-- Payment account — hidden for agents (locked to their assigned account).
-                             Selecting an account sets the provider (Stripe, Revolut or Square). -->
-                        <div v-if="!isAccountLocked" class="grid gap-2">
-                            <Label for="account_id">Payment Account <span class="text-destructive">*</span></Label>
-                            <Select v-model="accountValue">
-                                <SelectTrigger id="account_id" class="w-full">
-                                    <SelectValue placeholder="Select a payment account" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem
-                                        v-for="account in props.accounts"
-                                        :key="`${account.provider}:${account.id}`"
-                                        :value="`${account.provider}:${account.id}`"
-                                    >{{ account.account_name }} ({{ providerLabel[account.provider] ?? account.provider }})</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError class="mt-1" :message="form.errors.account_id" />
-                        </div>
+                    <!-- Relationship Manager -->
+                    <div class="grid gap-2">
+                        <Label for="relationship_manager_id">Relationship Manager <span class="text-destructive">*</span></Label>
+                        <SearchableSelect
+                            id="relationship_manager_id"
+                            v-model="form.relationship_manager_id"
+                            required
+                            :options="props.relationshipManagers"
+                            placeholder="Select a relationship manager"
+                            search-placeholder="Search relationship managers…"
+                        />
+                        <InputError class="mt-1" :message="form.errors.relationship_manager_id" />
+                    </div>
 
-                        <!-- Currency — locked when the selected account is single-currency (e.g. Square). -->
-                        <div class="grid gap-2">
-                            <Label for="currency">Currency <span class="text-destructive">*</span></Label>
-                            <Select v-model="form.currency" :disabled="isCurrencyLocked">
-                                <SelectTrigger id="currency" class="w-full">
-                                    <SelectValue placeholder="Select currency" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="usd">USD ($)</SelectItem>
-                                    <SelectItem value="gbp">GBP (£)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p
+                    <!-- Currency — locked when the selected account is single-currency (e.g. Square). -->
+                    <div class="grid gap-2">
+                        <Label for="currency" class="gap-1.5">
+                            Currency <span class="text-destructive">*</span>
+                            <span
                                 v-if="isCurrencyLocked"
-                                class="inline-flex w-fit items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-400"
+                                class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-400"
                             >
                                 <Lock class="size-3" />
                                 Locked to this account's currency
-                            </p>
-                            <InputError class="mt-1" :message="form.errors.currency" />
-                        </div>
+                            </span>
+                        </Label>
+                        <Select v-model="form.currency" :disabled="isCurrencyLocked">
+                            <SelectTrigger id="currency" class="w-full">
+                                <SelectValue placeholder="Select currency" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="usd">USD ($)</SelectItem>
+                                <SelectItem value="gbp">GBP (£)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError class="mt-1" :message="form.errors.currency" />
+                    </div>
 
-                        <!-- Client Name -->
-                        <div class="grid gap-2">
-                            <Label for="client_name">Client Name</Label>
-                            <Input
-                                id="client_name"
-                                v-model="form.client_name"
-                                type="text"
-                                placeholder="Jane Smith"
-                            />
-                            <InputError class="mt-1" :message="form.errors.client_name" />
-                        </div>
+                    <!-- Amount -->
+                    <div class="grid gap-2">
+                        <Label for="amount">Amount <span class="text-destructive">*</span></Label>
+                        <Input
+                            id="amount"
+                            v-model="form.amount"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            placeholder="0.00"
+                        />
+                        <InputError class="mt-1" :message="form.errors.amount" />
+                    </div>
 
-                        <!-- Package -->
-                        <div class="grid gap-2">
-                            <Label for="package">Package</Label>
-                            <Select v-model="form.package">
-                                <SelectTrigger id="package" class="w-full">
-                                    <SelectValue placeholder="Select a package (optional)" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="basic">Basic</SelectItem>
-                                    <SelectItem value="standard">Standard</SelectItem>
-                                    <SelectItem value="premium">Premium</SelectItem>
-                                    <SelectItem value="platinum">Platinum</SelectItem>
-                                    <SelectItem value="diamond">Diamond</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError class="mt-1" :message="form.errors.package" />
-                        </div>
+                    <!-- Client Name -->
+                    <div class="grid gap-2">
+                        <Label for="client_name">Client Name</Label>
+                        <Input
+                            id="client_name"
+                            v-model="form.client_name"
+                            type="text"
+                            placeholder="Jane Smith"
+                        />
+                        <InputError class="mt-1" :message="form.errors.client_name" />
+                    </div>
 
+                    <!-- Client Email -->
+                    <div class="grid gap-2">
+                        <Label for="client_email">Client Email</Label>
+                        <Input
+                            id="client_email"
+                            v-model="form.client_email"
+                            type="email"
+                            placeholder="jane@example.com"
+                        />
+                        <InputError class="mt-1" :message="form.errors.client_email" />
+                    </div>
+
+                    <!-- Package -->
+                    <div class="grid gap-2">
+                        <Label for="package">Package</Label>
+                        <Select v-model="form.package">
+                            <SelectTrigger id="package" class="w-full">
+                                <SelectValue placeholder="Select a package (optional)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="basic">Basic</SelectItem>
+                                <SelectItem value="standard">Standard</SelectItem>
+                                <SelectItem value="premium">Premium</SelectItem>
+                                <SelectItem value="platinum">Platinum</SelectItem>
+                                <SelectItem value="diamond">Diamond</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError class="mt-1" :message="form.errors.package" />
                     </div>
 
                     <!-- Note — spans full width -->
