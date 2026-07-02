@@ -25,6 +25,8 @@ const props = defineProps<{
 const sdkLoaded    = ref(false)
 const processing   = ref(false)
 const errorMessage = ref<string | null>(null)
+const cardFocused  = ref(false)
+const cardInvalid  = ref(false)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let card: any = null
@@ -75,17 +77,30 @@ onMounted(async () => {
 
     try {
         payments = Square.payments(props.squareAccount.application_id, props.squareAccount.location_id)
-        // Square's style API only accepts hex/rgb — guard the brand color, fall back to black.
-        const focusBorder = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(props.brand.primary_color)
-            ? props.brand.primary_color
-            : '#000000'
         card = await payments.card({
             style: {
-                '.input-container.is-focus': { borderColor: focusBorder },
+                input: {
+                    fontSize: '15px',
+                    fontFamily: 'inherit',
+                    color: '#0f172a',
+                },
+                'input::placeholder': { color: '#94a3b8' },
+                // Border/focus/error are drawn by our own wrapper (below) so the
+                // field's reserved message row can be cropped without losing the box outline.
+                '.input-container': { borderColor: 'transparent' },
+                '.input-container.is-focus': { borderColor: 'transparent' },
+                '.input-container.is-error': { borderColor: 'transparent' },
+                '.message-text': { color: '#64748b' },
                 '.message-text.is-error': { color: '#dc2626' },
             },
         })
         await card.attach('#sq-card')
+        // Mirror Square's internal focus/validity state onto our own wrapper so the
+        // outline still reacts, even though Square's own border is now transparent.
+        card.addEventListener('focusClassAdded', () => { cardFocused.value = true })
+        card.addEventListener('focusClassRemoved', () => { cardFocused.value = false })
+        card.addEventListener('errorClassAdded', () => { cardInvalid.value = true })
+        card.addEventListener('errorClassRemoved', () => { cardInvalid.value = false })
         sdkLoaded.value = true
     } catch (e) {
         console.error('[Square] init failed:', e)
@@ -171,15 +186,11 @@ async function submit(): Promise<void> {
 
 <template>
     <div class="space-y-6">
-        <!-- Loading skeleton — shown until the SDK attaches the card field -->
-        <div v-if="!sdkLoaded && !errorMessage" class="space-y-3">
-            <div class="skeleton-row h-12 rounded-lg"></div>
-            <div class="grid grid-cols-2 gap-3">
-                <div class="skeleton-row h-12 rounded-lg"></div>
-                <div class="skeleton-row h-12 rounded-lg"></div>
-            </div>
-            <div class="skeleton-row h-12 rounded-lg"></div>
-            <div class="skeleton-row h-12 rounded-lg mt-2 opacity-75"></div>
+        <!-- Loading skeleton — shown until the SDK attaches the card field.
+             Sized to match the compact single-row field so there's no layout shift. -->
+        <div v-if="!sdkLoaded && !errorMessage" class="space-y-5">
+            <div class="skeleton-row h-[52px] rounded-xl border border-slate-200"></div>
+            <div class="skeleton-row h-11 rounded-lg opacity-75"></div>
         </div>
 
         <!-- Fatal error before the card field could render -->
@@ -188,9 +199,21 @@ async function submit(): Promise<void> {
             <AlertDescription>{{ errorMessage }}</AlertDescription>
         </Alert>
 
-        <!-- #sq-card must always exist in the DOM so card.attach() can find it on mount -->
+        <!-- #sq-card must always exist in the DOM so card.attach() can find it on mount.
+             The wrapper draws the visible border/focus/error state (Square's own is
+             transparent), and crops the reserved-but-unused message row Square renders
+             beneath the input line — the app already surfaces errors via the Alert below. -->
         <form v-show="sdkLoaded" @submit.prevent="submit" class="space-y-5">
-            <div id="sq-card"></div>
+            <div
+                class="rounded-xl border bg-white transition-colors duration-150"
+                :class="cardInvalid || errorMessage
+                    ? 'border-red-300 ring-2 ring-red-100'
+                    : cardFocused
+                        ? 'border-[var(--brand-primary)] ring-2 ring-[var(--brand-primary)]/15'
+                        : 'border-slate-200 hover:border-slate-300'"
+            >
+                <div id="sq-card" class="sq-card-field"></div>
+            </div>
 
             <Alert v-if="sdkLoaded && errorMessage" variant="destructive">
                 <AlertCircle class="size-4" />
@@ -216,6 +239,11 @@ async function submit(): Promise<void> {
 </template>
 
 <style scoped>
+.sq-card-field {
+    height: 52px;
+    overflow: hidden;
+}
+
 .skeleton-row {
     background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
     background-size: 200% 100%;
