@@ -9,9 +9,16 @@ use App\Models\Payment;
 use App\Services\Revolut\RevolutClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Square\Environments;
+use Square\Exceptions\SquareApiException;
+use Square\Exceptions\SquareException;
+use Square\Payments\Requests\CreatePaymentRequest;
+use Square\SquareClient;
+use Square\Types\Money;
 use Stripe\StripeClient;
 
 class ClientPaymentController extends Controller
@@ -31,9 +38,11 @@ class ClientPaymentController extends Controller
             ]);
         }
 
-        return $payment->provider === PaymentProvider::Revolut
-            ? $this->showRevolut($payment)
-            : $this->showStripe($payment);
+        return match ($payment->provider) {
+            PaymentProvider::Revolut => $this->showRevolut($payment),
+            PaymentProvider::Square => $this->showSquare($payment),
+            default => $this->showStripe($payment),
+        };
     }
 
     private function showStripe(Payment $payment): Response
@@ -86,6 +95,7 @@ class ClientPaymentController extends Controller
 
         // SEC-04: clientSecret only in Inertia props — NEVER logged, NEVER in URL
         return Inertia::render('ClientPayment/Pay', [
+            'provider' => 'stripe',
             'payment' => $this->paymentProps($payment),
             'brand' => $this->brandProps($payment->brand),
             'stripeAccount' => ['publishable_key' => $payment->stripeAccount->publishable_key],
@@ -136,6 +146,27 @@ class ClientPaymentController extends Controller
     }
 
     /**
+     * Square embedded: no pre-charge. The Web Payments SDK tokenizes client-side and POSTs
+     * the token to chargeSquare(). NEVER expose access_token to the client.
+     */
+    private function showSquare(Payment $payment): Response
+    {
+        $payment->loadMissing('squareAccount');
+
+        return Inertia::render('ClientPayment/Pay', [
+            'provider' => 'square',
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'squareAccount' => [
+                'application_id' => $payment->squareAccount->application_id,
+                'location_id' => $payment->squareAccount->location_id,
+                'environment' => $payment->squareAccount->environment,
+            ],
+            'policies' => $this->policyProps(),
+        ]);
+    }
+
+    /**
      * Create a Revolut Merchant API order from the server-side Payment record.
      * Amount is read from the DB (integer minor units) — never from the client.
      *
@@ -166,7 +197,7 @@ class ClientPaymentController extends Controller
 
     /**
      * Record the customer's acceptance of the policies for the audit trail.
-     * Called client-side immediately before Stripe confirmPayment() — there is
+     * Called client-side immediately before the provider charge/confirm — there is
      * no Laravel submit round-trip for the payment itself.
      */
     public function storeConsent(StorePaymentConsentRequest $request, Payment $payment): JsonResponse
@@ -186,17 +217,78 @@ class ClientPaymentController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Square embedded charge endpoint. Receives a tokenized card (source_id) and optional
+     * SCA verification_token, then charges via the per-account Square client.
+     *
+     * The response only correlates the Square payment id — the authoritative status write
+     * still comes from the payment.updated webhook (CLAUDE.md rule: never trust client charge).
+     */
+    public function chargeSquare(Request $request, Payment $payment): JsonResponse
+    {
+        $payment->loadMissing('squareAccount');
+
+        // Guard mirrors show(): only Square payments in a chargeable state.
+        if ($payment->provider !== PaymentProvider::Square || ! in_array($payment->status, ['pending', 'failed'])) {
+            return response()->json(['ok' => false, 'error' => 'This payment cannot be processed.'], 422);
+        }
+
+        $validated = $request->validate([
+            'source_id' => ['required', 'string'],
+            'verification_token' => ['nullable', 'string'],
+        ]);
+
+        // Per-account SquareClient — NEVER a global token. app()->make() allows test mocking
+        // via app()->bind(SquareClient::class, ...).
+        $square = app()->make(SquareClient::class, [
+            'token' => $payment->squareAccount->access_token,
+            'options' => ['baseUrl' => $payment->squareAccount->environment === 'production'
+                ? Environments::Production->value
+                : Environments::Sandbox->value],
+        ]);
+
+        try {
+            $response = $square->payments->create(new CreatePaymentRequest([
+                'idempotencyKey' => (string) Str::uuid(),
+                'sourceId' => $validated['source_id'],
+                'verificationToken' => $validated['verification_token'] ?? null,
+                'amountMoney' => new Money([
+                    'amount' => $payment->amount,                 // integer cents from DB — SEC-02, never from client
+                    'currency' => strtoupper($payment->currency), // 'USD' | 'GBP'
+                ]),
+                'locationId' => $payment->squareAccount->location_id,
+                'referenceId' => (string) $payment->reference_code,
+                'note' => $payment->uuid,
+            ]));
+        } catch (SquareApiException) {
+            // Sanitized — never surface card data, tokens, or raw processor errors.
+            return response()->json(['ok' => false, 'error' => 'Your payment could not be processed. Please check your card details and try again.'], 422);
+        } catch (SquareException) {
+            return response()->json(['ok' => false, 'error' => 'Could not reach the payment processor. Please try again.'], 502);
+        }
+
+        $squarePaymentId = $response->getPayment()?->getId();
+
+        if ($squarePaymentId) {
+            // Store for webhook correlation only. Do NOT set status to completed here.
+            $payment->update(['square_payment_id' => $squarePaymentId]);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
     public function success(Payment $payment): Response|RedirectResponse
     {
         // D-04: Stripe redirects with ?redirect_status=succeeded on success.
         // SEC-04: Only read redirect_status — discard payment_intent_client_secret query param entirely.
-        // Revolut's Card Field completes via an onSuccess callback (no redirect param), so the
-        // redirect_status gate applies to Stripe only; truth still comes from the webhook either way.
+        // Revolut's Card Field and Square's embedded charge complete via a callback (no redirect
+        // param), so the redirect_status gate applies to Stripe only; truth still comes from the
+        // webhook either way.
         if ($payment->provider === PaymentProvider::Stripe && request('redirect_status') !== 'succeeded') {
             return redirect()->route('pay.failed', $payment->uuid);
         }
 
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount']);
 
         // CR-02 fix: block cancelled payments from showing success via crafted URLs.
         // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,

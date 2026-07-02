@@ -15,11 +15,13 @@ class Payment extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'uuid', 'reference_code', 'provider', 'brand_id', 'stripe_account_id', 'revolut_account_id', 'user_id', 'relationship_manager_id',
+        'uuid', 'reference_code', 'provider', 'brand_id',
+        'stripe_account_id', 'revolut_account_id', 'square_account_id',
+        'user_id', 'relationship_manager_id',
         'amount', 'currency', 'status',
         'client_email', 'client_name',
         'service', 'package', 'note',
-        'stripe_payment_intent_id', 'revolut_order_id', 'expires_at', 'paid_at',
+        'stripe_payment_intent_id', 'revolut_order_id', 'square_payment_id', 'expires_at', 'paid_at',
     ];
 
     protected static function boot(): void
@@ -76,25 +78,46 @@ class Payment extends Model
         return $this->belongsTo(RevolutAccount::class);
     }
 
+    public function squareAccount(): BelongsTo
+    {
+        return $this->belongsTo(SquareAccount::class);
+    }
+
     /**
-     * Display name of the payment account that processed (or will process) this
-     * payment, resolved by provider. Null if the account is missing.
+     * Reference code prefixed with the processing account's prefix (resolved by
+     * provider), e.g. "ACME-001234". Falls back to "#001234" when no prefix.
      */
     public function formattedReferenceCode(): string
     {
-        $prefix = $this->provider === PaymentProvider::Revolut
-            ? $this->revolutAccount?->prefix
-            : $this->stripeAccount?->prefix;
+        $prefix = match ($this->provider) {
+            PaymentProvider::Revolut => $this->revolutAccount?->prefix,
+            PaymentProvider::Square => $this->squareAccount?->prefix,
+            default => $this->stripeAccount?->prefix,
+        };
         $number = str_pad((string) ($this->reference_code ?? 0), 6, '0', STR_PAD_LEFT);
 
         return $prefix ? "{$prefix}-{$number}" : "#{$number}";
     }
 
+    /**
+     * Display name of the payment account that processed (or will process) this
+     * payment, resolved by provider. Null if the account is missing.
+     */
     public function providerAccountName(): ?string
     {
-        return $this->provider === PaymentProvider::Revolut
-            ? $this->revolutAccount?->account_name
-            : $this->stripeAccount?->account_name;
+        return match ($this->provider) {
+            PaymentProvider::Revolut => $this->revolutAccount?->account_name,
+            PaymentProvider::Square => $this->squareAccount?->account_name,
+            default => $this->stripeAccount?->account_name,
+        };
+    }
+
+    /**
+     * Unified account name accessor for cross-provider reporting.
+     */
+    public function getAccountNameAttribute(): ?string
+    {
+        return $this->providerAccountName();
     }
 
     public function user(): BelongsTo

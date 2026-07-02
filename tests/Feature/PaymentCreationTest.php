@@ -3,6 +3,7 @@
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
+use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,6 +30,25 @@ function validPaymentPayload(Brand $brand, StripeAccount $account): array
         'account_id' => $account->id,
         'relationship_manager_id' => $rm->id,
         'currency' => 'usd',
+        'amount' => '25.00',
+        'client_name' => 'Alice Smith',
+        'client_email' => 'alice@example.com',
+        'service' => 'Web Design',
+        'package' => 'standard',
+        'note' => null,
+    ];
+}
+
+function validSquarePaymentPayload(Brand $brand, SquareAccount $account): array
+{
+    $rm = RelationshipManager::factory()->create();
+
+    return [
+        'brand_id' => $brand->id,
+        'provider' => 'square',
+        'account_id' => $account->id,
+        'relationship_manager_id' => $rm->id,
+        'currency' => $account->currency ?? 'usd',
         'amount' => '25.00',
         'client_name' => 'Alice Smith',
         'client_email' => 'alice@example.com',
@@ -87,6 +107,84 @@ it('rejects inactive stripe account with validation error', function () {
     expect(Payment::count())->toBe(0);
 });
 
+// Merged dropdown: admin can create a Square payment via "square:{id}"
+it('admin can create a square payment via the merged payment_account value', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = SquareAccount::factory()->create(['is_active' => true]);
+
+    $response = $this->actingAs($admin)
+        ->post('/payments', validSquarePaymentPayload($brand, $account));
+
+    $payment = Payment::first();
+    $response->assertRedirect("/payments/{$payment->uuid}");
+    expect($payment->provider->value)->toBe('square');
+    expect($payment->square_account_id)->toBe($account->id);
+    expect($payment->stripe_account_id)->toBeNull();
+    expect($payment->status)->toBe('pending');
+});
+
+// Merged dropdown: inactive Square account is rejected with a validation error
+it('rejects inactive square account with validation error', function () {
+    $user = User::factory()->create();
+    $user->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = SquareAccount::factory()->create(['is_active' => false]);
+
+    $this->actingAs($user)
+        ->post('/payments', validSquarePaymentPayload($brand, $account))
+        ->assertSessionHasErrors('account_id');
+
+    expect(Payment::count())->toBe(0);
+});
+
+// Merged dropdown: stripe value sets provider=stripe and the stripe FK only
+it('stripe payment_account sets provider stripe and the stripe fk only', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = StripeAccount::factory()->create(['is_active' => true]);
+
+    $this->actingAs($admin)->post('/payments', validPaymentPayload($brand, $account));
+
+    $payment = Payment::first();
+    expect($payment->provider->value)->toBe('stripe');
+    expect($payment->stripe_account_id)->toBe($account->id);
+    expect($payment->square_account_id)->toBeNull();
+});
+
+// Agent locked to a Square account creates a Square payment (failover)
+it('agent locked to a square account creates a square payment', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $account = SquareAccount::factory()->create(['is_active' => true]);
+    $agent->square_account_id = $account->id;
+    $agent->save();
+
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+    $agent->brands()->sync([$brand->id]);
+    $agent->relationshipManagers()->sync([$rm->id]);
+
+    $payload = validSquarePaymentPayload($brand, $account);
+    $payload['relationship_manager_id'] = $rm->id;
+    // Even if the client injects a different (valid) account, the agent is locked server-side.
+    $otherAccount = StripeAccount::factory()->create(['is_active' => true]);
+    $payload['provider'] = 'stripe';
+    $payload['account_id'] = $otherAccount->id;
+
+    $this->actingAs($agent)->post('/payments', $payload)
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $payment = Payment::first();
+    expect($payment->provider->value)->toBe('square');
+    expect($payment->square_account_id)->toBe($account->id);
+    expect($payment->stripe_account_id)->toBeNull();
+});
+
 // PAY-03: client_name and client_email are stored on the Payment record
 it('stores client name and email on the payment record', function () {
     $user = User::factory()->create();
@@ -132,6 +230,40 @@ it('converts decimal amount to integer cents and stores server-side', function (
     $payment = Payment::first();
     expect($payment->amount)->toBe(2500);
     expect($payment->amount)->toBeInt();
+});
+
+// Square accounts are single-currency: submitting a currency that doesn't
+// match the account's currency is rejected with a validation error.
+it('rejects a square payment whose currency does not match the account currency', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = SquareAccount::factory()->create(['is_active' => true, 'currency' => 'usd']);
+
+    $payload = validSquarePaymentPayload($brand, $account);
+    $payload['currency'] = 'gbp';
+
+    $this->actingAs($admin)->post('/payments', $payload)
+        ->assertSessionHasErrors(['currency' => 'This Square account only accepts usd payments.']);
+
+    expect(Payment::count())->toBe(0);
+});
+
+// Matching currency succeeds for a Square payment.
+it('accepts a square payment whose currency matches the account currency', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = SquareAccount::factory()->create(['is_active' => true, 'currency' => 'gbp']);
+
+    $payload = validSquarePaymentPayload($brand, $account);
+    $payload['currency'] = 'gbp';
+
+    $this->actingAs($admin)->post('/payments', $payload)
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect(Payment::count())->toBe(1);
 });
 
 // PAY-06: Only usd and gbp are accepted; other currencies rejected
