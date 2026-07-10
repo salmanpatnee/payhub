@@ -5,6 +5,7 @@ use App\Models\Payment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Stripe\Exception\InvalidRequestException;
 use Stripe\PaymentIntent;
 use Stripe\StripeClient;
 
@@ -32,12 +33,24 @@ function mockStripeClient(): void
     app()->bind(StripeClient::class, fn () => $mockStripe);
 }
 
-function mockStripeClientWithRetrieve(string $existingPiId, string $existingStatus, string $existingClientSecret): void
-{
+/**
+ * $amount/$currency describe the PaymentIntent that Stripe returns from retrieve().
+ * They must match the Payment row for the reuse branch to be taken — passing values
+ * that differ exercises the amount/currency drift guard.
+ */
+function mockStripeClientWithRetrieve(
+    string $existingPiId,
+    string $existingStatus,
+    string $existingClientSecret,
+    ?int $amount = null,
+    ?string $currency = null,
+): void {
     $retrievedPi = PaymentIntent::constructFrom([
         'id' => $existingPiId,
         'client_secret' => $existingClientSecret,
         'status' => $existingStatus,
+        'amount' => $amount,
+        'currency' => $currency,
     ]);
 
     $newPi = PaymentIntent::constructFrom([
@@ -49,6 +62,29 @@ function mockStripeClientWithRetrieve(string $existingPiId, string $existingStat
     $mockPaymentIntents = Mockery::mock();
     $mockPaymentIntents->shouldReceive('retrieve')->with($existingPiId)->andReturn($retrievedPi);
     $mockPaymentIntents->shouldReceive('create')->andReturn($newPi);
+
+    $mockStripe = Mockery::mock(StripeClient::class);
+    $mockStripe->paymentIntents = $mockPaymentIntents;
+
+    app()->bind(StripeClient::class, fn () => $mockStripe);
+}
+
+/**
+ * retrieve() throws as Stripe does when the stored PaymentIntent id does not exist on
+ * the account being queried — i.e. the payment was moved to a different Stripe account.
+ */
+function mockStripeClientWithMissingPi(string $stalePiId): void
+{
+    $freshPi = PaymentIntent::constructFrom([
+        'id' => 'pi_fresh_after_404',
+        'client_secret' => 'pi_fresh_after_404_secret',
+        'status' => 'requires_payment_method',
+    ]);
+
+    $mockPaymentIntents = Mockery::mock();
+    $mockPaymentIntents->shouldReceive('retrieve')->with($stalePiId)
+        ->andThrow(new InvalidRequestException("No such payment_intent: '{$stalePiId}'"));
+    $mockPaymentIntents->shouldReceive('create')->andReturn($freshPi);
 
     $mockStripe = Mockery::mock(StripeClient::class);
     $mockStripe->paymentIntents = $mockPaymentIntents;
@@ -186,7 +222,7 @@ it('reuses existing PaymentIntent when stripe_payment_intent_id is set and PI is
         'stripe_payment_intent_id' => 'pi_existing_confirmable',
     ]);
 
-    mockStripeClientWithRetrieve('pi_existing_confirmable', 'requires_payment_method', 'pi_existing_confirmable_secret');
+    mockStripeClientWithRetrieve('pi_existing_confirmable', 'requires_payment_method', 'pi_existing_confirmable_secret', $payment->amount, $payment->currency);
 
     $this->get("/pay/{$payment->uuid}")
         ->assertInertia(fn ($page) => $page
@@ -217,6 +253,92 @@ it('creates a new PaymentIntent when existing PI is in terminal state', function
     expect($payment->fresh()->stripe_payment_intent_id)->toBe('pi_new_after_terminal');
 });
 
+// A PI id left dangling by an account move must not 500 the client's pay page.
+it('renders the pay page when the stored PaymentIntent no longer exists on the account', function () {
+    $payment = Payment::factory()->create([
+        'status' => 'pending',
+        'stripe_payment_intent_id' => 'pi_belongs_to_another_account',
+    ]);
+
+    mockStripeClientWithMissingPi('pi_belongs_to_another_account');
+
+    $this->get("/pay/{$payment->uuid}")
+        ->assertStatus(200)
+        ->assertInertia(fn ($page) => $page
+            ->component('ClientPayment/Pay')
+            ->where('clientSecret', 'pi_fresh_after_404_secret')
+        );
+});
+
+it('replaces the stale PaymentIntent id with the freshly created one', function () {
+    $payment = Payment::factory()->create([
+        'status' => 'pending',
+        'stripe_payment_intent_id' => 'pi_belongs_to_another_account',
+    ]);
+
+    mockStripeClientWithMissingPi('pi_belongs_to_another_account');
+
+    $this->get("/pay/{$payment->uuid}");
+
+    expect($payment->fresh()->stripe_payment_intent_id)->toBe('pi_fresh_after_404');
+});
+
+// Drift: reusing a confirmable PI whose amount predates an edit would charge the old price.
+it('creates a new PaymentIntent when the payment amount no longer matches the PI', function () {
+    $payment = Payment::factory()->create([
+        'status' => 'pending',
+        'amount' => 5000,
+        'currency' => 'usd',
+        'stripe_payment_intent_id' => 'pi_stale_amount',
+    ]);
+
+    // PI was created at $10.00, the payment has since been edited to $50.00.
+    mockStripeClientWithRetrieve('pi_stale_amount', 'requires_payment_method', 'pi_stale_amount_secret', 1000, 'usd');
+
+    $this->get("/pay/{$payment->uuid}")
+        ->assertInertia(fn ($page) => $page
+            ->component('ClientPayment/Pay')
+            ->where('clientSecret', 'pi_new_after_terminal_secret')
+        );
+
+    expect($payment->fresh()->stripe_payment_intent_id)->toBe('pi_new_after_terminal');
+});
+
+it('creates a new PaymentIntent when the payment currency no longer matches the PI', function () {
+    $payment = Payment::factory()->create([
+        'status' => 'pending',
+        'amount' => 5000,
+        'currency' => 'gbp',
+        'stripe_payment_intent_id' => 'pi_stale_currency',
+    ]);
+
+    mockStripeClientWithRetrieve('pi_stale_currency', 'requires_payment_method', 'pi_stale_currency_secret', 5000, 'usd');
+
+    $this->get("/pay/{$payment->uuid}")
+        ->assertInertia(fn ($page) => $page
+            ->component('ClientPayment/Pay')
+            ->where('clientSecret', 'pi_new_after_terminal_secret')
+        );
+
+    expect($payment->fresh()->stripe_payment_intent_id)->toBe('pi_new_after_terminal');
+});
+
+it('reuses the PaymentIntent when amount and currency both still match', function () {
+    $payment = Payment::factory()->create([
+        'status' => 'pending',
+        'amount' => 5000,
+        'currency' => 'usd',
+        'stripe_payment_intent_id' => 'pi_matching',
+    ]);
+
+    mockStripeClientWithRetrieve('pi_matching', 'requires_payment_method', 'pi_matching_secret', 5000, 'usd');
+
+    $this->get("/pay/{$payment->uuid}")
+        ->assertInertia(fn ($page) => $page->where('clientSecret', 'pi_matching_secret'));
+
+    expect($payment->fresh()->stripe_payment_intent_id)->toBe('pi_matching');
+});
+
 // CR-02 (retry): failed payment with redirect_status=succeeded renders Success
 // Stripe redirects before the webhook fires; status is still 'failed' at this instant — allow through.
 it('failed payment with redirect_status=succeeded renders ClientPayment/Success', function () {
@@ -241,7 +363,7 @@ it('failed payment renders ClientPayment/Pay for retry', function () {
         'stripe_payment_intent_id' => 'pi_failed_confirmable',
     ]);
 
-    mockStripeClientWithRetrieve('pi_failed_confirmable', 'requires_payment_method', 'pi_failed_confirmable_secret');
+    mockStripeClientWithRetrieve('pi_failed_confirmable', 'requires_payment_method', 'pi_failed_confirmable_secret', $payment->amount, $payment->currency);
 
     $this->get("/pay/{$payment->uuid}")
         ->assertInertia(fn ($page) => $page->component('ClientPayment/Pay'));
@@ -254,7 +376,7 @@ it('failed payment with confirmable PI reuses existing PI', function () {
         'stripe_payment_intent_id' => 'pi_failed_confirmable',
     ]);
 
-    mockStripeClientWithRetrieve('pi_failed_confirmable', 'requires_payment_method', 'pi_failed_confirmable_secret');
+    mockStripeClientWithRetrieve('pi_failed_confirmable', 'requires_payment_method', 'pi_failed_confirmable_secret', $payment->amount, $payment->currency);
 
     $this->get("/pay/{$payment->uuid}")
         ->assertInertia(fn ($page) => $page
