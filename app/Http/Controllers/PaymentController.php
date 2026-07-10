@@ -331,12 +331,46 @@ class PaymentController extends Controller
             $data = [...$data, ...$this->agentAccountData($user)];
         }
 
-        // status, user_id, and provider transaction ids are never updated here.
+        // status and user_id are never updated here. Provider transaction ids are only
+        // ever cleared, never set — see clearStaleProviderTransactionIds().
+        $data = [...$data, ...$this->clearStaleProviderTransactionIds($payment, $data)];
+
         $payment->update($data);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Payment updated.']);
 
         return redirect()->route('payments.show', $payment);
+    }
+
+    /**
+     * A provider transaction (Stripe PaymentIntent, Revolut order, Square payment) is
+     * scoped to the account that created it. When an edit moves the payment to another
+     * account — or to another provider entirely — the stored id is left dangling and
+     * every later lookup against the new account 404s. Null it so the client pay page
+     * mints a fresh transaction on the account the payment now belongs to.
+     *
+     * @param  array<string, mixed>  $data  the incoming attributes, post agent lock-in
+     * @return array<string, null>
+     */
+    private function clearStaleProviderTransactionIds(Payment $payment, array $data): array
+    {
+        $columns = [
+            'stripe_account_id' => 'stripe_payment_intent_id',
+            'revolut_account_id' => 'revolut_order_id',
+            'square_account_id' => 'square_payment_id',
+        ];
+
+        $cleared = [];
+
+        foreach ($columns as $accountColumn => $transactionColumn) {
+            $incoming = $data[$accountColumn] ?? null;
+
+            if ($payment->{$accountColumn} !== $incoming && $payment->{$transactionColumn} !== null) {
+                $cleared[$transactionColumn] = null;
+            }
+        }
+
+        return $cleared;
     }
 
     public function destroy(Payment $payment): RedirectResponse

@@ -244,12 +244,15 @@ it('rejects updating a payment to a square account with a mismatched currency', 
     $squareAccount = SquareAccount::factory()->create(['is_active' => true, 'currency' => 'usd']);
     $rm = RelationshipManager::factory()->create();
 
+    // Pin the currency: the factory picks usd/gbp at random, and the assertion below —
+    // that the rejected 'gbp' never landed — is vacuous if the payment started as gbp.
     $payment = Payment::factory()->create([
         'user_id' => $admin->id,
         'brand_id' => $brand->id,
         'square_account_id' => $squareAccount->id,
         'provider' => 'square',
         'stripe_account_id' => null,
+        'currency' => 'usd',
         'status' => 'pending',
     ]);
 
@@ -261,4 +264,119 @@ it('rejects updating a payment to a square account with a mismatched currency', 
         ->assertSessionHasErrors(['currency' => 'This Square account only accepts usd payments.']);
 
     expect($payment->fresh()->currency)->not()->toBe('gbp');
+});
+
+// A PaymentIntent belongs to the Stripe account that created it. Moving the payment to
+// another account must drop the id, or the pay page 404s against the new account's key.
+it('nulls stripe_payment_intent_id when the payment moves to another stripe account', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $accountA = StripeAccount::factory()->create(['is_active' => true]);
+    $accountB = StripeAccount::factory()->create(['is_active' => true]);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'stripe_account_id' => $accountA->id,
+        'stripe_payment_intent_id' => 'pi_on_account_a',
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", updatePayload($brand, $accountB, $rm))
+        ->assertRedirect("/payments/{$payment->uuid}")
+        ->assertSessionHasNoErrors();
+
+    $payment->refresh();
+    expect($payment->stripe_account_id)->toBe($accountB->id);
+    expect($payment->stripe_payment_intent_id)->toBeNull();
+});
+
+it('nulls stripe_payment_intent_id when the payment switches provider to square', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+    $squareAccount = SquareAccount::factory()->create(['is_active' => true, 'currency' => 'usd']);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'stripe_account_id' => $stripeAccount->id,
+        'stripe_payment_intent_id' => 'pi_orphaned_by_provider_switch',
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", updateSquarePayload($brand, $squareAccount, $rm))
+        ->assertRedirect("/payments/{$payment->uuid}")
+        ->assertSessionHasNoErrors();
+
+    $payment->refresh();
+    expect($payment->provider->value)->toBe('square');
+    expect($payment->stripe_payment_intent_id)->toBeNull();
+});
+
+// The id is only cleared on an account move — an ordinary edit must not throw away a
+// live PaymentIntent, or every save would orphan the one the client is looking at.
+it('preserves stripe_payment_intent_id when the stripe account is unchanged', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $account = StripeAccount::factory()->create(['is_active' => true]);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'stripe_account_id' => $account->id,
+        'stripe_payment_intent_id' => 'pi_still_valid',
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", [...updatePayload($brand, $account, $rm), 'note' => 'just a note edit'])
+        ->assertRedirect("/payments/{$payment->uuid}")
+        ->assertSessionHasNoErrors();
+
+    expect($payment->fresh()->stripe_payment_intent_id)->toBe('pi_still_valid');
+});
+
+// Agents have their account forced by agentAccountData(), which can move the payment
+// off the account its PaymentIntent lives on.
+it('nulls stripe_payment_intent_id when an agent update forces a different account', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $agentAccount = StripeAccount::factory()->create(['is_active' => true]);
+    $otherAccount = StripeAccount::factory()->create(['is_active' => true]);
+    $agent->stripe_account_id = $agentAccount->id;
+    $agent->save();
+
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+    $agent->brands()->sync([$brand->id]);
+    $agent->relationshipManagers()->sync([$rm->id]);
+
+    $payment = Payment::factory()->create([
+        'user_id' => $agent->id,
+        'brand_id' => $brand->id,
+        'stripe_account_id' => $otherAccount->id,
+        'stripe_payment_intent_id' => 'pi_on_other_account',
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($agent)
+        ->patch("/payments/{$payment->uuid}", updatePayload($brand, $otherAccount, $rm))
+        ->assertRedirect();
+
+    $payment->refresh();
+    expect($payment->stripe_account_id)->toBe($agentAccount->id);
+    expect($payment->stripe_payment_intent_id)->toBeNull();
 });
