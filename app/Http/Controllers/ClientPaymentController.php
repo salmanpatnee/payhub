@@ -10,15 +10,19 @@ use App\Services\Revolut\RevolutClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Sentry\Breadcrumb;
 use Square\Environments;
 use Square\Exceptions\SquareApiException;
 use Square\Exceptions\SquareException;
 use Square\Payments\Requests\CreatePaymentRequest;
 use Square\SquareClient;
 use Square\Types\Money;
+use Stripe\Exception\InvalidRequestException;
+use Stripe\PaymentIntent;
 use Stripe\StripeClient;
 
 class ClientPaymentController extends Controller
@@ -55,30 +59,9 @@ class ClientPaymentController extends Controller
         $stripe = app()->make(StripeClient::class, ['config' => $payment->stripeAccount->secret_key]);
 
         // CR-01 fix: retrieve-and-reuse pattern — no duplicate PIs on refresh
-        // Confirmable states: requires_payment_method, requires_confirmation, requires_action
-        // Terminal states: succeeded, canceled — must create a new PI
-        $confirmableStates = ['requires_payment_method', 'requires_confirmation', 'requires_action'];
+        $pi = $this->reusableStripePaymentIntent($stripe, $payment);
 
-        if ($payment->stripe_payment_intent_id) {
-            $pi = $stripe->paymentIntents->retrieve($payment->stripe_payment_intent_id);
-
-            if (! in_array($pi->status, $confirmableStates)) {
-                // Existing PI is in a terminal state — create a fresh one
-                $pi = $stripe->paymentIntents->create([
-                    'amount' => $payment->amount,
-                    'currency' => $payment->currency,
-                    'automatic_payment_methods' => ['enabled' => true],
-                    'description' => $this->buildDescription($payment),
-                    'metadata' => [
-                        'reference_code' => $payment->formattedReferenceCode(),
-                        'payment_uuid' => $payment->uuid,
-                    ],
-                ], ['idempotency_key' => 'pi-recreate-'.$payment->uuid.'-'.substr(md5($payment->stripe_payment_intent_id ?? ''), 0, 8)]);
-                $payment->update(['stripe_payment_intent_id' => $pi->id]);
-            }
-            // else: reuse the existing confirmable PI — do NOT update stripe_payment_intent_id
-        } else {
-            // No PI exists yet — create one
+        if ($pi === null) {
             $pi = $stripe->paymentIntents->create([
                 'amount' => $payment->amount,   // integer cents from DB — SEC-02
                 'currency' => $payment->currency, // 'usd' or 'gbp'
@@ -88,8 +71,8 @@ class ClientPaymentController extends Controller
                     'reference_code' => $payment->formattedReferenceCode(),
                     'payment_uuid' => $payment->uuid,
                 ],
-            ], ['idempotency_key' => 'pi-create-'.$payment->uuid]);
-            // D-02: Store PI ID so Phase 6 webhook handler can look up the Payment
+            ], ['idempotency_key' => $this->stripeIdempotencyKey($payment)]);
+            // D-02: Store PI ID so the webhook handler can look up the Payment
             $payment->update(['stripe_payment_intent_id' => $pi->id]);
         }
 
@@ -102,6 +85,78 @@ class ClientPaymentController extends Controller
             'clientSecret' => $pi->client_secret,
             'policies' => $this->policyProps(),
         ]);
+    }
+
+    /**
+     * Resolve the stored PaymentIntent if it is still usable, or null if a fresh one
+     * must be created. A PI is unusable when it no longer exists on the account (the
+     * payment was moved between Stripe accounts, leaving a dangling id), when it has
+     * reached a terminal state, or when the payment's amount/currency has since been
+     * edited — reusing a drifted PI would charge the client the pre-edit amount.
+     */
+    private function reusableStripePaymentIntent(StripeClient $stripe, Payment $payment): ?PaymentIntent
+    {
+        if (! $payment->stripe_payment_intent_id) {
+            return null;
+        }
+
+        try {
+            $pi = $stripe->paymentIntents->retrieve($payment->stripe_payment_intent_id);
+        } catch (InvalidRequestException) {
+            // PaymentIntents are scoped to the account that created them, so a 404 here
+            // means the stored id belongs to a different account. Recover by creating a
+            // fresh PI rather than 500ing on the client's pay page.
+            Log::warning('Stale Stripe PaymentIntent — creating a fresh one', [
+                'payment_uuid' => $payment->uuid,
+                'stripe_account_id' => $payment->stripe_account_id,
+                'stale_payment_intent_id' => $payment->stripe_payment_intent_id,
+            ]);
+
+            \Sentry\addBreadcrumb(new Breadcrumb(
+                Breadcrumb::LEVEL_WARNING,
+                Breadcrumb::TYPE_DEFAULT,
+                'stripe',
+                'Stale PaymentIntent, recreating',
+                [
+                    'payment_uuid' => $payment->uuid,
+                    'stripe_account_id' => $payment->stripe_account_id,
+                    'stale_payment_intent_id' => $payment->stripe_payment_intent_id,
+                ],
+            ));
+
+            return null;
+        }
+
+        // Confirmable states: requires_payment_method, requires_confirmation, requires_action
+        // Terminal states: succeeded, canceled — must create a new PI
+        $confirmableStates = ['requires_payment_method', 'requires_confirmation', 'requires_action'];
+
+        if (! in_array($pi->status, $confirmableStates)) {
+            return null;
+        }
+
+        if ((int) $pi->amount !== (int) $payment->amount || $pi->currency !== $payment->currency) {
+            return null;
+        }
+
+        return $pi;
+    }
+
+    /**
+     * Stable across page refreshes so a reload never mints a duplicate PI, but distinct
+     * once the payment moves account or its amount/currency is edited — precisely the
+     * cases where a new PI is required. Keying on the uuid alone would make Stripe
+     * replay the original (possibly dangling) PI for 24h.
+     */
+    private function stripeIdempotencyKey(Payment $payment): string
+    {
+        return sprintf(
+            'pi-%s-%d-%s-%d',
+            $payment->uuid,
+            $payment->stripe_account_id,
+            $payment->currency,
+            $payment->amount,
+        );
     }
 
     private function showRevolut(Payment $payment): Response
