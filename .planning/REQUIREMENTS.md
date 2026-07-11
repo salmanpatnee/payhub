@@ -69,6 +69,35 @@
 - [ ] **DASH-03**: User can view their own payment history (payments they created)
 - [ ] **DASH-04**: Payment list shows: amount, currency, brand, status, created date, client email
 
+### Revolut Payment Provider (REVOLUT)
+
+- [x] **REVOLUT-01**: Admin can add a Revolut account (`secret_key` + `webhook_signature_key`), encrypted at rest
+- [x] **REVOLUT-02**: Admin or User can create a payment against an active Revolut account
+- [x] **REVOLUT-03**: Client pay page creates a Merchant API order and completes checkout under the correct Revolut account
+- [x] **REVOLUT-04**: `/webhook/revolut/{account}` verifies HMAC-SHA256 `v1.{timestamp}.{rawBody}` signature (300s replay tolerance) and is the sole writer of payment status
+- [x] **REVOLUT-05**: Revolut webhook idempotency is keyed on `order_id:event_type` (`ProcessedRevolutEvent`) since Revolut delivers no event id
+- [x] **REVOLUT-06**: Revolut rows appear correctly in CSV export and dashboard/filter surfaces
+
+### Square Payment Provider (SQUARE)
+
+- [x] **SQUARE-01**: Admin can add a Square account (`access_token` + `webhook_signature_key`), encrypted at rest; sandbox credentials blocked in production
+- [x] **SQUARE-02**: A `SquareAccount` is single-currency; creating/updating a payment against a mismatched-currency account is rejected
+- [x] **SQUARE-03**: Client pay page tokenizes via Square Web Payments SDK; amount always read server-side from the `Payment` record
+- [x] **SQUARE-04**: `/webhook/square/{squareAccount}` verifies `x-square-hmacsha256-signature` via the Square SDK's `WebhooksHelper`
+- [x] **SQUARE-05**: Square webhook idempotency tracked via `ProcessedSquareEvent`
+- [x] **SQUARE-06**: Square rows appear correctly in CSV export, including Provider Reference (fixed — was blank, commit `2aa7451`)
+- [x] **SQUARE-07**: Square rows appear correctly in dashboard/filter surfaces, including "Accounts Today" account resolution
+
+### Viva Payments Provider (VIVA)
+
+- [x] **VIVA-01**: Admin can add a Viva account (`client_secret`, `api_key`, `webhook_verification_key`), encrypted at rest; demo credentials blocked in production
+- [x] **VIVA-02**: Creating or updating a payment against a Viva account is rejected unless currency is GBP (flat platform rule, not per-account)
+- [x] **VIVA-03**: Client pay page redirects to Viva Smart Checkout via an OAuth2 client_credentials order; `viva_order_code` captured at order-creation time
+- [x] **VIVA-04**: `/webhook/viva/{vivaAccount}` verifies the `Viva-Signature` header and is the sole writer of completed status; idempotency via `ProcessedVivaEvent`
+- [x] **VIVA-05**: Viva rows appear correctly in CSV export and the payment detail page — Provider Reference falls back to `viva_order_code` when `viva_transaction_id` isn't set yet (fixed 2026-07-11)
+- [x] **VIVA-06**: Moving a Viva payment to a different account clears both `viva_order_code` and `viva_transaction_id` (fixed 2026-07-11, same merge)
+- [ ] **VIVA-07**: Failed Viva payments transition to `failed` status via webhook — blocked on confirming the `TransactionFailed` event type id against a live sandbox; currently a failed Viva payment stays `pending` indefinitely
+
 ### Security (SEC)
 
 - [x] **SEC-01**: Stripe secret keys and webhook secrets are encrypted at rest (AES-256 via Laravel encrypted cast)
@@ -86,13 +115,19 @@
 - Cancel/void a payment link — Admin can invalidate without deleting
 - Duplicate a payment link — re-use as template
 - Refund from dashboard (via Stripe API)
-- CSV export of payment history
 - Slack/webhook notifications
 - SSO (Google/Microsoft)
 - Duplicate event deduplication (webhook idempotency)
 - Retry visibility / dead-letter queue UI
 - APP_KEY rotation runbook documentation
 - Cross-brand analytics with charts
+
+**Delivered post-v1** (was listed here as deferred, since implemented):
+- ~~CSV export of payment history~~ — delivered (`PaymentsExport`, `payments.export` route), covers all four providers
+
+**Carried over from the stale-provider-txn-id fix (2026-07-10/11)**, tracked in memory `project-stale-provider-txn-ids`:
+- Read-side stale-id recovery (à la `reusableStripePaymentIntent()`) for Revolut/Square/Viva pay pages — only Stripe has it
+- Amount-drift protection on reused provider orders for Revolut/Square/Viva
 
 ---
 
@@ -160,3 +195,23 @@
 | SEC-02 | Phase 4 | Complete |
 | SEC-03 | Phase 6 | Complete |
 | SEC-04 | Phase 5 | Complete |
+| REVOLUT-01 | Phase 8 | Complete |
+| REVOLUT-02 | Phase 8 | Complete |
+| REVOLUT-03 | Phase 8 | Complete |
+| REVOLUT-04 | Phase 8 | Complete |
+| REVOLUT-05 | Phase 8 | Complete |
+| REVOLUT-06 | Phase 8 | Complete |
+| SQUARE-01 | Phase 9 | Complete |
+| SQUARE-02 | Phase 9 | Complete |
+| SQUARE-03 | Phase 9 | Complete |
+| SQUARE-04 | Phase 9 | Complete |
+| SQUARE-05 | Phase 9 | Complete |
+| SQUARE-06 | Phase 9 | Complete |
+| SQUARE-07 | Phase 9 | Complete |
+| VIVA-01 | Phase 10 | Complete |
+| VIVA-02 | Phase 10 | Complete |
+| VIVA-03 | Phase 10 | Complete |
+| VIVA-04 | Phase 10 | Complete |
+| VIVA-05 | Phase 10 | Complete |
+| VIVA-06 | Phase 10 | Complete |
+| VIVA-07 | Phase 10 | Pending (needs live sandbox to confirm TransactionFailed event id) |

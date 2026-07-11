@@ -19,8 +19,18 @@ const config: Record<string, { color: string; label: string; path: string }> = {
         label: 'Square',
         path: 'M4.01 3.5A2.51 2.51 0 0 0 1.5 6.01v11.98A2.51 2.51 0 0 0 4.01 20.5h15.98a2.51 2.51 0 0 0 2.51-2.51V6.01a2.51 2.51 0 0 0-2.51-2.51H4.01zM5 6.5h14v11H5v-11zm4 3a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1H9z',
     },
+    viva: {
+        color: 'text-orange-600 dark:text-orange-400',
+        label: 'Viva',
+        // Simple landmark/bank glyph — Viva has no single recognizable brand
+        // mark like Stripe/Square, and this is redirect-only (no in-page SDK).
+        path: 'M12 2 1 9h2v11h4v-7h10v7h4V9h2L12 2zm-4 9h8v9H8v-9z',
+    },
 };
 
+// Explicit per-provider entries are required above — falling back to
+// config.stripe for an unmapped provider silently mislabels it (this is the
+// exact bug class two prior Square CSV export bugs came from; see CLAUDE.md).
 const c = computed(() => config[props.provider] ?? config.stripe);
 </script>
 

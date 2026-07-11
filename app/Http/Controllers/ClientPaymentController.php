@@ -7,6 +7,7 @@ use App\Http\Requests\StorePaymentConsentRequest;
 use App\Models\Brand;
 use App\Models\Payment;
 use App\Services\Revolut\RevolutClient;
+use App\Services\Viva\VivaClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,6 +46,7 @@ class ClientPaymentController extends Controller
         return match ($payment->provider) {
             PaymentProvider::Revolut => $this->showRevolut($payment),
             PaymentProvider::Square => $this->showSquare($payment),
+            PaymentProvider::Viva => $this->showViva($payment),
             default => $this->showStripe($payment),
         };
     }
@@ -222,6 +224,73 @@ class ClientPaymentController extends Controller
     }
 
     /**
+     * Viva has no embedded card field — Smart Checkout is a hosted redirect
+     * page, confirmed against Viva's own docs (no Stripe-Elements-equivalent
+     * embedding option exists). Renders our own branded summary page first
+     * (matching Stripe/Revolut/Square's UX shape) with an explicit "Proceed
+     * to payment" action — the actual redirect to Viva happens client-side
+     * from PayViva.vue after consent is recorded.
+     *
+     * Reuses an existing order code rather than recreating one on every visit:
+     * unlike Stripe/Revolut, Viva has no confirmed cheap "retrieve order"
+     * status check (see .planning/research/VIVA_PAYMENTS.md), and recreating
+     * on each show() would silently break webhook correlation for a customer
+     * who has an older order still open in another tab (the webhook looks up
+     * the Payment by viva_order_code). Revisit this once Viva's order-expiry
+     * behavior is confirmed against a live sandbox.
+     */
+    private function showViva(Payment $payment): Response
+    {
+        $payment->loadMissing('vivaAccount');
+
+        $viva = app()->make(VivaClient::class, [
+            'clientId' => $payment->vivaAccount->client_id,
+            'clientSecret' => $payment->vivaAccount->client_secret,
+            'merchantId' => $payment->vivaAccount->merchant_id,
+            'apiKey' => $payment->vivaAccount->api_key,
+            'sourceCode' => $payment->vivaAccount->source_code,
+            'environment' => $payment->vivaAccount->environment,
+        ]);
+
+        $orderCode = $payment->viva_order_code;
+
+        if (! $orderCode) {
+            $order = $viva->createOrder([
+                'amount' => $payment->amount,   // integer cents from DB — SEC-02, never from client
+                'currencyCode' => 826,          // GBP — StorePaymentRequest already guarantees currency=gbp for Viva
+                'customerTrns' => $this->buildDescription($payment),
+                'merchantTrns' => $payment->formattedReferenceCode(),
+                'sourceCode' => $payment->vivaAccount->source_code,
+            ]);
+
+            // Viva's own documentation and official code samples disagree on the
+            // response casing (orderCode vs OrderCode) across API generations —
+            // accept either rather than guessing, and fail loudly with the raw
+            // response if neither is present so this never resurfaces as an
+            // opaque "undefined array key" crash.
+            $rawOrderCode = $order['orderCode'] ?? $order['OrderCode'] ?? null;
+
+            if ($rawOrderCode === null) {
+                throw new \RuntimeException('Viva order creation did not return an order code: '.json_encode($order));
+            }
+
+            $orderCode = (string) $rawOrderCode;
+
+            $payment->update([
+                'viva_order_code' => $orderCode,
+                'viva_account_id' => $payment->vivaAccount->id,
+            ]);
+        }
+
+        return Inertia::render('ClientPayment/PayViva', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'checkoutUrl' => $viva->checkoutUrl($orderCode, $payment->brand->primary_color),
+            'policies' => $this->policyProps(),
+        ]);
+    }
+
+    /**
      * Create a Revolut Merchant API order from the server-side Payment record.
      * Amount is read from the DB (integer minor units) — never from the client.
      *
@@ -343,7 +412,14 @@ class ClientPaymentController extends Controller
             return redirect()->route('pay.failed', $payment->uuid);
         }
 
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount']);
+        // Viva's exact return query param names are unconfirmed against a live
+        // sandbox (see .planning/research/VIVA_PAYMENTS.md) — intentionally no
+        // fast-fail query-param check here yet, to avoid guessing a wrong param
+        // name and incorrectly redirecting every real Viva success to /failed.
+        // The status === 'cancelled' guard below still applies regardless, and
+        // the authoritative status write remains webhook-only either way.
+
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount']);
 
         // CR-02 fix: block cancelled payments from showing success via crafted URLs.
         // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,
@@ -361,6 +437,25 @@ class ClientPaymentController extends Controller
             'brand' => $this->brandProps($payment->brand),
             'provider' => $payment->provider->value,
         ]);
+    }
+
+    /**
+     * Generic Viva Smart Checkout return endpoints — see the routes/web.php comment
+     * for why these can't be per-payment URLs. `s` is Viva's order code query param,
+     * which we already store as `viva_order_code` for webhook correlation.
+     */
+    public function vivaReturnSuccess(Request $request): RedirectResponse
+    {
+        $payment = Payment::where('viva_order_code', $request->query('s'))->firstOrFail();
+
+        return redirect()->route('pay.success', $payment);
+    }
+
+    public function vivaReturnFailed(Request $request): RedirectResponse
+    {
+        $payment = Payment::where('viva_order_code', $request->query('s'))->firstOrFail();
+
+        return redirect()->route('pay.failed', $payment);
     }
 
     public function failed(Payment $payment): Response

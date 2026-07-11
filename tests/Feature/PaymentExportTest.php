@@ -7,6 +7,7 @@ use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
+use App\Models\VivaAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Permission\Models\Role;
@@ -64,15 +65,18 @@ it('redirects guests to login', function () {
         ->assertRedirect(route('login'));
 });
 
-it('maps provider-aware account columns for stripe and revolut rows', function () {
+it('maps provider-aware account columns for stripe, revolut, square, and viva rows', function () {
     // The export must show the correct provider, account name, and provider
-    // reference (Revolut order id / Stripe PaymentIntent id) per payment — the
-    // old hardcoded "Stripe Account" column left Revolut rows blank.
+    // reference (Revolut order id / Stripe PaymentIntent id / Square payment id /
+    // Viva transaction id) per payment. The old hardcoded "Stripe Account" column
+    // left Revolut rows blank, and a `default => stripe_payment_intent_id` match
+    // arm previously left Square's Provider Reference column blank too (see git
+    // history) — the Viva assertion below guards against the same class of bug.
     $headings = (new PaymentsExport(Payment::query()))->headings();
     expect($headings)->toContain('Provider', 'Payment Account', 'Provider Reference');
     expect($headings)->not->toContain('Stripe Account');
 
-    $with = ['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'relationshipManager'];
+    $with = ['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'relationshipManager'];
     $export = new PaymentsExport(Payment::query());
 
     $stripeAccount = StripeAccount::factory()->create(['account_name' => 'Acme Stripe']);
@@ -107,6 +111,31 @@ it('maps provider-aware account columns for stripe and revolut rows', function (
     expect($squareRow[6])->toBe('Square');
     expect($squareRow[7])->toBe('Acme Square');
     expect($squareRow[8])->toBe('sq_pay_777');
+
+    $vivaAccount = VivaAccount::factory()->create(['account_name' => 'Acme Viva']);
+    $vivaPayment = Payment::factory()->viva()->create([
+        'viva_account_id' => $vivaAccount->id,
+        'viva_transaction_id' => 'viva_txn_555',
+    ]);
+
+    $vivaRow = $export->map($vivaPayment->load($with));
+    expect($vivaRow[6])->toBe('Viva');
+    expect($vivaRow[7])->toBe('Acme Viva');
+    expect($vivaRow[8])->toBe('viva_txn_555');
+
+    // Pending/pre-webhook Viva payments only have viva_order_code (set when the
+    // pay page creates the Viva order) — viva_transaction_id is only populated
+    // once the webhook confirms payment. The export must fall back to the order
+    // code rather than showing a blank Provider Reference cell.
+    $pendingVivaPayment = Payment::factory()->viva()->create([
+        'viva_account_id' => $vivaAccount->id,
+        'viva_order_code' => 'order_888',
+        'viva_transaction_id' => null,
+    ]);
+
+    $pendingVivaRow = $export->map($pendingVivaPayment->load($with));
+    expect($pendingVivaRow[6])->toBe('Viva');
+    expect($pendingVivaRow[8])->toBe('order_888');
 });
 
 it('scopes the export to the active brand filter', function () {

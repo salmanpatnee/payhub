@@ -25,7 +25,7 @@ class StoreUserRequest extends FormRequest
                 Rule::requiredIf(fn () => $this->input('role') === 'agent'),
                 'nullable',
                 'string',
-                'in:stripe,revolut,square',
+                'in:stripe,revolut,square,viva',
             ],
             'account_id' => [
                 Rule::requiredIf(fn () => $this->input('role') === 'agent'),
@@ -53,6 +53,7 @@ class StoreUserRequest extends FormRequest
         return match ($this->input('provider')) {
             'revolut' => 'revolut_accounts',
             'square' => 'square_accounts',
+            'viva' => 'viva_accounts',
             default => 'stripe_accounts',
         };
     }

@@ -43,4 +43,11 @@ return [
         'api_version' => env('REVOLUT_API_VERSION', '2024-09-01'),
     ],
 
+    'viva' => [
+        // 'demo' targets the demo-*.vivapayments.com hosts; 'production' targets the live hosts.
+        // Per-account client id/secret/merchant id/api key live (encrypted where applicable)
+        // on the viva_accounts table — no global credentials here.
+        'environment' => env('VIVA_ENVIRONMENT', 'demo'),
+    ],
+
 ];
