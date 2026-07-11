@@ -14,13 +14,13 @@ class RegisterVivaWebhook extends Command
         {--url= : Override the webhook URL (use when APP_URL is not the public URL, e.g. a tunnel)}
         {--events=1796 : Comma-separated Viva EventTypeIds (1796 = TransactionPaymentCreated)}';
 
-    protected $description = 'Register the Viva webhook subscription for an account and store its verification key';
+    protected $description = 'Fetch and store the Viva webhook verification key, and print the dashboard setup details';
 
     /**
-     * NOTE: VivaClient::registerWebhook()'s exact request/response shape is
-     * unconfirmed against a live sandbox — see .planning/research/VIVA_PAYMENTS.md
-     * §2 and the TODO on VivaClient::registerWebhook(). Confirm and adjust the
-     * response-key extraction below before relying on this command.
+     * Viva has no webhook-registration API: the webhook URL + event types are
+     * created by hand in the Viva dashboard (API Access → Webhooks). This
+     * command fetches the account's verification Key (so the "Verify" handshake
+     * passes) and prints the exact URL/events to enter in the dashboard.
      */
     public function handle(): int
     {
@@ -39,11 +39,6 @@ class RegisterVivaWebhook extends Command
             return self::FAILURE;
         }
 
-        $eventTypeIds = array_values(array_filter(array_map(
-            fn (string $id): int => (int) trim($id),
-            explode(',', (string) $this->option('events')),
-        )));
-
         $client = new VivaClient(
             $account->client_id,
             $account->client_secret,
@@ -53,19 +48,19 @@ class RegisterVivaWebhook extends Command
             $account->environment,
         );
 
-        $webhook = $client->registerWebhook($url, $eventTypeIds);
-
         // webhook_verification_key is not mass-assignable (encrypted cast) — set directly.
-        $account->webhook_verification_key = $webhook['Key'] ?? $webhook['verificationKey'] ?? null;
+        $account->webhook_verification_key = $client->fetchWebhookVerificationKey();
         $account->save();
 
-        $this->info('Webhook registered and verification key stored.');
+        $this->info('Verification key fetched and stored.');
+        $this->line('Now create the webhook in the Viva dashboard (API Access → Webhooks) with:');
         $this->table(['Field', 'Value'], [
             ['Account', "{$account->account_name} (#{$account->id})"],
             ['URL', $url],
-            ['Event Type IDs', implode(', ', $eventTypeIds)],
+            ['Event Type IDs', (string) $this->option('events')],
             ['Environment', $account->environment],
         ]);
+        $this->line('Then click "Verify" in the dashboard — it will pass now that the key is stored.');
 
         return self::SUCCESS;
     }

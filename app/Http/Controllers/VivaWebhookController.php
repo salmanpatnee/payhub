@@ -43,12 +43,13 @@ class VivaWebhookController extends Controller
             return response('', 200); // Acknowledge; skip processing
         }
 
+        // Viva's payment webhooks are NOT per-message signed — the one-time URL
+        // verification handshake (the shared Key) is the whole of Viva's own
+        // security model. So this endpoint cannot authenticate the POST itself;
+        // it treats the event only as a nudge. The authoritative check lives in
+        // HandleVivaWebhookJob, which re-fetches the transaction from Viva's API
+        // and refuses to mark a payment paid unless Viva confirms it succeeded.
         $payload = $request->getContent();
-        $signature = $request->header('Viva-Signature', '');
-
-        if (! $this->signatureIsValid($payload, $signature, $vivaAccount->webhook_verification_key)) {
-            return response('Invalid signature', 400);
-        }
 
         $data = json_decode($payload, true);
 
@@ -98,25 +99,5 @@ class VivaWebhookController extends Controller
         HandleVivaWebhookJob::dispatch($vivaAccount->id, $orderCode, $transactionId);
 
         return response('', 200);
-    }
-
-    /**
-     * Verify the Viva webhook signature.
-     *
-     * TODO: header name and signed-payload shape are unconfirmed against a
-     * live sandbox — see .planning/research/VIVA_PAYMENTS.md §2. Assumes
-     * HMAC-SHA256 of the raw body using the stored verification key, mirrored
-     * on the same isolated-method pattern as RevolutWebhookController so the
-     * header/algorithm can be corrected in one place once confirmed.
-     */
-    private function signatureIsValid(string $payload, string $signatureHeader, ?string $secret): bool
-    {
-        if ($secret === null || $secret === '' || $signatureHeader === '') {
-            return false;
-        }
-
-        $expected = hash_hmac('sha256', $payload, $secret);
-
-        return hash_equals($expected, $signatureHeader);
     }
 }
