@@ -40,6 +40,14 @@ class VivaWebhookController extends Controller
 
     public function handle(Request $request, VivaAccount $vivaAccount): Response
     {
+        // Diagnostic entry log at WARNING level (staging/prod often set
+        // LOG_LEVEL=error/warning, which would swallow info logs). Proves the
+        // POST actually reached Laravel and shows the raw body Viva delivered.
+        Log::warning('viva.webhook.hit', [
+            'viva_account_id' => $vivaAccount->id,
+            'raw' => $request->getContent(),
+        ]);
+
         if (! $vivaAccount->is_active) {
             return response('', 200); // Acknowledge; skip processing
         }
@@ -64,7 +72,7 @@ class VivaWebhookController extends Controller
         // transaction ids, no card data or secrets — safe to log). Lets us confirm
         // the real EventTypeId + EventData shape against a live delivery instead of
         // guessing, and surfaces events (e.g. "Order Updated") we currently ignore.
-        Log::info('viva.webhook.received', [
+        Log::warning('viva.webhook.received', [
             'viva_account_id' => $vivaAccount->id,
             'event_type_id' => $eventTypeId,
             'handled' => in_array($eventTypeId, self::HANDLED_EVENT_TYPE_IDS, true),
