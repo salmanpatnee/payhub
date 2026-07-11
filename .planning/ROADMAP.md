@@ -19,6 +19,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Client Payment Page** - Branded unauthenticated payment page, Stripe Elements, 3DS handling, success/failure pages *(completed 2026-05-09)*
 - [x] **Phase 6: Webhooks + Status Sync** - Per-account webhook endpoints, signature verification, queued fulfillment, authoritative status writes *(completed 2026-05-12)*
 - [x] **Phase 7: Notifications + Dashboard** - Admin email notification, unified dashboard, filtering, user payment history *(completed 2026-05-14)*
+- [x] **Phase 8: Revolut Payment Provider** - Revolut Merchant API as a second parallel provider alongside Stripe *(completed, exact date not tracked — delivered via ad-hoc branch outside phase-plan workflow)*
+- [x] **Phase 9: Square Payment Provider** - Square Payments API as a third parallel provider, with per-account currency lock *(completed 2026-07-02, merged `feat/square-payment-processor-v2` → `staging`)*
+- [x] **Phase 10: Viva Payments Provider** - Viva Smart Checkout as a fourth parallel provider, GBP-only *(completed 2026-07-11, merged `feat/viva-payment-provider` → `staging`)*
 
 ## Phase Details
 
@@ -146,10 +149,49 @@ Plans:
 
 **UI hint**: yes
 
+### Phase 8: Revolut Payment Provider
+**Goal**: Revolut Merchant API is available as a second parallel payment provider alongside Stripe, with full parity — account CRUD, payment creation, client pay page, webhook-driven status sync, CSV export, and dashboard filtering.
+**Depends on**: Phase 7 (built on the completed v1.0 Stripe-only foundation)
+**Requirements**: REVOLUT-01 .. REVOLUT-06 (see REQUIREMENTS.md)
+**Success Criteria** (what must be TRUE):
+  1. Admin can create/edit/deactivate a Revolut account (`secret_key`/`webhook_signature_key` encrypted at rest, never mass-assignable)
+  2. A payment can be created against an active Revolut account; the client pay page creates a Merchant API order and completes checkout
+  3. `/webhook/revolut/{account}` verifies the HMAC-SHA256 `v1.{timestamp}.{rawBody}` signature (300s replay tolerance) and is the sole writer of payment status; idempotency keyed on `order_id:event_type` (`ProcessedRevolutEvent`) since Revolut webhooks carry no event id
+  4. Revolut rows appear correctly in the CSV export (Provider Reference = `revolut_order_id`) and in dashboard/filter surfaces
+**Plans**: Delivered via an ad-hoc feature branch outside the phase-plan wave workflow — no PLAN.md/CONTEXT.md exists for this phase; exact completion date not tracked in `.planning`.
+**UI hint**: yes
+
+### Phase 9: Square Payment Provider
+**Goal**: Square Payments API is available as a third parallel payment provider, including Square's single-currency-per-account constraint, with the same CRUD/pay-page/webhook/export/dashboard parity as Stripe and Revolut.
+**Depends on**: Phase 8
+**Requirements**: SQUARE-01 .. SQUARE-07 (see REQUIREMENTS.md)
+**Success Criteria** (what must be TRUE):
+  1. Admin can create/edit/deactivate a Square account (`access_token`/`webhook_signature_key` encrypted, never mass-assignable); sandbox credentials are blocked in production
+  2. A `SquareAccount` is single-currency (`square_accounts.currency`); creating/updating a payment against a mismatched-currency account is rejected with a clear validation error
+  3. The client pay page tokenizes via Square Web Payments SDK and charges server-side via the Payments API, amount always read from the DB `Payment` row
+  4. `/webhook/square/{squareAccount}` verifies `x-square-hmacsha256-signature` via the Square SDK's `WebhooksHelper`; idempotency tracked in `ProcessedSquareEvent`
+  5. Square rows appear correctly in the CSV export (Provider Reference = `square_payment_id`) and dashboard/filter surfaces, including "Accounts Today" account resolution
+**Plans**: Delivered via `feat/square-payment-processor-v2`, merged to `staging` 2026-07-02 (commits `72b6bd5`, `377aa4c`) with a follow-up CSV export fix (`2aa7451` — Provider Reference blank-cell bug). No PLAN.md wave breakdown exists for this phase.
+**UI hint**: yes
+
+### Phase 10: Viva Payments Provider
+**Goal**: Viva Smart Checkout is available as a fourth parallel payment provider, GBP-only as a flat platform rule, with the same CRUD/pay-page/webhook/export/dashboard parity as the other three providers.
+**Depends on**: Phase 9
+**Requirements**: VIVA-01 .. VIVA-07 (see REQUIREMENTS.md)
+**Success Criteria** (what must be TRUE):
+  1. Admin can create/edit/deactivate a Viva account (`client_secret`/`api_key`/`webhook_verification_key` encrypted, never mass-assignable); demo credentials are blocked in production
+  2. Creating or updating a payment against a Viva account is rejected unless currency is GBP (flat rule, not per-account like Square)
+  3. The client pay page redirects to Viva Smart Checkout with an order created via OAuth2 client_credentials; `viva_order_code` is captured at order-creation time (before any webhook), `viva_transaction_id` only once the webhook confirms payment
+  4. `/webhook/viva/{vivaAccount}` verifies the `Viva-Signature` header and is the sole writer of completed status; idempotency via `ProcessedVivaEvent` (`event_key` = Viva's `MessageId` or a composite `orderCode:eventTypeId` fallback)
+  5. Viva rows appear correctly in the CSV export and payment detail page — Provider Reference falls back to `viva_order_code` when `viva_transaction_id` isn't set yet (fixed 2026-07-11, was blank for every pending/failed Viva payment)
+  6. `PaymentController::clearStaleProviderTransactionIds()` nulls both `viva_order_code` and `viva_transaction_id` when a Viva payment moves to a different account
+**Plans**: Delivered via `feat/viva-payment-provider`, merged to `staging` 2026-07-11 (commit `4f35859`). No PLAN.md wave breakdown exists for this phase. **Known open items** (see `.planning/research/VIVA_PAYMENTS.md` and memory `project-viva-provider`): the webhook signature header/algorithm and the `TransactionFailed` event type id are unconfirmed against a live Viva sandbox — pending a real staging webhook test.
+**UI hint**: yes
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -160,3 +202,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 5. Client Payment Page | 6/6 | Complete | 2026-05-09 |
 | 6. Webhooks + Status Sync | 4/4 | Complete | 2026-05-13 |
 | 7. Notifications + Dashboard | 4/4 | Complete | 2026-05-14 |
+| 8. Revolut Payment Provider | N/A — no phase plans | Complete | not tracked |
+| 9. Square Payment Provider | N/A — no phase plans | Complete | 2026-07-02 |
+| 10. Viva Payments Provider | N/A — no phase plans | Complete | 2026-07-11 |
