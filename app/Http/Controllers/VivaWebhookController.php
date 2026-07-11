@@ -9,6 +9,7 @@ use App\Models\VivaAccount;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 
 class VivaWebhookController extends Controller
 {
@@ -58,6 +59,17 @@ class VivaWebhookController extends Controller
         }
 
         $eventTypeId = (int) ($data['EventTypeId'] ?? 0);
+
+        // Diagnostic: log every inbound Viva webhook (payloads carry only order/
+        // transaction ids, no card data or secrets — safe to log). Lets us confirm
+        // the real EventTypeId + EventData shape against a live delivery instead of
+        // guessing, and surfaces events (e.g. "Order Updated") we currently ignore.
+        Log::info('viva.webhook.received', [
+            'viva_account_id' => $vivaAccount->id,
+            'event_type_id' => $eventTypeId,
+            'handled' => in_array($eventTypeId, self::HANDLED_EVENT_TYPE_IDS, true),
+            'payload' => $data,
+        ]);
 
         if (! in_array($eventTypeId, self::HANDLED_EVENT_TYPE_IDS, true)) {
             return response('', 200);
