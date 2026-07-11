@@ -114,6 +114,7 @@ watch(
                         <SelectItem value="stripe">Stripe</SelectItem>
                         <SelectItem value="revolut">Revolut</SelectItem>
                         <SelectItem value="square">Square</SelectItem>
+                        <SelectItem value="viva">Viva</SelectItem>
                     </SelectContent>
                 </Select>
             </div>

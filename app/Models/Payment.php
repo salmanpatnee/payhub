@@ -16,12 +16,13 @@ class Payment extends Model
 
     protected $fillable = [
         'uuid', 'reference_code', 'provider', 'brand_id',
-        'stripe_account_id', 'revolut_account_id', 'square_account_id',
+        'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id',
         'user_id', 'relationship_manager_id',
         'amount', 'currency', 'status',
         'client_email', 'client_name',
         'service', 'package', 'note',
-        'stripe_payment_intent_id', 'revolut_order_id', 'square_payment_id', 'expires_at', 'paid_at',
+        'stripe_payment_intent_id', 'revolut_order_id', 'square_payment_id',
+        'viva_transaction_id', 'viva_order_code', 'expires_at', 'paid_at',
     ];
 
     protected static function boot(): void
@@ -83,16 +84,27 @@ class Payment extends Model
         return $this->belongsTo(SquareAccount::class);
     }
 
+    public function vivaAccount(): BelongsTo
+    {
+        return $this->belongsTo(VivaAccount::class);
+    }
+
     /**
      * Reference code prefixed with the processing account's prefix (resolved by
      * provider), e.g. "ACME-001234". Falls back to "#001234" when no prefix.
+     *
+     * Match arms are exhaustive by design (no default) so an unhandled provider
+     * throws UnhandledMatchError instead of silently resolving to Stripe's
+     * account — see git history for the Square CSV export bugs this pattern
+     * previously caused.
      */
     public function formattedReferenceCode(): string
     {
         $prefix = match ($this->provider) {
+            PaymentProvider::Stripe => $this->stripeAccount?->prefix,
             PaymentProvider::Revolut => $this->revolutAccount?->prefix,
             PaymentProvider::Square => $this->squareAccount?->prefix,
-            default => $this->stripeAccount?->prefix,
+            PaymentProvider::Viva => $this->vivaAccount?->prefix,
         };
         $number = str_pad((string) ($this->reference_code ?? 0), 6, '0', STR_PAD_LEFT);
 
@@ -102,13 +114,16 @@ class Payment extends Model
     /**
      * Display name of the payment account that processed (or will process) this
      * payment, resolved by provider. Null if the account is missing.
+     *
+     * Match arms are exhaustive by design — see formattedReferenceCode() note.
      */
     public function providerAccountName(): ?string
     {
         return match ($this->provider) {
+            PaymentProvider::Stripe => $this->stripeAccount?->account_name,
             PaymentProvider::Revolut => $this->revolutAccount?->account_name,
             PaymentProvider::Square => $this->squareAccount?->account_name,
-            default => $this->stripeAccount?->account_name,
+            PaymentProvider::Viva => $this->vivaAccount?->account_name,
         };
     }
 

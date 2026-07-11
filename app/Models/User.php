@@ -14,7 +14,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'username', 'email', 'password', 'stripe_account_id', 'revolut_account_id', 'square_account_id'])]
+#[Fillable(['name', 'username', 'email', 'password', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -43,6 +43,11 @@ class User extends Authenticatable
     public function squareAccount(): BelongsTo
     {
         return $this->belongsTo(SquareAccount::class);
+    }
+
+    public function vivaAccount(): BelongsTo
+    {
+        return $this->belongsTo(VivaAccount::class);
     }
 
     /**

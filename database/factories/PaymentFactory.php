@@ -7,6 +7,7 @@ use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
+use App\Models\VivaAccount;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -21,6 +22,7 @@ class PaymentFactory extends Factory
             'stripe_account_id' => StripeAccount::factory(),
             'revolut_account_id' => null,
             'square_account_id' => null,
+            'viva_account_id' => null,
             'user_id' => User::factory(),
             'amount' => $this->faker->numberBetween(500, 100000),
             'currency' => $this->faker->randomElement(['usd', 'gbp']),
@@ -36,6 +38,8 @@ class PaymentFactory extends Factory
             'stripe_payment_intent_id' => null,
             'revolut_order_id' => null,
             'square_payment_id' => null,
+            'viva_transaction_id' => null,
+            'viva_order_code' => null,
             'expires_at' => null,
             'paid_at' => null,
         ];
@@ -62,6 +66,21 @@ class PaymentFactory extends Factory
             'provider' => 'square',
             'stripe_account_id' => null,
             'square_account_id' => SquareAccount::factory(),
+        ]);
+    }
+
+    /**
+     * Viva-provider payment: nulls the Stripe account and attaches a Viva
+     * account. Viva is GBP-only — currency is forced to 'gbp' to match the
+     * platform rule enforced in Store/UpdatePaymentRequest.
+     */
+    public function viva(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'provider' => 'viva',
+            'stripe_account_id' => null,
+            'viva_account_id' => VivaAccount::factory(),
+            'currency' => 'gbp',
         ]);
     }
 }

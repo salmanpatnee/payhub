@@ -30,20 +30,29 @@ class StorePaymentRequest extends FormRequest
                 : 'exists:relationship_managers,id'],
             // The account selector implies the provider; account_id is validated
             // against whichever provider's table was chosen (must be active).
-            'provider' => ['required', 'string', 'in:stripe,revolut,square'],
+            'provider' => ['required', 'string', 'in:stripe,revolut,square,viva'],
             'account_id' => ['required', 'integer',
                 Rule::exists($this->accountTable(), 'id')->where('is_active', true)],
-            'currency' => ['required', 'string', 'in:usd,gbp', function (string $attribute, mixed $value, \Closure $fail): void {
-                if ($this->input('provider') !== 'square') {
-                    return;
-                }
+            'currency' => ['required', 'string', 'in:usd,gbp',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($this->input('provider') !== 'square') {
+                        return;
+                    }
 
-                $account = SquareAccount::find($this->input('account_id'));
+                    $account = SquareAccount::find($this->input('account_id'));
 
-                if ($account?->currency && $account->currency !== $value) {
-                    $fail("This Square account only accepts {$account->currency} payments.");
-                }
-            }],
+                    if ($account?->currency && $account->currency !== $value) {
+                        $fail("This Square account only accepts {$account->currency} payments.");
+                    }
+                },
+                // Viva is GBP-only as a flat platform rule (no per-account variability,
+                // unlike Square's per-account currency lock above) — see CLAUDE.md.
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($this->input('provider') === 'viva' && $value !== 'gbp') {
+                        $fail('Viva payments must be in GBP.');
+                    }
+                },
+            ],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
             'client_name' => ['nullable', 'string', 'max:255'],
             'client_email' => ['nullable', 'email', 'max:255'],
@@ -86,6 +95,7 @@ class StorePaymentRequest extends FormRequest
         $data['stripe_account_id'] = $provider === 'stripe' ? $accountId : null;
         $data['revolut_account_id'] = $provider === 'revolut' ? $accountId : null;
         $data['square_account_id'] = $provider === 'square' ? $accountId : null;
+        $data['viva_account_id'] = $provider === 'viva' ? $accountId : null;
 
         return $data;
     }
@@ -95,6 +105,7 @@ class StorePaymentRequest extends FormRequest
         return match ($this->input('provider')) {
             'revolut' => 'revolut_accounts',
             'square' => 'square_accounts',
+            'viva' => 'viva_accounts',
             default => 'stripe_accounts',
         };
     }

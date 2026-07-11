@@ -11,6 +11,7 @@ use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
+use App\Models\VivaAccount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -23,7 +24,7 @@ class UserController extends Controller
     public function index(): Response
     {
         return Inertia::render('admin/users/Index', [
-            'users' => User::with(['roles', 'stripeAccount', 'revolutAccount', 'squareAccount'])
+            'users' => User::with(['roles', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount'])
                 ->orderBy('name')
                 ->get()
                 ->map(fn (User $user) => [
@@ -33,7 +34,8 @@ class UserController extends Controller
                     'roles' => $user->getRoleNames(),
                     'account_name' => $user->stripeAccount?->account_name
                         ?? $user->revolutAccount?->account_name
-                        ?? $user->squareAccount?->account_name,
+                        ?? $user->squareAccount?->account_name
+                        ?? $user->vivaAccount?->account_name,
                 ]),
         ]);
     }
@@ -69,8 +71,9 @@ class UserController extends Controller
                 [
                     'provider' => $user->stripe_account_id ? 'stripe'
                         : ($user->revolut_account_id ? 'revolut'
-                            : ($user->square_account_id ? 'square' : null)),
-                    'account_id' => $user->stripe_account_id ?? $user->revolut_account_id ?? $user->square_account_id,
+                            : ($user->square_account_id ? 'square'
+                                : ($user->viva_account_id ? 'viva' : null))),
+                    'account_id' => $user->stripe_account_id ?? $user->revolut_account_id ?? $user->square_account_id ?? $user->viva_account_id,
                     'roles' => $user->getRoleNames(),
                     'brand_ids' => $user->brands()->pluck('brands.id'),
                     'relationship_manager_ids' => $user->relationshipManagers()->pluck('relationship_managers.id'),
@@ -121,19 +124,22 @@ class UserController extends Controller
         $square = SquareAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
             ->map(fn (SquareAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'square']);
 
-        return $stripe->concat($revolut)->concat($square)->values();
+        $viva = VivaAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (VivaAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'viva']);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->values();
     }
 
     /**
      * Resolve the payment-account FK columns from the request. Only agents carry
      * an account; for other roles all columns are cleared.
      *
-     * @return array{stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int}
+     * @return array{stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int}
      */
     private function resolveAccountColumns(StoreUserRequest|UpdateUserRequest $request): array
     {
         if ($request->validated('role') !== 'agent') {
-            return ['stripe_account_id' => null, 'revolut_account_id' => null, 'square_account_id' => null];
+            return ['stripe_account_id' => null, 'revolut_account_id' => null, 'square_account_id' => null, 'viva_account_id' => null];
         }
 
         $provider = $request->validated('provider');
@@ -143,6 +149,7 @@ class UserController extends Controller
             'stripe_account_id' => $provider === 'stripe' ? $accountId : null,
             'revolut_account_id' => $provider === 'revolut' ? $accountId : null,
             'square_account_id' => $provider === 'square' ? $accountId : null,
+            'viva_account_id' => $provider === 'viva' ? $accountId : null,
         ];
     }
 

@@ -6,12 +6,14 @@ use App\Http\Controllers\Admin\RevolutAccountController;
 use App\Http\Controllers\Admin\SquareAccountController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Admin\VivaAccountController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RevolutWebhookController;
 use App\Http\Controllers\SquareWebhookController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\VivaWebhookController;
 use App\Support\Navigation;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
@@ -136,6 +138,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'square-accounts/{square_account}/test-connection',
             [SquareAccountController::class, 'testStoredConnection']
         )->name('square-accounts.test-stored-connection');
+
+        Route::resource('viva-accounts', VivaAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'viva-accounts/{viva_account}/deactivate',
+            [VivaAccountController::class, 'deactivate']
+        )->name('viva-accounts.deactivate');
+
+        Route::patch(
+            'viva-accounts/{viva_account}/activate',
+            [VivaAccountController::class, 'activate']
+        )->name('viva-accounts.activate');
+
+        Route::post(
+            'viva-accounts/test-connection',
+            [VivaAccountController::class, 'testKeyConnection']
+        )->name('viva-accounts.test-connection');
+
+        Route::post(
+            'viva-accounts/{viva_account}/test-connection',
+            [VivaAccountController::class, 'testStoredConnection']
+        )->name('viva-accounts.test-stored-connection');
     });
 
 // Public payment routes — no auth middleware (CLIENT-01)
@@ -144,6 +169,16 @@ Route::get('/pay/{payment}', [ClientPaymentController::class, 'show'])->name('pa
 Route::post('/pay/{payment}/consent', [ClientPaymentController::class, 'storeConsent'])->name('pay.consent');
 Route::get('/pay/{payment}/success', [ClientPaymentController::class, 'success'])->name('pay.success');
 Route::get('/pay/{payment}/failed', [ClientPaymentController::class, 'failed'])->name('pay.failed');
+
+// Viva Smart Checkout return endpoints — the Success/Failure URL is configured once per
+// VivaAccount in Viva's own dashboard (self-care), a static URL that can't embed our
+// per-payment {payment} route segment. Viva instead appends `?s={orderCode}` (plus `t`,
+// `lang`, `eventId`) to whatever static URL is configured — resolve the Payment via the
+// order code and hand off to the existing per-payment success/failed page.
+// Paths match what's already configured in the Viva dashboard (https://payhub.test/success
+// and https://payhub.test/failed) so no dashboard change is needed per account.
+Route::get('/success', [ClientPaymentController::class, 'vivaReturnSuccess'])->name('pay.viva.return.success');
+Route::get('/failed', [ClientPaymentController::class, 'vivaReturnFailed'])->name('pay.viva.return.failed');
 
 // Square embedded charge endpoint — public, no auth, CSRF-excluded, throttled.
 // Authoritative status still comes from the payment.updated webhook (CLAUDE.md rule).
@@ -165,6 +200,17 @@ Route::post('/webhook/revolut/{revolutAccount}', [RevolutWebhookController::clas
 // {squareAccount} resolves by integer id (implicit model binding)
 Route::post('/webhook/square/{squareAccount}', [SquareWebhookController::class, 'handle'])
     ->name('webhook.square')
+    ->middleware('throttle:120,1');
+
+// {vivaAccount} resolves by integer id (implicit model binding).
+// GET: Viva's one-time verification handshake, sent before any signed POSTs.
+// POST: signed TransactionPaymentCreated event delivery.
+Route::get('/webhook/viva/{vivaAccount}', [VivaWebhookController::class, 'verify'])
+    ->name('webhook.viva.verify')
+    ->middleware('throttle:120,1');
+
+Route::post('/webhook/viva/{vivaAccount}', [VivaWebhookController::class, 'handle'])
+    ->name('webhook.viva')
     ->middleware('throttle:120,1');
 
 // TEMPORARY deploy hatch — clears app caches AND resets PHP opcache so freshly
