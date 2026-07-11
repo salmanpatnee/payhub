@@ -107,22 +107,30 @@ class VivaClient
     }
 
     /**
-     * Register a webhook subscription and capture the verification key.
+     * Fetch this merchant's webhook verification token ("Key").
      *
-     * TODO: exact endpoint/request/response shape is unconfirmed against
-     * live Viva docs — this is the "confirm against sandbox" item flagged in
-     * .planning/research/VIVA_PAYMENTS.md. Finalize during Phase 5 webhook
-     * testing before relying on this in production.
+     * Viva has no webhook-*registration* API — the webhook URL and its event
+     * types are created by hand in the Viva dashboard (Self-Care → API Access →
+     * Webhooks). The only server-side step is fetching the account's stable
+     * verification Key, which our GET /webhook/viva/{account} handshake endpoint
+     * echoes back so Viva's "Verify" button succeeds.
      *
-     * @param  list<int>  $eventTypeIds
-     * @return array<string, mixed>
+     * This lives in Viva's legacy messaging system: it is served from the
+     * checkout host (NOT the OAuth `accounts` host) and uses legacy Basic Auth
+     * (merchant id / api key) — the same auth as createOrder(), not the OAuth2
+     * Bearer token used by the rest of this client.
+     *
+     *   GET {checkout}/api/messages/config/token  (Basic merchant_id:api_key)
+     *   → { "Key": "<token>" }
      */
-    public function registerWebhook(string $url, array $eventTypeIds): array
+    public function fetchWebhookVerificationKey(): string
     {
-        return $this->request()->post('/webhooks', [
-            'url' => $url,
-            'eventTypeIds' => $eventTypeIds,
-        ])->throw()->json();
+        return (string) Http::baseUrl($this->checkoutBaseUrl())
+            ->withBasicAuth($this->merchantId, $this->apiKey)
+            ->acceptJson()
+            ->get('/api/messages/config/token')
+            ->throw()
+            ->json('Key');
     }
 
     /**
