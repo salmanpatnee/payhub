@@ -2,11 +2,11 @@
 
 ## What This Is
 
-PayHub is a centralized payment infrastructure system for an agency managing multiple brands. It replaces a fragmented multi-site WooCommerce setup with a single Laravel 13 + Inertia.js application that generates branded payment links, processes payments via Stripe Elements, and provides unified reporting. Clients never see backend complexity — they see the brand they trust.
+PayHub is a centralized payment infrastructure system for an agency managing multiple brands. It replaces a fragmented multi-site WooCommerce setup with a single Laravel 13 + Inertia.js application that generates branded payment links, processes payments across four parallel providers (Stripe, Revolut, Square, Viva — see `PaymentProvider` enum), and provides unified reporting. Clients never see backend complexity — they see the brand they trust.
 
 ## Core Value
 
-Clients always feel they are paying the same brand they interacted with, regardless of which Stripe account or backend system processes the payment.
+Clients always feel they are paying the same brand they interacted with, regardless of which payment provider or account processes the payment.
 
 ## Requirements
 
@@ -79,13 +79,30 @@ Clients always feel they are paying the same brand they interacted with, regardl
 - blank-means-preserve pattern: empty webhook_secret field on update preserves existing secret
 - 14/14 webhook tests passing; live E2E verified via Stripe CLI
 
-### Active
+### Validated
 
-**Phase 7: Notifications + Dashboard** *(next)*
-- [ ] Admin receives email notification on payment completion
-- [ ] Admin dashboard: unified payment list across all brands (amount, currency, brand, status, date, client email)
-- [ ] Admin can filter payments by brand, Stripe account, status, date range
-- [ ] User can view own payment history
+**Phase 7: Notifications + Dashboard** *(validated 2026-05-14 — v1.0 milestone complete)*
+- Admin receives email notification on payment completion
+- Admin dashboard: unified payment list across all brands (amount, currency, brand, status, date, client email)
+- Admin can filter payments by brand, Stripe account, status, date range
+- User can view own payment history
+
+### Validated (post-v1.0 — delivered via ad-hoc feature branches, not phase-plan waves)
+
+**Phase 8: Revolut Payment Provider** *(delivered, exact date not tracked)*
+- Revolut Merchant API as a second parallel provider — full parity with Stripe (account CRUD, pay page, webhook, export, dashboard)
+- Per-account `RevolutClient`; webhook idempotency via `ProcessedRevolutEvent` (`order_id:event_type`, since Revolut sends no event id)
+
+**Phase 9: Square Payment Provider** *(validated 2026-07-02, merged `feat/square-payment-processor-v2` → `staging`)*
+- Square Payments API as a third parallel provider
+- Per-account single-currency lock (`square_accounts.currency`) — rejects mismatched-currency payments
+- CSV export Provider Reference bug fixed post-merge (`2aa7451`)
+
+**Phase 10: Viva Payments Provider** *(validated 2026-07-11, merged `feat/viva-payment-provider` → `staging` as `4f35859`)*
+- Viva Smart Checkout as a fourth parallel provider, GBP-only as a flat platform rule (not per-account like Square)
+- Two ids scoped to the account: `viva_order_code` (set at pay-page order creation) and `viva_transaction_id` (set by webhook) — CSV export and payment detail page Provider Reference now fall back to `viva_order_code` when the transaction id isn't set yet
+- `PaymentController::clearStaleProviderTransactionIds()` extended to clear both Viva ids on account change
+- **Open**: webhook signature header/algorithm and the `TransactionFailed` event type id are unconfirmed against a live sandbox (VIVA-07) — see `.planning/research/VIVA_PAYMENTS.md`
 
 ### Out of Scope
 
@@ -99,8 +116,9 @@ Clients always feel they are paying the same brand they interacted with, regardl
 - Analytics / conversion tracking — deferred to optimization phase
 - Invite-only registration flow (signed URLs) — admin creates accounts manually for v1
 - Cancel/void a payment link — deferred to v2
-- CSV export of payment history — deferred to v2
 - 2FA settings UI — TwoFactorAuthenticatable on model but no UI in v1
+
+(CSV export of payment history was listed here as deferred but has since been delivered — see Phase 9/10 validated entries above.)
 
 ## Context
 
@@ -140,6 +158,9 @@ Each payment selects a brand → resolves linked Stripe account → creates Paym
 | All DB status writes via webhooks only | Client-side confirmPayment() cannot be trusted; webhook is authoritative | Enforced — HandleStripeWebhookJob is sole writer |
 | has_webhook_secret bool pattern | Raw encrypted value must never reach frontend | Implemented in Phase 6 — boolean only in Inertia response |
 | Queue driver: sync on shared hosting | HandleStripeWebhookJob is a fast DB write — no reason to defer on shared hosting | Documented in CLAUDE.md deployment section |
+| Revolut, Square, Viva added as parallel providers (not a Stripe replacement) | Agency needed non-Stripe rails per brand/market; each provider gets its own account FK + transaction id columns on `Payment`, resolved by branching on `$payment->provider` | Implemented in Phases 8–10 — see CLAUDE.md "Payment providers" section for the per-provider architecture |
+| Square: per-account single-currency lock | A Square merchant account is provisioned for one currency; mixing currencies on one account isn't supported by Square | Implemented Phase 9 — `square_accounts.currency`, enforced in Store/UpdatePaymentRequest |
+| Viva: flat GBP-only rule (not per-account) | Simpler than Square's per-account lock — Viva accounts have no `currency` column at all | Implemented Phase 10 — enforced in Store/UpdatePaymentRequest |
 
 ## Evolution
 
@@ -159,4 +180,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-13 — Phase 6 complete, Phase 7 next*
+*Last updated: 2026-07-11 — v1.0 milestone (Phases 1–7) complete; Phases 8–10 (Revolut, Square, Viva payment providers) delivered post-milestone via ad-hoc feature branches, backfilled into this doc 2026-07-11*
