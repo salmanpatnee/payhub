@@ -6,6 +6,7 @@ use App\Models\RelationshipManager;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
+use App\Models\VivaAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -49,6 +50,25 @@ function validSquarePaymentPayload(Brand $brand, SquareAccount $account): array
         'account_id' => $account->id,
         'relationship_manager_id' => $rm->id,
         'currency' => $account->currency ?? 'usd',
+        'amount' => '25.00',
+        'client_name' => 'Alice Smith',
+        'client_email' => 'alice@example.com',
+        'service' => 'Web Design',
+        'package' => 'standard',
+        'note' => null,
+    ];
+}
+
+function validVivaPaymentPayload(Brand $brand, VivaAccount $account): array
+{
+    $rm = RelationshipManager::factory()->create();
+
+    return [
+        'brand_id' => $brand->id,
+        'provider' => 'viva',
+        'account_id' => $account->id,
+        'relationship_manager_id' => $rm->id,
+        'currency' => 'gbp',
         'amount' => '25.00',
         'client_name' => 'Alice Smith',
         'client_email' => 'alice@example.com',
@@ -258,6 +278,38 @@ it('accepts a square payment whose currency matches the account currency', funct
 
     $payload = validSquarePaymentPayload($brand, $account);
     $payload['currency'] = 'gbp';
+
+    $this->actingAs($admin)->post('/payments', $payload)
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect(Payment::count())->toBe(1);
+});
+
+// Viva is GBP-only as a flat platform rule: submitting a non-GBP currency is rejected.
+it('rejects a viva payment whose currency is not gbp', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = VivaAccount::factory()->create(['is_active' => true]);
+
+    $payload = validVivaPaymentPayload($brand, $account);
+    $payload['currency'] = 'usd';
+
+    $this->actingAs($admin)->post('/payments', $payload)
+        ->assertSessionHasErrors(['currency' => 'Viva payments must be in GBP.']);
+
+    expect(Payment::count())->toBe(0);
+});
+
+// GBP currency succeeds for a Viva payment.
+it('accepts a viva payment whose currency is gbp', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = VivaAccount::factory()->create(['is_active' => true]);
+
+    $payload = validVivaPaymentPayload($brand, $account);
 
     $this->actingAs($admin)->post('/payments', $payload)
         ->assertSessionHasNoErrors()

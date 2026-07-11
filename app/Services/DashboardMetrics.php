@@ -9,6 +9,7 @@ use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
+use App\Models\VivaAccount;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -79,6 +80,7 @@ class DashboardMetrics
             ->when($accountProvider === 'stripe', fn ($q) => $q->where('stripe_account_id', $accountId))
             ->when($accountProvider === 'revolut', fn ($q) => $q->where('revolut_account_id', $accountId))
             ->when($accountProvider === 'square', fn ($q) => $q->where('square_account_id', $accountId))
+            ->when($accountProvider === 'viva', fn ($q) => $q->where('viva_account_id', $accountId))
             ->when($this->filters['currency'] ?? null, fn ($q, $v) => $q->where('currency', $v))
             ->when($this->filters['from'] ?? null, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
             ->when($this->filters['to'] ?? null, fn ($q, $v) => $q->whereDate('created_at', '<=', $v));
@@ -100,7 +102,7 @@ class DashboardMetrics
 
         [$provider, $id] = explode(':', $value, 2);
 
-        return in_array($provider, ['stripe', 'revolut', 'square'], true) && ctype_digit($id)
+        return in_array($provider, ['stripe', 'revolut', 'square', 'viva'], true) && ctype_digit($id)
             ? [$provider, (int) $id]
             : [null, null];
     }
@@ -337,14 +339,16 @@ class DashboardMetrics
         $stripeNames = StripeAccount::query()->pluck('account_name', 'id');
         $revolutNames = RevolutAccount::query()->pluck('account_name', 'id');
         $squareNames = SquareAccount::query()->pluck('account_name', 'id');
+        $vivaNames = VivaAccount::query()->pluck('account_name', 'id');
 
         return collect(array_keys($accepted + $pending))
-            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames) {
+            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames, $vivaNames) {
                 [$provider, $id] = explode(':', $key);
                 $id = (int) $id;
                 $name = match ($provider) {
                     'revolut' => $revolutNames[$id] ?? "Account #{$id}",
                     'square' => $squareNames[$id] ?? "Account #{$id}",
+                    'viva' => $vivaNames[$id] ?? "Account #{$id}",
                     default => $stripeNames[$id] ?? "Account #{$id}",
                 };
 
@@ -371,14 +375,15 @@ class DashboardMetrics
     {
         $totals = [];
 
-        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, currency, sum(amount) as s')
-            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'currency')
+        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, viva_account_id, currency, sum(amount) as s')
+            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'currency')
             ->get()
             ->each(function ($r) use (&$totals) {
                 $provider = $r->provider instanceof PaymentProvider ? $r->provider->value : (string) $r->provider;
                 $id = match ($provider) {
                     'revolut' => $r->revolut_account_id,
                     'square' => $r->square_account_id,
+                    'viva' => $r->viva_account_id,
                     default => $r->stripe_account_id,
                 };
 
@@ -555,6 +560,13 @@ class DashboardMetrics
                 'provider' => 'square',
             ]);
 
-        return $stripe->concat($revolut)->concat($square)->values()->all();
+        $viva = VivaAccount::query()->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (VivaAccount $a) => [
+                'value' => "viva:{$a->id}",
+                'name' => $a->account_name,
+                'provider' => 'viva',
+            ]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->values()->all();
     }
 }

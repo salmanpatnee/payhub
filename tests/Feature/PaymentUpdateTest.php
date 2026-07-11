@@ -6,6 +6,7 @@ use App\Models\RelationshipManager;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
+use App\Models\VivaAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -261,4 +262,78 @@ it('rejects updating a payment to a square account with a mismatched currency', 
         ->assertSessionHasErrors(['currency' => 'This Square account only accepts usd payments.']);
 
     expect($payment->fresh()->currency)->not()->toBe('gbp');
+});
+
+function updateVivaPayload(Brand $brand, VivaAccount $account, RelationshipManager $rm): array
+{
+    return [
+        'brand_id' => $brand->id,
+        'provider' => 'viva',
+        'account_id' => $account->id,
+        'relationship_manager_id' => $rm->id,
+        'currency' => 'gbp',
+        'amount' => '42.50',
+        'client_name' => 'Updated Client',
+        'client_email' => 'updated@example.com',
+        'service' => 'Updated Service',
+        'package' => 'premium',
+        'note' => 'changed',
+    ];
+}
+
+it('admin can update a payment to use a viva account', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+    $vivaAccount = VivaAccount::factory()->create(['is_active' => true]);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'stripe_account_id' => $stripeAccount->id,
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", updateVivaPayload($brand, $vivaAccount, $rm))
+        ->assertRedirect("/payments/{$payment->uuid}")
+        ->assertSessionHasNoErrors();
+
+    $payment->refresh();
+    expect($payment->provider->value)->toBe('viva');
+    expect($payment->viva_account_id)->toBe($vivaAccount->id);
+    expect($payment->stripe_account_id)->toBeNull();
+    expect($payment->currency)->toBe('gbp');
+});
+
+// Viva is GBP-only as a flat platform rule: updating to a non-GBP currency is rejected.
+it('rejects updating a payment to a viva account with a non-gbp currency', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $vivaAccount = VivaAccount::factory()->create(['is_active' => true]);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'viva_account_id' => $vivaAccount->id,
+        'provider' => 'viva',
+        'stripe_account_id' => null,
+        'currency' => 'gbp',
+        'status' => 'pending',
+    ]);
+
+    $payload = updateVivaPayload($brand, $vivaAccount, $rm);
+    $payload['currency'] = 'usd';
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", $payload)
+        ->assertSessionHasErrors(['currency' => 'Viva payments must be in GBP.']);
+
+    expect($payment->fresh()->currency)->not()->toBe('usd');
 });

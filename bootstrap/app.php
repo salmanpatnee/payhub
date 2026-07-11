@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'webhook/stripe/*',
             'webhook/revolut/*',
             'webhook/square/*',
+            'webhook/viva/*',
             'pay/*/square',
         ]);
 
