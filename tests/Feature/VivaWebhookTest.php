@@ -164,6 +164,33 @@ it('does NOT complete when the retrieved transaction belongs to a different orde
     expect($payment->fresh()->status)->toBe('pending');
 });
 
+it('returns 200 (never 500) and does not record the event when the Viva API errors', function () {
+    // Sync queue runs the job inline; a Viva API failure must NOT 500 the
+    // webhook (Viva would mark delivery failed) and must NOT record the event
+    // as processed, so Viva's retry can re-attempt.
+    Http::fake([
+        '*demo-accounts.vivapayments.com/connect/token' => Http::response([
+            'access_token' => 'test_access_token', 'expires_in' => 3600,
+        ]),
+        '*demo-api.vivapayments.com/checkout/v2/transactions/*' => Http::response('', 500),
+    ]);
+
+    $account = VivaAccount::factory()->create();
+
+    $payment = Payment::factory()->viva()->create([
+        'status' => 'pending',
+        'viva_order_code' => 'order_apierr',
+        'viva_account_id' => $account->id,
+    ]);
+
+    $payload = vivaEventPayload('evt_apierr', 'order_apierr', 'txn_apierr');
+
+    vivaPost("/webhook/viva/{$account->id}", $payload)->assertStatus(200);
+
+    expect($payment->fresh()->status)->toBe('pending');
+    $this->assertDatabaseMissing('processed_viva_events', ['event_key' => 'evt_apierr']);
+});
+
 it('unhandled event type id is acknowledged but not processed', function () {
     $account = VivaAccount::factory()->create();
 

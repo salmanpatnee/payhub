@@ -101,11 +101,6 @@ class VivaWebhookController extends Controller
             return response('', 200);
         }
 
-        ProcessedVivaEvent::create([
-            'event_key' => $eventKey,
-            'processed_at' => now(),
-        ]);
-
         // Status guard: skip only if already completed — failed can still transition
         // to completed on a successful retry, so it must be allowed through.
         $payment = Payment::where('viva_order_code', $orderCode)
@@ -113,10 +108,27 @@ class VivaWebhookController extends Controller
             ->first();
 
         if ($payment && $payment->status === 'completed') {
+            ProcessedVivaEvent::firstOrCreate(['event_key' => $eventKey], ['processed_at' => now()]);
+
             return response('', 200);
         }
 
-        HandleVivaWebhookJob::dispatch($vivaAccount->id, $orderCode, $transactionId);
+        // A webhook must ALWAYS return 2xx to Viva — otherwise Viva marks the
+        // delivery failed and retries hourly. On a sync queue, dispatch() runs
+        // the job inline, so a Viva API error inside it would otherwise 500 the
+        // response. Guard it: on failure, don't record the event as processed so
+        // Viva's retry can re-attempt, and never propagate the exception.
+        try {
+            HandleVivaWebhookJob::dispatch($vivaAccount->id, $orderCode, $transactionId);
+            ProcessedVivaEvent::firstOrCreate(['event_key' => $eventKey], ['processed_at' => now()]);
+        } catch (\Throwable $e) {
+            Log::error('viva.webhook.processing_failed', [
+                'viva_account_id' => $vivaAccount->id,
+                'order_code' => $orderCode,
+                'transaction_id' => $transactionId,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response('', 200);
     }
