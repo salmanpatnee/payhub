@@ -18,12 +18,18 @@ use App\Support\Navigation;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 Route::get('/', function () {
     return Auth::check()
         ? redirect(Navigation::homePathFor(Auth::user()))
         : redirect()->route('login');
 })->name('home');
+
+if (app()->isLocal()) {
+    Route::get('/dev/errors/{status}', fn (int $status) => Inertia::render('Error', ['status' => $status]))
+        ->whereNumber('status');
+}
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])

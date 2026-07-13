@@ -44,6 +44,10 @@ const props = defineProps<{
 }>()
 
 const stripeLoaded  = ref(false)
+// Tracks the Payment Element's own `ready` event — distinct from stripeLoaded,
+// which only means the Stripe.js script downloaded. Submitting before this is
+// true races confirmPayment() against a not-yet-mounted Element (PAYHUB-BACKEND-N/J).
+const elementReady  = ref(false)
 const processing    = ref(false)
 const errorMessage  = ref<string | null>(null)
 
@@ -147,6 +151,12 @@ async function submit(instance: any, elements: any): Promise<void> {
         return
     }
 
+    // Guard against submitting before the Payment Element has mounted (PAYHUB-BACKEND-N/J).
+    if (!elementReady.value) {
+        errorMessage.value = 'Payment form is still loading. Please wait a moment and try again.'
+        return
+    }
+
     // Consent gate — block before any Stripe call if unchecked.
     if (!consent.value) {
         consentError.value = 'You must agree to the Terms & Conditions, Refund Policy, and Privacy Policy before proceeding.'
@@ -224,7 +234,7 @@ async function submit(instance: any, elements: any): Promise<void> {
                 >
                     <template #default="{ instance, elements }">
                         <form @submit.prevent="submit(instance, elements)" class="space-y-5">
-                            <StripeElement type="payment" :elements="elements" />
+                            <StripeElement type="payment" :elements="elements" @ready="elementReady = true" />
 
                             <Alert v-if="errorMessage" variant="destructive">
                                 <AlertCircle class="size-4" />
@@ -237,9 +247,9 @@ async function submit(instance: any, elements: any): Promise<void> {
                                 size="lg"
                                 class="w-full bg-[var(--btn-color)] text-white hover:bg-[var(--btn-color)]/90 focus-visible:ring-[var(--btn-color)]/50 font-semibold tracking-wide cursor-pointer"
                                 :style="{ '--btn-color': brand.secondary_color || brand.primary_color }"
-                                :disabled="processing"
+                                :disabled="processing || !elementReady"
                             >
-                                <Spinner v-if="processing" class="size-4 mr-2" />
+                                <Spinner v-if="processing || !elementReady" class="size-4 mr-2" />
                                 <span>{{ processing ? 'Processing…' : `Pay ${formatAmount(payment.amount, payment.currency)}` }}</span>
                             </Button>
 

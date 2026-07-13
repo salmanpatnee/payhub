@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
+import { LogIn } from 'lucide-vue-next';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import TextLink from '@/components/TextLink.vue';
@@ -85,6 +86,7 @@ defineProps<{
                 data-test="login-button"
             >
                 <Spinner v-if="processing" />
+                <LogIn v-else class="size-4" />
                 Log in
             </Button>
         </div>
