@@ -60,7 +60,7 @@ const defaultConfig: ErrorConfig = {
 const config = computed(() => configs[props.status] ?? defaultConfig)
 
 const page = usePage()
-const isAuthenticated = computed(() => !!page.props.auth.user)
+const isAuthenticated = computed(() => !!page.props.auth?.user)
 
 function goBack() {
     window.history.back()
