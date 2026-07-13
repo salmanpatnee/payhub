@@ -1,1 +1,0 @@
-import{F as e,R as t,Y as n,b as r,k as i,m as a,mt as o}from"./vue.runtime.esm-bundler-p0JfcMXT.js";import{q as s}from"./app-Ce5Bqi_F.js";var c=r({__name:`DialogClose`,props:{asChild:{type:Boolean},as:{}},setup(r){let c=r;return(r,l)=>(e(),a(o(s),i({"data-slot":`dialog-close`},c),{default:n(()=>[t(r.$slots,`default`)]),_:3},16))}});export{c as t};
