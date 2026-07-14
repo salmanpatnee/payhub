@@ -168,6 +168,7 @@ it('still saves the agent payment with their assigned stripe account', function 
         'relationship_manager_id' => $rm->id,
         'currency' => 'usd',
         'amount' => '25.00',
+        'client_name' => 'Alice Smith',
     ])->assertRedirect();
 
     expect(Payment::count())->toBe(1);

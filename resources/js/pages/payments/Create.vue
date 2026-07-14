@@ -190,7 +190,7 @@ function submit() {
 
                     <!-- Client Name -->
                     <div class="grid gap-2">
-                        <Label for="client_name">Client Name</Label>
+                        <Label for="client_name">Client Name <span class="text-destructive">*</span></Label>
                         <Input
                             id="client_name"
                             v-model="form.client_name"

@@ -21,22 +21,24 @@ defineOptions({
     },
 });
 
-/** Primary currency for single-axis charts: the user's filter, else the dominant one. */
-const displayCurrency = computed(() => {
-    if (props.filters.currency) return props.filters.currency;
-    const entries = Object.entries(props.currencySplit);
-    if (entries.length === 0) return 'usd';
-    return entries.sort((a, b) => b[1] - a[1])[0][0];
-});
+/** Stable left-to-right currency order — never inferred from backend GROUP BY row order. */
+const CURRENCY_ORDER = ['usd', 'gbp'];
 
 function moneyLines(amounts: MoneyByCurrency): string[] {
-    const entries = Object.entries(amounts).filter(([, v]) => v > 0);
+    const entries = CURRENCY_ORDER.filter((cur) => (amounts[cur] ?? 0) > 0);
     if (entries.length === 0) return [formatMoney(0, 'usd')];
-    return entries.map(([cur, cents]) => formatMoney(cents, cur));
+    return entries.map((cur) => formatMoney(amounts[cur], cur));
 }
 
-const collectedLines = computed(() => moneyLines(props.kpis.collected));
-const pendingLines = computed(() => moneyLines(props.kpis.pendingPipeline.amounts));
+/** Dual-currency KpiCard amounts, USD then GBP, omitting currencies with nothing to show. */
+function moneyAmounts(amounts: MoneyByCurrency): { code: string; formatted: string }[] {
+    const entries = CURRENCY_ORDER.filter((cur) => (amounts[cur] ?? 0) > 0);
+    if (entries.length === 0) return [{ code: 'USD', formatted: formatMoney(0, 'usd') }];
+    return entries.map((cur) => ({ code: cur.toUpperCase(), formatted: formatMoney(amounts[cur], cur) }));
+}
+
+const collectedAmounts = computed(() => moneyAmounts(props.kpis.collected));
+const pendingAmounts = computed(() => moneyAmounts(props.kpis.pendingPipeline.amounts));
 const avgLines = computed(() => moneyLines(props.kpis.avgPaymentValue));
 
 /** Inline currency mix, e.g. "84% USD · 16% GBP" — replaces the donut. */
@@ -51,16 +53,13 @@ const currencyMix = computed(() => {
 });
 
 const collectedSublines = computed(() => {
-    const lines = [...collectedLines.value.slice(1)];
+    const lines: string[] = [];
     if (currencyMix.value) lines.push(currencyMix.value);
-    lines.push(`Avg ${avgLines.value[0]} / payment`);
+    lines.push(`Avg ${avgLines.value.join(' · ')} / payment`);
     return lines;
 });
 
-const pendingSublines = computed(() => [
-    ...pendingLines.value.slice(1),
-    `${props.kpis.pendingPipeline.count} links at risk`,
-]);
+const pendingSublines = computed(() => [`${props.kpis.pendingPipeline.count} links at risk`]);
 </script>
 
 <template>
@@ -74,16 +73,18 @@ const pendingSublines = computed(() => [
             <div class="grid gap-3 sm:grid-cols-3">
                 <KpiCard
                     hero
+                    dual
                     label="Collected"
                     :icon="TrendingUp"
-                    :value="collectedLines[0]"
+                    :amounts="collectedAmounts"
                     :sublines="collectedSublines"
                 />
                 <KpiCard
                     hero
+                    dual
                     label="Pending Pipeline"
                     :icon="Clock"
-                    :value="pendingLines[0]"
+                    :amounts="pendingAmounts"
                     :sublines="pendingSublines"
                     accent="text-amber-600"
                 />
@@ -115,12 +116,12 @@ const pendingSublines = computed(() => [
         <div class="space-y-3">
             <h2 class="px-1 text-sm font-semibold">Breakdown by brand &amp; rep</h2>
             <div class="grid gap-4 lg:grid-cols-2">
-                <BrandPerformanceChart :rows="brandPerformance" :currency="displayCurrency" />
-                <RmLeaderboard :rows="rmLeaderboard" :currency="displayCurrency" />
+                <BrandPerformanceChart :rows="brandPerformance" :currency="filters.currency ?? undefined" />
+                <RmLeaderboard :rows="rmLeaderboard" :currency="filters.currency ?? undefined" />
             </div>
         </div>
 
-        <!-- Operational "now" view — standalone, ignores the filter bar -->
-        <AccountsTodayPanel :accounts="accountsToday" />
+        <!-- Per-account intake, driven by the same date range as the rest of the dashboard -->
+        <AccountsTodayPanel :accounts="accountsToday" :filters="filters" />
     </div>
 </template>
