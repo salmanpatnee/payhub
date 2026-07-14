@@ -54,7 +54,7 @@ class StorePaymentRequest extends FormRequest
                 },
             ],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
-            'client_name' => ['nullable', 'string', 'max:255'],
+            'client_name' => ['required', 'string', 'max:255'],
             'client_email' => ['nullable', 'email', 'max:255'],
             'service' => ['nullable', 'string', 'max:255'],
             'package' => ['nullable', 'string',

@@ -24,11 +24,6 @@ class DashboardController extends Controller
             'currency' => ['nullable', 'in:usd,gbp'],
         ]);
 
-        // Default to the last 30 days when no range is supplied.
-        if (empty($filters['from']) && empty($filters['to'])) {
-            $filters['from'] = now()->subDays(30)->toDateString();
-        }
-
         return Inertia::render('Dashboard', DashboardMetrics::for($filters));
     }
 }
