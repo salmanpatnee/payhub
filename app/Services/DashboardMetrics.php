@@ -67,9 +67,9 @@ class DashboardMetrics
     }
 
     /**
-     * Base query with the shared filters applied (status excluded — callers add it).
+     * Non-date filters applied (status excluded — callers add it).
      */
-    private function baseQuery(): Builder
+    private function filteredQuery(): Builder
     {
         [$accountProvider, $accountId] = $this->parsedAccountFilter();
 
@@ -81,7 +81,15 @@ class DashboardMetrics
             ->when($accountProvider === 'revolut', fn ($q) => $q->where('revolut_account_id', $accountId))
             ->when($accountProvider === 'square', fn ($q) => $q->where('square_account_id', $accountId))
             ->when($accountProvider === 'viva', fn ($q) => $q->where('viva_account_id', $accountId))
-            ->when($this->filters['currency'] ?? null, fn ($q, $v) => $q->where('currency', $v))
+            ->when($this->filters['currency'] ?? null, fn ($q, $v) => $q->where('currency', $v));
+    }
+
+    /**
+     * filteredQuery() plus the created_at date-range filter (status excluded — callers add it).
+     */
+    private function baseQuery(): Builder
+    {
+        return $this->filteredQuery()
             ->when($this->filters['from'] ?? null, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
             ->when($this->filters['to'] ?? null, fn ($q, $v) => $q->whereDate('created_at', '<=', $v));
     }
@@ -171,15 +179,18 @@ class DashboardMetrics
     }
 
     /**
-     * Daily completed revenue per currency, based on paid_at.
+     * Daily completed revenue per currency, based on paid_at (not created_at —
+     * a payment created within range can still pay outside it, and vice versa).
      *
      * @return array<int, array{date: string, currency: string, total: int}>
      */
     private function revenueTrend(): array
     {
-        return (clone $this->baseQuery())
+        return (clone $this->filteredQuery())
             ->where('status', self::COMPLETED)
             ->whereNotNull('paid_at')
+            ->when($this->filters['from'] ?? null, fn ($q, $v) => $q->whereDate('paid_at', '>=', $v))
+            ->when($this->filters['to'] ?? null, fn ($q, $v) => $q->whereDate('paid_at', '<=', $v))
             ->selectRaw('DATE(paid_at) as d, currency, sum(amount) as s')
             ->groupBy('d', 'currency')
             ->orderBy('d')
@@ -314,26 +325,40 @@ class DashboardMetrics
     }
 
     /**
-     * Per-account "right now" intake, independent of the dashboard filters.
+     * Per-account "right now" intake. Respects an explicit dashboard date
+     * filter same as every other panel, but — unlike the rest of the
+     * dashboard, which defaults to all-time — this panel's own default
+     * (no filter applied) is "today", since it's an operational, right-now
+     * view rather than a historical total.
      *
-     * Accepted = completed payments paid today. Pending = pending links created
-     * today or yesterday (still live, may convert). Currencies never merged.
+     * Accepted = completed payments paid within the range. Pending = pending
+     * links created within the range (still live, may convert). Currencies
+     * never merged.
      *
      * @return array<int, array{id: int, provider: string, name: string, accepted: array<string, int>, pending: array<string, int>}>
      */
     private function accountsToday(): array
     {
+        $from = $this->filters['from'] ?? null;
+        $to = $this->filters['to'] ?? null;
+
+        if (! $from && ! $to) {
+            $from = $to = Carbon::today()->toDateString();
+        }
+
         $accepted = $this->accountCurrencyTotals(
-            Payment::query()
+            (clone $this->filteredQuery())
                 ->where('status', self::COMPLETED)
                 ->whereNotNull('paid_at')
-                ->whereDate('paid_at', Carbon::today())
+                ->when($from, fn ($q, $v) => $q->whereDate('paid_at', '>=', $v))
+                ->when($to, fn ($q, $v) => $q->whereDate('paid_at', '<=', $v))
         );
 
         $pending = $this->accountCurrencyTotals(
-            Payment::query()
+            (clone $this->filteredQuery())
                 ->where('status', self::PENDING)
-                ->whereDate('created_at', '>=', Carbon::yesterday()->toDateString())
+                ->when($from, fn ($q, $v) => $q->whereDate('created_at', '>=', $v))
+                ->when($to, fn ($q, $v) => $q->whereDate('created_at', '<=', $v))
         );
 
         $stripeNames = StripeAccount::query()->pluck('account_name', 'id');

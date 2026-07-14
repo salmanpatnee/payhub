@@ -109,6 +109,37 @@ it('builds a daily revenue trend per currency', function () {
     expect($gbp)->toBe(8000);
 });
 
+it('excludes revenue trend points paid outside the selected range even if created inside it', function () {
+    $brand = Brand::factory()->create();
+    $account = StripeAccount::factory()->create();
+
+    Payment::factory()->for($brand)->create([
+        'stripe_account_id' => $account->id,
+        'amount' => 5000,
+        'currency' => 'usd',
+        'status' => 'completed',
+        'created_at' => now()->subDays(10),
+        'paid_at' => now()->subDays(10),
+    ]);
+
+    $trend = DashboardMetrics::for(['from' => now()->toDateString()])['revenueTrend'];
+
+    expect($trend)->toBeEmpty();
+});
+
+it('defaults the dashboard to an all-time window when no filters are applied', function () {
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    $this->actingAs($admin)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('filters.from', null)
+            ->where('filters.to', null)
+        );
+});
+
 it('narrows results when a currency filter is applied', function () {
     seedDashboardPayments();
 
@@ -145,21 +176,25 @@ it('summarises accepted and pending per account for today', function () {
     expect($accounts[0]['pending'])->toEqualCanonicalizing(['usd' => 7000]);
 });
 
-it('ignores dashboard filters for the accounts-today panel', function () {
+it('respects the brand filter for the accounts-today panel', function () {
     $ids = seedDashboardPayments();
 
-    $accounts = DashboardMetrics::for([
-        'brand_id' => $ids['brandB']->id,
-        'from' => '2020-01-01',
-        'to' => '2020-01-02',
-    ])['accountsToday'];
+    $accounts = DashboardMetrics::for(['brand_id' => $ids['brandB']->id])['accountsToday'];
 
     expect($accounts)->toHaveCount(1);
-    expect($accounts[0]['accepted'])->toEqualCanonicalizing(['usd' => 15000, 'gbp' => 8000]);
-    expect($accounts[0]['pending'])->toEqualCanonicalizing(['usd' => 7000]);
+    expect($accounts[0]['accepted'])->toEqualCanonicalizing(['usd' => 5000]);
+    expect($accounts[0]['pending'])->toBe([]);
 });
 
-it('excludes stale pending links older than yesterday', function () {
+it('respects the date-range filter for the accounts-today panel', function () {
+    seedDashboardPayments();
+
+    $accounts = DashboardMetrics::for(['from' => '2020-01-01', 'to' => '2020-01-02'])['accountsToday'];
+
+    expect($accounts)->toBe([]);
+});
+
+it('excludes pending links created outside the selected range', function () {
     $ids = seedDashboardPayments();
 
     Payment::factory()->for($ids['brandA'])->create([
@@ -169,9 +204,44 @@ it('excludes stale pending links older than yesterday', function () {
         'created_at' => now()->subDays(3),
     ]);
 
-    $accounts = DashboardMetrics::for([])['accountsToday'];
+    $accounts = DashboardMetrics::for(['from' => now()->toDateString()])['accountsToday'];
 
     expect($accounts[0]['pending'])->toEqualCanonicalizing(['usd' => 7000]);
+});
+
+it('defaults the accounts-today panel to today (not all-time like the rest of the dashboard) when no range is applied', function () {
+    $ids = seedDashboardPayments();
+    $account = StripeAccount::query()->first();
+
+    Payment::factory()->for($ids['brandA'])->create([
+        'stripe_account_id' => $account->id,
+        'amount' => 9999,
+        'currency' => 'usd',
+        'status' => 'pending',
+        'created_at' => now()->subDays(3),
+    ]);
+
+    $accounts = DashboardMetrics::for([])['accountsToday'];
+
+    // Stale 3-day-old pending link is excluded — the panel's default is "today", unlike KPIs/trend/etc.
+    expect($accounts[0]['pending'])->toEqualCanonicalizing(['usd' => 7000]);
+});
+
+it('lets an explicit all-time-ish range override the accounts-today panel default of today', function () {
+    $ids = seedDashboardPayments();
+    $account = StripeAccount::query()->first();
+
+    Payment::factory()->for($ids['brandA'])->create([
+        'stripe_account_id' => $account->id,
+        'amount' => 9999,
+        'currency' => 'usd',
+        'status' => 'pending',
+        'created_at' => now()->subDays(3),
+    ]);
+
+    $accounts = DashboardMetrics::for(['from' => now()->subDays(5)->toDateString()])['accountsToday'];
+
+    expect($accounts[0]['pending'])->toEqualCanonicalizing(['usd' => 16999]);
 });
 
 it('includes square accounts in the accounts-today panel', function () {

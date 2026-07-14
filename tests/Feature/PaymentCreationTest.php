@@ -205,6 +205,22 @@ it('agent locked to a square account creates a square payment', function () {
     expect($payment->stripe_account_id)->toBeNull();
 });
 
+// client_name is now required at creation time (Update excluded — see UpdatePaymentRequest).
+it('rejects a payment with an empty client name', function () {
+    $user = User::factory()->create();
+    $user->assignRole('user');
+    $brand = Brand::factory()->create();
+    $account = StripeAccount::factory()->create(['is_active' => true]);
+
+    $payload = validPaymentPayload($brand, $account);
+    $payload['client_name'] = '';
+
+    $this->actingAs($user)->post('/payments', $payload)
+        ->assertSessionHasErrors('client_name');
+
+    expect(Payment::count())->toBe(0);
+});
+
 // PAY-03: client_name and client_email are stored on the Payment record
 it('stores client name and email on the payment record', function () {
     $user = User::factory()->create();

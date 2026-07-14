@@ -126,6 +126,7 @@ it('admin can create a revolut payment via the unified account selector', functi
         'relationship_manager_id' => $rm->id,
         'currency' => 'gbp',
         'amount' => '50.00',
+        'client_name' => 'Alice Smith',
     ])->assertRedirect();
 
     $payment = Payment::first();
