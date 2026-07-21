@@ -2,8 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\SupportedCurrency;
 use App\Models\SquareAccount;
+use App\Models\User;
+use App\Models\UserPaymentAccount;
+use App\Support\CurrencySupportResolver;
+use App\Support\ProviderAccountTable;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class UpdatePaymentRequest extends FormRequest
@@ -29,29 +35,38 @@ class UpdatePaymentRequest extends FormRequest
             'relationship_manager_id' => ['required', 'integer', $isAgent
                 ? Rule::exists('relationship_manager_user', 'relationship_manager_id')->where('user_id', $user->id)
                 : 'exists:relationship_managers,id'],
-            // The account selector implies the provider; account_id is validated
-            // against whichever provider's table was chosen (must be active).
-            'provider' => ['required', 'string', 'in:stripe,revolut,square,viva'],
-            'account_id' => ['required', 'integer',
-                Rule::exists($this->accountTable(), 'id')->where('is_active', true)],
-            'currency' => ['required', 'string', 'in:usd,gbp',
-                function (string $attribute, mixed $value, \Closure $fail): void {
-                    if ($this->input('provider') !== 'square') {
+            // Non-agents pick the account explicitly, which implies the provider.
+            // Agents are routed server-side by currency (see agentAccountData()) so
+            // neither field is required from them.
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva'],
+            'account_id' => [
+                Rule::requiredIf(! $isAgent),
+                'nullable',
+                'integer',
+                Rule::exists($this->accountTable(), 'id')->where('is_active', true),
+            ],
+            'currency' => ['required', 'string', 'in:'.implode(',', SupportedCurrency::values()),
+                function (string $attribute, mixed $value, \Closure $fail) use ($isAgent, $user): void {
+                    if ($isAgent) {
+                        if ($user === null || ! $this->agentHasActiveAccountForCurrency($user, $value)) {
+                            $fail('No active payment account configured for this currency. Contact an admin.');
+                        }
+
                         return;
                     }
 
-                    $account = SquareAccount::find($this->input('account_id'));
+                    $provider = $this->input('provider');
+                    $accountCurrency = $provider === 'square'
+                        ? SquareAccount::find($this->input('account_id'))?->currency
+                        : null;
 
-                    if ($account?->currency && $account->currency !== $value) {
-                        $fail("This Square account only accepts {$account->currency} payments.");
+                    if (CurrencySupportResolver::supports($provider, $accountCurrency, $value)) {
+                        return;
                     }
-                },
-                // Viva is GBP-only as a flat platform rule (no per-account variability,
-                // unlike Square's per-account currency lock above) — see CLAUDE.md.
-                function (string $attribute, mixed $value, \Closure $fail): void {
-                    if ($this->input('provider') === 'viva' && $value !== 'gbp') {
-                        $fail('Viva payments must be in GBP.');
-                    }
+
+                    $fail($provider === 'viva'
+                        ? 'Viva payments must be in GBP.'
+                        : "This Square account only accepts {$accountCurrency} payments.");
                 },
             ],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
@@ -80,14 +95,16 @@ class UpdatePaymentRequest extends FormRequest
 
     /**
      * Map the unified provider/account_id pair onto the concrete FK columns.
+     * provider/account_id may be null here for an agent (locked server-side
+     * by the controller via agentAccountData()) — every FK simply lands null.
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function mapAccountColumns(array $data): array
     {
-        $provider = $data['provider'] ?? 'stripe';
-        $accountId = (int) ($data['account_id'] ?? 0);
+        $provider = $data['provider'] ?? null;
+        $accountId = isset($data['account_id']) ? (int) $data['account_id'] : null;
         unset($data['account_id']);
 
         $data['stripe_account_id'] = $provider === 'stripe' ? $accountId : null;
@@ -98,13 +115,25 @@ class UpdatePaymentRequest extends FormRequest
         return $data;
     }
 
+    /**
+     * Authoritative "can't submit a currency you don't have" check for agents:
+     * the user must have an active user_payment_accounts row for the currency.
+     */
+    private function agentHasActiveAccountForCurrency(User $user, string $currency): bool
+    {
+        $account = UserPaymentAccount::where('user_id', $user->id)->where('currency', $currency)->first();
+
+        if ($account === null) {
+            return false;
+        }
+
+        $table = ProviderAccountTable::for($account->provider->value);
+
+        return DB::table($table)->where('id', $account->account_id)->where('is_active', true)->exists();
+    }
+
     private function accountTable(): string
     {
-        return match ($this->input('provider')) {
-            'revolut' => 'revolut_accounts',
-            'square' => 'square_accounts',
-            'viva' => 'viva_accounts',
-            default => 'stripe_accounts',
-        };
+        return ProviderAccountTable::for($this->input('provider'));
     }
 }

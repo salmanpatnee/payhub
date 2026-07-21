@@ -2,6 +2,9 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Check, Eye, EyeOff } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import InputError from '@/components/InputError.vue';
+import MultiSelectCombobox from '@/components/MultiSelectCombobox.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -13,9 +16,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import InputError from '@/components/InputError.vue';
 import { Label } from '@/components/ui/label';
-import MultiSelectCombobox from '@/components/MultiSelectCombobox.vue';
 import {
     Select,
     SelectContent,
@@ -26,14 +27,14 @@ import {
 
 type AccountOption = { id: number; account_name: string; provider: string };
 type NamedOption = { id: number; name: string };
+type PaymentAccountEntry = { currency: string; provider: string; account_id: string };
 
 type UserProp = {
     id: number;
     name: string;
     username: string;
     roles: string[];
-    provider: string | null;
-    account_id: number | null;
+    payment_accounts: { currency: string; provider: string; account_id: number }[];
     brand_ids: number[];
     relationship_manager_ids: number[];
 };
@@ -41,7 +42,7 @@ type UserProp = {
 const props = defineProps<{
     user: UserProp;
     roles: string[];
-    accounts: AccountOption[];
+    accountsByCurrency: { usd: AccountOption[]; gbp: AccountOption[] };
     brands: NamedOption[];
     relationshipManagers: NamedOption[];
 }>();
@@ -65,22 +66,46 @@ const form = useForm({
     username:                   props.user.username,
     password:                   '',
     role:                       props.user.roles[0] ?? 'agent',
-    provider:                   props.user.provider ?? '',
-    account_id:                 props.user.account_id ? String(props.user.account_id) : '',
+    payment_accounts:           props.user.payment_accounts.map((a) => ({ ...a, account_id: String(a.account_id) })) as PaymentAccountEntry[],
     brand_ids:                  [...props.user.brand_ids],
     relationship_manager_ids:   [...props.user.relationship_manager_ids],
 });
 
 const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut', square: 'Square', viva: 'Viva' };
 
-// The account selector encodes "provider:id" since ids collide across providers.
-const accountValue = ref(
-    props.user.provider && props.user.account_id ? `${props.user.provider}:${props.user.account_id}` : ''
-);
-watch(accountValue, (val) => {
-    const [provider, id] = val.split(':');
-    form.provider = provider ?? '';
-    form.account_id = id ?? '';
+// Each account selector encodes "provider:id" since ids collide across providers.
+function toSelectOptions(accounts: AccountOption[]) {
+    return accounts.map((a) => ({ id: `${a.provider}:${a.id}`, name: `${a.account_name} (${providerLabel[a.provider] ?? a.provider})` }));
+}
+
+const usdOptions = computed(() => toSelectOptions(props.accountsByCurrency.usd));
+const gbpOptions = computed(() => toSelectOptions(props.accountsByCurrency.gbp));
+
+const existingUsd = props.user.payment_accounts.find((a) => a.currency === 'usd');
+const existingGbp = props.user.payment_accounts.find((a) => a.currency === 'gbp');
+
+const usdAccountValue = ref(existingUsd ? `${existingUsd.provider}:${existingUsd.account_id}` : '');
+const gbpAccountValue = ref(existingGbp ? `${existingGbp.provider}:${existingGbp.account_id}` : '');
+
+// Deterministic index into form.payment_accounts for each currency's field —
+// USD (if set) always lands first, GBP fills whichever slot remains.
+const usdEntryIndex = computed(() => (usdAccountValue.value ? 0 : -1));
+const gbpEntryIndex = computed(() => (gbpAccountValue.value ? (usdAccountValue.value ? 1 : 0) : -1));
+
+watch([usdAccountValue, gbpAccountValue], () => {
+    const entries: PaymentAccountEntry[] = [];
+
+    if (usdAccountValue.value) {
+        const [provider, accountId] = usdAccountValue.value.split(':');
+        entries.push({ currency: 'usd', provider, account_id: accountId });
+    }
+
+    if (gbpAccountValue.value) {
+        const [provider, accountId] = gbpAccountValue.value.split(':');
+        entries.push({ currency: 'gbp', provider, account_id: accountId });
+    }
+
+    form.payment_accounts = entries;
 });
 
 const deleteForm = useForm({});
@@ -91,7 +116,9 @@ function submit() {
 
 function executeDelete() {
     deleteForm.delete(`/admin/users/${props.user.id}`, {
-        onSuccess: () => { deleteOpen.value = false; },
+        onSuccess: () => {
+            deleteOpen.value = false;
+        },
     });
 }
 </script>
@@ -183,20 +210,29 @@ function executeDelete() {
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">
-                        <Label for="account_id">Payment Account <span class="text-destructive">*</span></Label>
-                        <Select v-model="accountValue" required>
-                            <SelectTrigger id="account_id" class="w-full">
-                                <SelectValue placeholder="Select a payment account" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="account in accounts"
-                                    :key="`${account.provider}:${account.id}`"
-                                    :value="`${account.provider}:${account.id}`"
-                                >{{ account.account_name }} ({{ providerLabel[account.provider] ?? account.provider }})</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <InputError class="mt-2" :message="form.errors.account_id" />
+                        <Label for="usd_account_id">USD Payment Account</Label>
+                        <SearchableSelect
+                            id="usd_account_id"
+                            v-model="usdAccountValue"
+                            :options="usdOptions"
+                            placeholder="No USD account"
+                            search-placeholder="Search accounts…"
+                            empty-text="No active USD-capable accounts."
+                        />
+                        <InputError class="mt-2" :message="usdEntryIndex >= 0 ? form.errors[`payment_accounts.${usdEntryIndex}.account_id`] ?? form.errors[`payment_accounts.${usdEntryIndex}.currency`] : undefined" />
+                    </div>
+
+                    <div v-if="form.role === 'agent'" class="grid gap-2">
+                        <Label for="gbp_account_id">GBP Payment Account</Label>
+                        <SearchableSelect
+                            id="gbp_account_id"
+                            v-model="gbpAccountValue"
+                            :options="gbpOptions"
+                            placeholder="No GBP account"
+                            search-placeholder="Search accounts…"
+                            empty-text="No active GBP-capable accounts."
+                        />
+                        <InputError class="mt-2" :message="gbpEntryIndex >= 0 ? form.errors[`payment_accounts.${gbpEntryIndex}.account_id`] ?? form.errors[`payment_accounts.${gbpEntryIndex}.currency`] : undefined" />
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">

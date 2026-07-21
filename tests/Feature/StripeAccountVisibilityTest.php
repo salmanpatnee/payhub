@@ -25,8 +25,7 @@ function makeMappedAgent(StripeAccount $account): User
 {
     $agent = User::factory()->create();
     $agent->assignRole('agent');
-    $agent->stripe_account_id = $account->id;
-    $agent->save();
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $account->id]);
 
     return $agent;
 }
@@ -130,8 +129,9 @@ it('shows the stripe account name to admins on the show page', function () {
         );
 });
 
-// Agent create page: accounts payload carries the id + provider only, never the name.
-it('omits the stripe account name from the agent create form options', function () {
+// Agent create page: agents are routed by currency, never receive the account
+// id, provider, or name — only which currencies are usable.
+it('omits the stripe account details from the agent create form options', function () {
     $account = StripeAccount::factory()->create(['is_active' => true, 'account_name' => 'Secret Brand']);
     $agent = makeMappedAgent($account);
 
@@ -142,10 +142,11 @@ it('omits the stripe account name from the agent create form options', function 
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('isAccountLocked', true)
-            ->has('accounts', 1)
-            ->where('accounts.0.id', $account->id)
-            ->where('accounts.0.provider', 'stripe')
-            ->missing('accounts.0.account_name')
+            ->has('accounts', 0)
+            ->where('agentCurrencies.0.currency', 'usd')
+            ->where('agentCurrencies.0.enabled', true)
+            ->where('agentCurrencies.1.currency', 'gbp')
+            ->where('agentCurrencies.1.enabled', false)
         );
 });
 

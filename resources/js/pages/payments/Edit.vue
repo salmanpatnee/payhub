@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, onMounted, ref, watch } from 'vue';
 import { ArrowLeft, Lock, Save } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import InputError from '@/components/InputError.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card, CardContent, CardDescription,
     CardFooter, CardHeader, CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import InputError from '@/components/InputError.vue';
 import { Label } from '@/components/ui/label';
-import SearchableSelect from '@/components/SearchableSelect.vue';
 import {
     Select, SelectContent, SelectItem,
     SelectTrigger, SelectValue,
@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 type BrandOption = { id: number; name: string };
 type AccountOption = { id: number; account_name?: string; provider: string; currency?: string };
 type RmOption = { id: number; name: string };
+type AgentCurrencyOption = { currency: string; enabled: boolean; reason: string | null };
 type PaymentData = {
     uuid: string;
     brand_id: number;
@@ -38,6 +39,7 @@ type PaymentData = {
 const props = defineProps<{
     brands: BrandOption[];
     accounts: AccountOption[];
+    agentCurrencies: AgentCurrencyOption[];
     isAccountLocked: boolean;
     relationshipManagers: RmOption[];
     payment: PaymentData;
@@ -77,18 +79,14 @@ watch(accountValue, (val) => {
     form.account_id = id ?? '';
 
     const account = props.accounts.find(a => `${a.provider}:${a.id}` === val);
+
     if (account?.currency) {
         form.currency = account.currency;
     }
 });
 
-onMounted(() => {
-    if (props.isAccountLocked && props.accounts.length > 0) {
-        const a = props.accounts[0];
-        accountValue.value = `${a.provider}:${a.id}`;
-    }
-});
-
+// No onMounted account/currency default here (unlike Create.vue) — accountValue
+// and form.currency are already seeded above from the payment's existing data.
 
 function submit() {
     form.patch(`/payments/${props.payment.uuid}`);
@@ -165,7 +163,8 @@ function submit() {
                         <InputError class="mt-1" :message="form.errors.relationship_manager_id" />
                     </div>
 
-                    <!-- Currency — locked when the selected account is single-currency (e.g. Square). -->
+                    <!-- Currency — locked when the selected account is single-currency (e.g. Square),
+                         or per-item disabled for agents based on their configured payment accounts. -->
                     <div class="grid gap-2">
                         <Label for="currency" class="gap-1.5">
                             Currency <span class="text-destructive">*</span>
@@ -182,8 +181,21 @@ function submit() {
                                 <SelectValue placeholder="Select currency" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="usd">USD ($)</SelectItem>
-                                <SelectItem value="gbp">GBP (£)</SelectItem>
+                                <template v-if="isAccountLocked">
+                                    <SelectItem
+                                        v-for="c in agentCurrencies"
+                                        :key="c.currency"
+                                        :value="c.currency"
+                                        :disabled="!c.enabled"
+                                    >
+                                        {{ c.currency.toUpperCase() }}
+                                        <span v-if="!c.enabled" class="text-muted-foreground text-xs">— {{ c.reason }}</span>
+                                    </SelectItem>
+                                </template>
+                                <template v-else>
+                                    <SelectItem value="usd">USD ($)</SelectItem>
+                                    <SelectItem value="gbp">GBP (£)</SelectItem>
+                                </template>
                             </SelectContent>
                         </Select>
                         <InputError class="mt-1" :message="form.errors.currency" />

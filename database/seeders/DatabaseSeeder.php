@@ -57,11 +57,12 @@ class DatabaseSeeder extends Seeder
                 'name' => 'Agent User',
                 'email' => 'agent@payhub.test',
                 'password' => Hash::make('password'),
-                'stripe_account_id' => $stripeAccount->id,
             ]
         );
-        $user->stripe_account_id = $stripeAccount->id;
-        $user->save();
+        $user->paymentAccounts()->updateOrCreate(
+            ['currency' => 'usd'],
+            ['provider' => 'stripe', 'account_id' => $stripeAccount->id]
+        );
         $user->syncRoles(['agent']);
 
         $account = User::firstOrCreate(

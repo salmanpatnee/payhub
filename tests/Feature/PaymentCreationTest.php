@@ -180,8 +180,7 @@ it('agent locked to a square account creates a square payment', function () {
     $agent->assignRole('agent');
 
     $account = SquareAccount::factory()->create(['is_active' => true]);
-    $agent->square_account_id = $account->id;
-    $agent->save();
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'square', 'account_id' => $account->id]);
 
     $brand = Brand::factory()->create();
     $rm = RelationshipManager::factory()->create();
@@ -403,8 +402,7 @@ it('agent create page shows only mapped brands and relationship managers', funct
     $agent->assignRole('agent');
 
     $account = StripeAccount::factory()->create(['is_active' => true]);
-    $agent->stripe_account_id = $account->id;
-    $agent->save();
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $account->id]);
 
     $mappedBrand = Brand::factory()->create();
     $otherBrand = Brand::factory()->create();
@@ -430,8 +428,7 @@ it('agent cannot create a payment with an unmapped brand', function () {
     $agent->assignRole('agent');
 
     $account = StripeAccount::factory()->create(['is_active' => true]);
-    $agent->stripe_account_id = $account->id;
-    $agent->save();
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $account->id]);
 
     $mappedBrand = Brand::factory()->create();
     $unmappedBrand = Brand::factory()->create();
@@ -455,8 +452,7 @@ it('agent cannot create a payment with an unmapped relationship manager', functi
     $agent->assignRole('agent');
 
     $account = StripeAccount::factory()->create(['is_active' => true]);
-    $agent->stripe_account_id = $account->id;
-    $agent->save();
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $account->id]);
 
     $brand = Brand::factory()->create();
     $mappedRm = RelationshipManager::factory()->create();
@@ -480,8 +476,7 @@ it('agent can create a payment with mapped brand and relationship manager', func
     $agent->assignRole('agent');
 
     $account = StripeAccount::factory()->create(['is_active' => true]);
-    $agent->stripe_account_id = $account->id;
-    $agent->save();
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $account->id]);
 
     $brand = Brand::factory()->create();
     $rm = RelationshipManager::factory()->create();
@@ -568,4 +563,111 @@ it('amount in database matches round of submitted decimal times 100', function (
 
     expect(Payment::first()->amount)->toBe(1001);
     expect(Payment::first()->amount)->toBeInt();
+});
+
+// Currency-specific payment accounts: agents are routed by currency, not a single
+// locked account. provider/account_id are no longer submitted by agents at all.
+it('agent with only a gbp payment account is rejected on usd but succeeds on gbp', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $vivaAccount = VivaAccount::factory()->create(['is_active' => true]);
+    $agent->paymentAccounts()->create(['currency' => 'gbp', 'provider' => 'viva', 'account_id' => $vivaAccount->id]);
+
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+    $agent->brands()->sync([$brand->id]);
+    $agent->relationshipManagers()->sync([$rm->id]);
+
+    $payload = [
+        'brand_id' => $brand->id,
+        'relationship_manager_id' => $rm->id,
+        'currency' => 'usd',
+        'amount' => '25.00',
+        'client_name' => 'Alice Smith',
+    ];
+
+    $this->actingAs($agent)->post('/payments', $payload)
+        ->assertSessionHasErrors('currency');
+    expect(Payment::count())->toBe(0);
+
+    $payload['currency'] = 'gbp';
+    $this->actingAs($agent)->post('/payments', $payload)
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $payment = Payment::first();
+    expect($payment->provider->value)->toBe('viva');
+    expect($payment->viva_account_id)->toBe($vivaAccount->id);
+});
+
+it('agent with both currencies configured routes to the correct provider account per currency', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+    $vivaAccount = VivaAccount::factory()->create(['is_active' => true]);
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $stripeAccount->id]);
+    $agent->paymentAccounts()->create(['currency' => 'gbp', 'provider' => 'viva', 'account_id' => $vivaAccount->id]);
+
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+    $agent->brands()->sync([$brand->id]);
+    $agent->relationshipManagers()->sync([$rm->id]);
+
+    $basePayload = [
+        'brand_id' => $brand->id,
+        'relationship_manager_id' => $rm->id,
+        'amount' => '25.00',
+        'client_name' => 'Alice Smith',
+    ];
+
+    $this->actingAs($agent)->post('/payments', [...$basePayload, 'currency' => 'usd'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $usdPayment = Payment::first();
+    expect($usdPayment->provider->value)->toBe('stripe');
+    expect($usdPayment->stripe_account_id)->toBe($stripeAccount->id);
+
+    $this->actingAs($agent)->post('/payments', [...$basePayload, 'currency' => 'gbp'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $gbpPayment = Payment::where('id', '!=', $usdPayment->id)->first();
+    expect($gbpPayment->provider->value)->toBe('viva');
+    expect($gbpPayment->viva_account_id)->toBe($vivaAccount->id);
+});
+
+it('zero-currency agent is redirected from the payment create page', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $this->actingAs($agent)->get('/payments/create')
+        ->assertRedirect('/payments');
+});
+
+it('rejects a payment when the agents configured account has since been deactivated', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $stripeAccount->id]);
+
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+    $agent->brands()->sync([$brand->id]);
+    $agent->relationshipManagers()->sync([$rm->id]);
+
+    $stripeAccount->update(['is_active' => false]);
+
+    $this->actingAs($agent)->post('/payments', [
+        'brand_id' => $brand->id,
+        'relationship_manager_id' => $rm->id,
+        'currency' => 'usd',
+        'amount' => '25.00',
+        'client_name' => 'Alice Smith',
+    ])->assertSessionHasErrors('currency');
+
+    expect(Payment::count())->toBe(0);
 });

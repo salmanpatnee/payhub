@@ -112,7 +112,7 @@ it('admin can create an account user without stripe, brand, or RM mappings', fun
 
     $user = User::where('username', 'finance')->firstOrFail();
     expect($user->hasRole('account'))->toBeTrue();
-    expect($user->stripe_account_id)->toBeNull();
+    expect($user->paymentAccounts)->toHaveCount(0);
     expect($user->brands()->count())->toBe(0);
     expect($user->relationshipManagers()->count())->toBe(0);
 });

@@ -13,12 +13,13 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 
+type PaymentAccountSummary = { currency: string; account_name: string | null };
 type UserRow = {
     id: number;
     name: string;
     username: string;
     roles: string[];
-    account_name: string | null;
+    payment_accounts: PaymentAccountSummary[];
 };
 
 defineProps<{ users: UserRow[] }>();
@@ -30,6 +31,14 @@ defineOptions({
         ],
     },
 });
+
+const currencyLabel: Record<string, string> = { usd: 'USD', gbp: 'GBP' };
+
+function paymentAccountsSummary(user: UserRow): string {
+    return user.payment_accounts
+        .map((a) => `${currencyLabel[a.currency] ?? a.currency.toUpperCase()}: ${a.account_name ?? 'Inactive account'}`)
+        .join(' · ');
+}
 
 const page         = usePage();
 const authUserId   = computed(() => page.props.auth.user?.id);
@@ -44,7 +53,10 @@ function confirmDelete(user: UserRow) {
 }
 
 function executeDelete() {
-    if (!deleteTarget.value) return;
+    if (!deleteTarget.value) {
+        return;
+    }
+
     deleteForm.delete(`/admin/users/${deleteTarget.value.id}`, {
         onSuccess: () => {
             deleteOpen.value   = false;
@@ -93,7 +105,14 @@ function executeDelete() {
                                 </Badge>
                             </td>
                             <td class="px-5 py-3.5 text-muted-foreground">
-                                {{ user.account_name ?? '—' }}
+                                <span
+                                    v-if="user.roles.includes('agent') && user.payment_accounts.length === 0"
+                                    class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                                >
+                                    Not configured
+                                </span>
+                                <span v-else-if="user.payment_accounts.length > 0">{{ paymentAccountsSummary(user) }}</span>
+                                <span v-else>—</span>
                             </td>
                             <td class="px-5 py-3.5 text-right">
                                 <div class="flex items-center justify-end gap-1">
