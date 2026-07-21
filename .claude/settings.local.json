@@ -121,7 +121,9 @@
       "Bash(python -m pip show pandas openpyxl xlrd)",
       "Bash(find .planning -maxdepth 3 -iname \"*viva*\" -o -iname \"STATE.md\")",
       "Bash(ls .planning)",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Skill(artifact-design)",
+      "Artifact"
     ]
   },
   "enableAllProjectMcpServers": true,
