@@ -2,6 +2,7 @@
 
 use App\Models\Brand;
 use App\Models\Payment;
+use App\Models\RelationshipManager;
 use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -204,6 +205,36 @@ it('user does not receive brands or accounts props', function () {
             ->where('isAdmin', false)
             ->where('brands', [])
             ->where('accounts', [])
+        );
+});
+
+it('excludes inactive RMs from the payments index filter dropdown by default', function () {
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    $activeRm = RelationshipManager::factory()->create(['name' => 'Active RM']);
+    $inactiveRm = RelationshipManager::factory()->inactive()->create(['name' => 'Retired RM']);
+
+    $this->actingAs($admin)
+        ->get(route('payments.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('relationshipManagers', fn ($rms) => collect($rms)->contains('id', $activeRm->id)
+                && collect($rms)->doesntContain('id', $inactiveRm->id))
+        );
+});
+
+it('keeps the currently-filtered inactive RM visible in the payments index filter dropdown', function () {
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    $inactiveRm = RelationshipManager::factory()->inactive()->create(['name' => 'Retired RM']);
+
+    $this->actingAs($admin)
+        ->get(route('payments.index', ['relationship_manager_id' => $inactiveRm->id]))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('relationshipManagers', fn ($rms) => collect($rms)->contains('id', $inactiveRm->id))
         );
 });
 

@@ -72,4 +72,48 @@ class RelationshipManagerManagementTest extends TestCase
                 ->where('rms.last_page', 2)
             );
     }
+
+    // Index hides inactive RMs by default
+    public function test_index_hides_inactive_rms_by_default(): void
+    {
+        RelationshipManager::factory()->create(['name' => 'Active Alice']);
+        RelationshipManager::factory()->inactive()->create(['name' => 'Inactive Ivan']);
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.relationship-managers.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('rms.data', 1)
+                ->where('rms.data.0.name', 'Active Alice')
+            );
+    }
+
+    // show_inactive=1 returns both active and inactive RMs
+    public function test_index_show_inactive_returns_all_rms(): void
+    {
+        RelationshipManager::factory()->create(['name' => 'Active Alice']);
+        RelationshipManager::factory()->inactive()->create(['name' => 'Inactive Ivan']);
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.relationship-managers.index', ['show_inactive' => 1]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('rms.data', 2)
+            );
+    }
+
+    // direction=desc returns RMs in reverse alphabetical order
+    public function test_index_direction_desc_sorts_reverse_alphabetically(): void
+    {
+        RelationshipManager::factory()->create(['name' => 'Alice Anderson']);
+        RelationshipManager::factory()->create(['name' => 'Bob Brown']);
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.relationship-managers.index', ['direction' => 'desc']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('rms.data.0.name', 'Bob Brown')
+                ->where('rms.data.1.name', 'Alice Anderson')
+            );
+    }
 }

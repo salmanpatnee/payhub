@@ -308,3 +308,31 @@ it('accepts provider=square on the dashboard route without a validation error', 
         ->get(route('dashboard', ['provider' => 'square']))
         ->assertOk();
 });
+
+it('excludes inactive RMs from the dashboard filter dropdown by default', function () {
+    seedDashboardPayments();
+    $inactiveRm = RelationshipManager::factory()->inactive()->create(['name' => 'Retired RM']);
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    $this->actingAs($admin)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('filterOptions.relationshipManagers', fn ($rms) => collect($rms)->doesntContain('id', $inactiveRm->id))
+        );
+});
+
+it('keeps the currently-filtered inactive RM visible in the dashboard filter dropdown', function () {
+    seedDashboardPayments();
+    $inactiveRm = RelationshipManager::factory()->inactive()->create(['name' => 'Retired RM']);
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    $this->actingAs($admin)
+        ->get(route('dashboard', ['relationship_manager_id' => $inactiveRm->id]))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('filterOptions.relationshipManagers', fn ($rms) => collect($rms)->contains('id', $inactiveRm->id))
+        );
+});

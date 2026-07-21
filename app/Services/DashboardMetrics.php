@@ -550,7 +550,10 @@ class DashboardMetrics
     {
         return [
             'brands' => Brand::query()->orderBy('name')->get(['id', 'name']),
-            'relationshipManagers' => RelationshipManager::query()->orderBy('name')->get(['id', 'name']),
+            'relationshipManagers' => RelationshipManager::query()
+                ->where(fn ($q) => $q->where('is_active', true)->orWhere('id', $this->filters['relationship_manager_id'] ?? null))
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'accounts' => $this->accountOptions(),
         ];
     }

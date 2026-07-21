@@ -537,7 +537,7 @@ it('payment edit page includes the currently-assigned inactive relationship mana
 });
 
 // RM deactivation: index filter dropdown still lists inactive RMs (historical filtering)
-it('payment index filter still lists inactive relationship managers', function () {
+it('payment index filter excludes inactive relationship managers', function () {
     $admin = User::factory()->create();
     $admin->assignRole('admin');
 
@@ -546,7 +546,7 @@ it('payment index filter still lists inactive relationship managers', function (
 
     $this->actingAs($admin)->get('/payments')
         ->assertStatus(200)
-        ->assertInertia(fn ($page) => $page->has('relationshipManagers', 2));
+        ->assertInertia(fn ($page) => $page->has('relationshipManagers', 1));
 });
 
 // SEC-02: Amount in database matches round of submitted decimal times 100
