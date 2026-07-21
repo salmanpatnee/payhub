@@ -66,7 +66,9 @@ class PaymentController extends Controller
             'readOnly' => $isAccount,
             'canExport' => $canViewAll,
             'canViewStripeAccount' => $canViewAll,
-            'relationshipManagers' => RelationshipManager::orderBy('name')->get(['id', 'name']),
+            'relationshipManagers' => RelationshipManager::where(
+                fn ($q) => $q->where('is_active', true)->orWhere('id', $request->relationship_manager_id)
+            )->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
