@@ -72,10 +72,10 @@ watch(accountValue, (val) => {
 
 onMounted(() => {
     if (props.isAccountLocked) {
-        const firstEnabled = props.agentCurrencies.find(c => c.enabled);
+        const enabledCurrencies = props.agentCurrencies.filter(c => c.enabled);
 
-        if (firstEnabled) {
-            form.currency = firstEnabled.currency;
+        if (enabledCurrencies.length === 1) {
+            form.currency = enabledCurrencies[0].currency;
         }
     }
 });
