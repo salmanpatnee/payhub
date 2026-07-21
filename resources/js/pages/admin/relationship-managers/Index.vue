@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { CheckCircle2, Pencil, Plus, Power, PowerOff, Search, Trash2, XCircle } from 'lucide-vue-next';
+import { CheckCircle2, ChevronDown, ChevronUp, Pencil, Plus, Power, PowerOff, Search, Trash2, XCircle } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -34,7 +35,7 @@ type PaginatedRms = {
 
 const props = defineProps<{
     rms: PaginatedRms;
-    filters: { search?: string };
+    filters: { search?: string; show_inactive?: boolean; direction?: 'asc' | 'desc' };
 }>();
 
 defineOptions({
@@ -45,19 +46,35 @@ defineOptions({
     },
 });
 
-const filters = reactive({ search: props.filters.search || '' });
+const filters = reactive({
+    search: props.filters.search || '',
+    show_inactive: props.filters.show_inactive || false,
+    direction: props.filters.direction || 'asc',
+});
+
+function buildQuery(extra?: Record<string, string | number>): Record<string, string | number> {
+    const query: Record<string, string | number> = { ...extra };
+    if (filters.search) query.search = filters.search;
+    if (filters.show_inactive) query.show_inactive = 1;
+    if (filters.direction !== 'asc') query.direction = filters.direction;
+    return query;
+}
 
 watch(
     filters,
-    (f) => {
+    () => {
         router.get(
-            rmsIndex.url({ query: f.search ? { search: f.search } : {} }),
+            rmsIndex.url({ query: buildQuery() }),
             {},
             { preserveState: true, replace: true },
         );
     },
     { deep: true },
 );
+
+function toggleSort(): void {
+    filters.direction = filters.direction === 'asc' ? 'desc' : 'asc';
+}
 
 const pageItems = computed((): (number | '...')[] => {
     const current = props.rms.current_page;
@@ -74,10 +91,8 @@ const pageItems = computed((): (number | '...')[] => {
 });
 
 function goToPage(page: number): void {
-    const query: Record<string, string | number> = { page };
-    if (filters.search) query.search = filters.search;
     router.get(
-        rmsIndex.url({ query }),
+        rmsIndex.url({ query: buildQuery({ page }) }),
         {},
         { preserveState: true, preserveScroll: true, replace: true },
     );
@@ -157,8 +172,8 @@ function executeDelete() {
 
         <!-- Search -->
         <div class="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
-            <div class="flex gap-4 p-4">
-                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
+            <div class="flex items-end justify-between gap-4 p-4">
+                <div class="flex flex-col gap-1.5 w-full max-w-xs">
                     <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Search</Label>
                     <div class="relative">
                         <Search class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -170,6 +185,14 @@ function executeDelete() {
                         />
                     </div>
                 </div>
+
+                <Label
+                    for="show_inactive"
+                    class="flex h-9 shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 cursor-pointer select-none transition-colors hover:bg-muted/70 has-[[data-state=checked]]:border-foreground/30 has-[[data-state=checked]]:bg-foreground/[0.06]"
+                >
+                    <Checkbox id="show_inactive" v-model="filters.show_inactive" />
+                    <span class="text-xs font-medium text-foreground/80">Show inactive</span>
+                </Label>
             </div>
         </div>
 
@@ -178,7 +201,16 @@ function executeDelete() {
                 <thead>
                     <tr class="bg-[#F7F5F2] border-b border-border">
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">S.No</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Name</th>
+                        <th
+                            class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground cursor-pointer select-none"
+                            @click="toggleSort"
+                        >
+                            <span class="inline-flex items-center gap-1">
+                                Name
+                                <ChevronUp v-if="filters.direction === 'asc'" class="size-3.5" />
+                                <ChevronDown v-else class="size-3.5" />
+                            </span>
+                        </th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>

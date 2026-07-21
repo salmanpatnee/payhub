@@ -15,16 +15,26 @@ class RelationshipManagerController extends Controller
 {
     public function index(Request $request): Response
     {
+        $direction = $request->input('direction') === 'desc' ? 'desc' : 'asc';
+        $showInactive = $request->boolean('show_inactive');
+
         return Inertia::render('admin/relationship-managers/Index', [
-            'rms' => RelationshipManager::orderBy('name')
+            'rms' => RelationshipManager::query()
+                ->when(! $showInactive, fn ($q) => $q->where('is_active', true))
                 ->when($request->search, fn ($q, $v) => $q->where('name', 'LIKE', "%{$v}%"))
+                ->orderBy('name', $direction)
                 ->paginate(20)
+                ->withQueryString()
                 ->through(fn (RelationshipManager $rm) => [
                     'id' => $rm->id,
                     'name' => $rm->name,
                     'is_active' => $rm->is_active,
                 ]),
-            'filters' => $request->only(['search']),
+            'filters' => [
+                'search' => $request->input('search'),
+                'show_inactive' => $showInactive,
+                'direction' => $direction,
+            ],
         ]);
     }
 
