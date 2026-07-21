@@ -6,6 +6,7 @@ use App\Models\Brand;
 use App\Models\RelationshipManager;
 use App\Models\StripeAccount;
 use App\Models\User;
+use App\Models\VivaAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -52,8 +53,9 @@ class AdminUserManagementTest extends TestCase
                 'username' => 'testuser',
                 'password' => 'Password1!',
                 'role' => 'agent',
-                'provider' => 'stripe',
-                'account_id' => $stripeAccount->id,
+                'payment_accounts' => [
+                    ['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $stripeAccount->id],
+                ],
                 'brand_ids' => [$brand->id],
                 'relationship_manager_ids' => [$rm->id],
             ])
@@ -65,6 +67,117 @@ class AdminUserManagementTest extends TestCase
         $user = User::where('username', 'testuser')->firstOrFail();
         $this->assertDatabaseHas('brand_user', ['brand_id' => $brand->id, 'user_id' => $user->id]);
         $this->assertDatabaseHas('relationship_manager_user', ['relationship_manager_id' => $rm->id, 'user_id' => $user->id]);
+        $this->assertDatabaseHas('user_payment_accounts', [
+            'user_id' => $user->id,
+            'currency' => 'usd',
+            'provider' => 'stripe',
+            'account_id' => $stripeAccount->id,
+        ]);
+    }
+
+    public function test_admin_can_create_agent_with_zero_payment_accounts(): void
+    {
+        $admin = $this->adminUser();
+        $brand = Brand::factory()->create();
+        $rm = RelationshipManager::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'No Accounts Yet',
+                'username' => 'noaccounts',
+                'password' => 'Password1!',
+                'role' => 'agent',
+                'brand_ids' => [$brand->id],
+                'relationship_manager_ids' => [$rm->id],
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('admin.users.index'));
+
+        $user = User::where('username', 'noaccounts')->firstOrFail();
+        $this->assertDatabaseCount('user_payment_accounts', 0);
+        $this->assertCount(0, $user->paymentAccounts);
+    }
+
+    public function test_admin_can_create_agent_with_two_currencies_across_two_providers(): void
+    {
+        $admin = $this->adminUser();
+        $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+        $vivaAccount = VivaAccount::factory()->create(['is_active' => true]);
+        $brand = Brand::factory()->create();
+        $rm = RelationshipManager::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'Dual Currency Agent',
+                'username' => 'dualcurrency',
+                'password' => 'Password1!',
+                'role' => 'agent',
+                'payment_accounts' => [
+                    ['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $stripeAccount->id],
+                    ['currency' => 'gbp', 'provider' => 'viva', 'account_id' => $vivaAccount->id],
+                ],
+                'brand_ids' => [$brand->id],
+                'relationship_manager_ids' => [$rm->id],
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('admin.users.index'));
+
+        $user = User::where('username', 'dualcurrency')->firstOrFail();
+        $this->assertDatabaseHas('user_payment_accounts', [
+            'user_id' => $user->id, 'currency' => 'usd', 'provider' => 'stripe', 'account_id' => $stripeAccount->id,
+        ]);
+        $this->assertDatabaseHas('user_payment_accounts', [
+            'user_id' => $user->id, 'currency' => 'gbp', 'provider' => 'viva', 'account_id' => $vivaAccount->id,
+        ]);
+    }
+
+    public function test_admin_cannot_assign_a_currency_the_account_does_not_support(): void
+    {
+        $admin = $this->adminUser();
+        // Viva is GBP-only as a flat platform rule (CurrencySupportResolver).
+        $vivaAccount = VivaAccount::factory()->create(['is_active' => true]);
+        $brand = Brand::factory()->create();
+        $rm = RelationshipManager::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'Bad Currency',
+                'username' => 'badcurrency',
+                'password' => 'Password1!',
+                'role' => 'agent',
+                'payment_accounts' => [
+                    ['currency' => 'usd', 'provider' => 'viva', 'account_id' => $vivaAccount->id],
+                ],
+                'brand_ids' => [$brand->id],
+                'relationship_manager_ids' => [$rm->id],
+            ])
+            ->assertSessionHasErrors(['payment_accounts.0.currency']);
+
+        $this->assertDatabaseMissing('users', ['username' => 'badcurrency']);
+    }
+
+    public function test_admin_cannot_assign_an_inactive_account(): void
+    {
+        $admin = $this->adminUser();
+        $stripeAccount = StripeAccount::factory()->create(['is_active' => false]);
+        $brand = Brand::factory()->create();
+        $rm = RelationshipManager::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'Inactive Account',
+                'username' => 'inactiveaccount',
+                'password' => 'Password1!',
+                'role' => 'agent',
+                'payment_accounts' => [
+                    ['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $stripeAccount->id],
+                ],
+                'brand_ids' => [$brand->id],
+                'relationship_manager_ids' => [$rm->id],
+            ])
+            ->assertSessionHasErrors(['payment_accounts.0.account_id']);
+
+        $this->assertDatabaseMissing('users', ['username' => 'inactiveaccount']);
     }
 
     public function test_create_excludes_inactive_rms_from_dropdown(): void
@@ -108,8 +221,9 @@ class AdminUserManagementTest extends TestCase
                 'username' => 'nomappings',
                 'password' => 'Password1!',
                 'role' => 'agent',
-                'provider' => 'stripe',
-                'account_id' => $stripeAccount->id,
+                'payment_accounts' => [
+                    ['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $stripeAccount->id],
+                ],
             ])
             ->assertSessionHasErrors(['brand_ids', 'relationship_manager_ids']);
 

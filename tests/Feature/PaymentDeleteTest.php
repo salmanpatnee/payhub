@@ -65,8 +65,7 @@ it('agent cannot delete a payment', function () {
     $agent->assignRole('agent');
 
     $account = StripeAccount::factory()->create(['is_active' => true]);
-    $agent->stripe_account_id = $account->id;
-    $agent->save();
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $account->id]);
 
     $brand = Brand::factory()->create();
 
