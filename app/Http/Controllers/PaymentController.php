@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\PaymentProvider;
+use App\Enums\SupportedCurrency;
 use App\Exports\PaymentsExport;
 use App\Http\Requests\StorePaymentRequest;
 use App\Http\Requests\UpdatePaymentRequest;
@@ -14,6 +15,7 @@ use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use App\Models\VivaAccount;
+use App\Support\ProviderAccountTable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -143,21 +145,25 @@ class PaymentController extends Controller
     /**
      * Load the brand / payment account / relationship manager options for the
      * create and edit forms. Agents are restricted to their assigned resources;
-     * returns a RedirectResponse if the agent has no payment account, brands, or RMs.
+     * returns a RedirectResponse if the agent has no payment accounts at all,
+     * or no brands/RMs.
      *
-     * The account list is a union of active Stripe, Revolut and Square accounts,
-     * each tagged with its provider — the selector implies the provider on submit.
+     * The account list is a union of active Stripe, Revolut, Square and Viva
+     * accounts, each tagged with its provider — the selector implies the
+     * provider on submit. Agents don't use this list (they're routed by
+     * currency); instead they get agentCurrencies, one entry per
+     * SupportedCurrency flagging whether that currency is usable.
      *
      * Inactive relationship managers are hidden from selection, except the
      * payment's currently-assigned RM ($currentRmId) which is always included
      * so historical records remain editable.
      *
-     * @return array{brands: mixed, accounts: mixed, isAccountLocked: bool, relationshipManagers: mixed}|RedirectResponse
+     * @return array{brands: mixed, accounts: mixed, agentCurrencies: mixed, isAccountLocked: bool, relationshipManagers: mixed}|RedirectResponse
      */
     private function formOptions(User $user, ?int $currentRmId = null): array|RedirectResponse
     {
         if ($user->hasRole('agent')) {
-            if (! $user->stripe_account_id && ! $user->revolut_account_id && ! $user->square_account_id && ! $user->viva_account_id) {
+            if ($user->paymentAccounts->isEmpty()) {
                 Inertia::flash('toast', ['type' => 'error', 'message' => 'No payment account assigned. Contact an admin.']);
 
                 return redirect()->route('payments.index');
@@ -175,24 +181,12 @@ class PaymentController extends Controller
                 return redirect()->route('payments.index');
             }
 
-            // Agents never receive the account name (only id + provider) — the
-            // selector is locked/hidden for them. Mirrors the existing privacy rule.
-            if ($user->stripe_account_id) {
-                $accounts = StripeAccount::where('id', $user->stripe_account_id)->get(['id'])
-                    ->map(fn (StripeAccount $a) => ['id' => $a->id, 'provider' => 'stripe']);
-            } elseif ($user->revolut_account_id) {
-                $accounts = RevolutAccount::where('id', $user->revolut_account_id)->get(['id'])
-                    ->map(fn (RevolutAccount $a) => ['id' => $a->id, 'provider' => 'revolut']);
-            } elseif ($user->square_account_id) {
-                $accounts = SquareAccount::where('id', $user->square_account_id)->get(['id'])
-                    ->map(fn (SquareAccount $a) => ['id' => $a->id, 'provider' => 'square']);
-            } else {
-                $accounts = VivaAccount::where('id', $user->viva_account_id)->get(['id'])
-                    ->map(fn (VivaAccount $a) => ['id' => $a->id, 'provider' => 'viva']);
-            }
+            $accounts = [];
+            $agentCurrencies = $this->agentCurrencyOptions($user);
             $isAccountLocked = true;
         } else {
             $accounts = $this->activeAccountOptions();
+            $agentCurrencies = [];
             $isAccountLocked = false;
             $brands = Brand::orderBy('name')->get(['id', 'name']);
             $relationshipManagers = RelationshipManager::where(fn ($q) => $q->where('is_active', true)->orWhere('id', $currentRmId))
@@ -203,9 +197,37 @@ class PaymentController extends Controller
         return [
             'brands' => $brands,
             'accounts' => $accounts,
+            'agentCurrencies' => $agentCurrencies,
             'isAccountLocked' => $isAccountLocked,
             'relationshipManagers' => $relationshipManagers,
         ];
+    }
+
+    /**
+     * Per-currency availability for an agent's payment-currency selector:
+     * one entry per SupportedCurrency flagging whether it's usable and, if
+     * not, why (unconfigured vs. the configured account being deactivated).
+     *
+     * @return Collection<int, array{currency: string, enabled: bool, reason: ?string}>
+     */
+    private function agentCurrencyOptions(User $user): Collection
+    {
+        return collect(SupportedCurrency::cases())->map(function (SupportedCurrency $currency) use ($user) {
+            $account = $user->paymentAccounts->firstWhere('currency', $currency->value);
+
+            if ($account === null) {
+                return ['currency' => $currency->value, 'enabled' => false, 'reason' => 'No account configured for this currency.'];
+            }
+
+            $table = ProviderAccountTable::for($account->provider->value);
+            $isActive = DB::table($table)->where('id', $account->account_id)->where('is_active', true)->exists();
+
+            if (! $isActive) {
+                return ['currency' => $currency->value, 'enabled' => false, 'reason' => 'Account inactive, contact an admin.'];
+            }
+
+            return ['currency' => $currency->value, 'enabled' => true, 'reason' => null];
+        })->values();
     }
 
     /**
@@ -232,30 +254,43 @@ class PaymentController extends Controller
     }
 
     /**
-     * Resolve an agent's locked provider/account FK columns from their assignment.
+     * Resolve an agent's locked provider/account FK columns for the given
+     * currency from their per-currency assignment. Returns null if the agent
+     * has no account configured for this currency, or the configured account
+     * has since been deactivated — the caller must reject the request; this
+     * is a race-condition defense, the real block is StorePaymentRequest /
+     * UpdatePaymentRequest's currency validation.
      *
      * Every branch is explicit (including the Square case, which previously sat
      * in an implicit else) so adding a 5th provider later can't silently land in
      * whichever branch happens to be last — see CLAUDE.md's warning about the
      * two Square CSV export bugs caused by exactly this pattern.
      *
-     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int}
+     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int}|null
      */
-    private function agentAccountData(User $user): array
+    private function agentAccountData(User $user, string $currency): ?array
     {
-        if ($user->stripe_account_id) {
-            return ['provider' => 'stripe', 'stripe_account_id' => $user->stripe_account_id, 'revolut_account_id' => null, 'square_account_id' => null, 'viva_account_id' => null];
+        $account = $user->paymentAccounts()->where('currency', $currency)->first();
+
+        if ($account === null) {
+            return null;
         }
 
-        if ($user->revolut_account_id) {
-            return ['provider' => 'revolut', 'stripe_account_id' => null, 'revolut_account_id' => $user->revolut_account_id, 'square_account_id' => null, 'viva_account_id' => null];
+        $provider = $account->provider->value;
+        $table = ProviderAccountTable::for($provider);
+        $isActive = DB::table($table)->where('id', $account->account_id)->where('is_active', true)->exists();
+
+        if (! $isActive) {
+            return null;
         }
 
-        if ($user->square_account_id) {
-            return ['provider' => 'square', 'stripe_account_id' => null, 'revolut_account_id' => null, 'square_account_id' => $user->square_account_id, 'viva_account_id' => null];
-        }
-
-        return ['provider' => 'viva', 'stripe_account_id' => null, 'revolut_account_id' => null, 'square_account_id' => null, 'viva_account_id' => $user->viva_account_id];
+        return [
+            'provider' => $provider,
+            'stripe_account_id' => $provider === 'stripe' ? $account->account_id : null,
+            'revolut_account_id' => $provider === 'revolut' ? $account->account_id : null,
+            'square_account_id' => $provider === 'square' ? $account->account_id : null,
+            'viva_account_id' => $provider === 'viva' ? $account->account_id : null,
+        ];
     }
 
     public function store(StorePaymentRequest $request): RedirectResponse
@@ -268,7 +303,11 @@ class PaymentController extends Controller
         $user = auth()->user();
 
         if ($user->hasRole('agent')) {
-            $data = [...$data, ...$this->agentAccountData($user)];
+            $accountData = $this->agentAccountData($user, $data['currency']);
+
+            abort_if($accountData === null, 422, 'No active payment account configured for this currency.');
+
+            $data = [...$data, ...$accountData];
         }
 
         $payment = $this->createPaymentWithRetry([
@@ -345,7 +384,11 @@ class PaymentController extends Controller
         $user = auth()->user();
 
         if ($user->hasRole('agent')) {
-            $data = [...$data, ...$this->agentAccountData($user)];
+            $accountData = $this->agentAccountData($user, $data['currency']);
+
+            abort_if($accountData === null, 422, 'No active payment account configured for this currency.');
+
+            $data = [...$data, ...$accountData];
         }
 
         // status and user_id are never updated here. Provider transaction ids are only

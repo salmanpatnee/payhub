@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\SupportedCurrency;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
@@ -11,7 +12,9 @@ use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
+use App\Models\UserPaymentAccount;
 use App\Models\VivaAccount;
+use App\Support\CurrencySupportResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -23,8 +26,10 @@ class UserController extends Controller
 {
     public function index(): Response
     {
+        $accountNames = $this->accountNameLookup();
+
         return Inertia::render('admin/users/Index', [
-            'users' => User::with(['roles', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount'])
+            'users' => User::with(['roles', 'paymentAccounts'])
                 ->orderBy('name')
                 ->get()
                 ->map(fn (User $user) => [
@@ -32,10 +37,12 @@ class UserController extends Controller
                     'name' => $user->name,
                     'username' => $user->username,
                     'roles' => $user->getRoleNames(),
-                    'account_name' => $user->stripeAccount?->account_name
-                        ?? $user->revolutAccount?->account_name
-                        ?? $user->squareAccount?->account_name
-                        ?? $user->vivaAccount?->account_name,
+                    'payment_accounts' => $user->paymentAccounts
+                        ->map(fn (UserPaymentAccount $account) => [
+                            'currency' => $account->currency->value,
+                            'account_name' => $accountNames[$account->provider->value][$account->account_id] ?? null,
+                        ])
+                        ->values(),
                 ]),
         ]);
     }
@@ -44,7 +51,7 @@ class UserController extends Controller
     {
         return Inertia::render('admin/users/Create', [
             'roles' => Role::pluck('name'),
-            'accounts' => $this->activeAccountOptions(),
+            'accountsByCurrency' => $this->activeAccountOptionsByCurrency(),
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
             'relationshipManagers' => RelationshipManager::active()->orderBy('name')->get(['id', 'name']),
         ]);
@@ -53,11 +60,11 @@ class UserController extends Controller
     public function store(StoreUserRequest $request): RedirectResponse
     {
         $data = $request->safe()->only('name', 'username', 'password');
-        $data = [...$data, ...$this->resolveAccountColumns($request)];
 
         $user = User::create($data);
         $user->syncRoles([$request->validated('role')]);
         $this->syncMappings($user, $request);
+        $this->syncPaymentAccounts($user, $request);
 
         return redirect()->route('admin.users.index')
             ->with('success', 'User created.');
@@ -69,18 +76,20 @@ class UserController extends Controller
             'user' => array_merge(
                 $user->only('id', 'name', 'username'),
                 [
-                    'provider' => $user->stripe_account_id ? 'stripe'
-                        : ($user->revolut_account_id ? 'revolut'
-                            : ($user->square_account_id ? 'square'
-                                : ($user->viva_account_id ? 'viva' : null))),
-                    'account_id' => $user->stripe_account_id ?? $user->revolut_account_id ?? $user->square_account_id ?? $user->viva_account_id,
+                    'payment_accounts' => $user->paymentAccounts
+                        ->map(fn (UserPaymentAccount $account) => [
+                            'currency' => $account->currency->value,
+                            'provider' => $account->provider->value,
+                            'account_id' => $account->account_id,
+                        ])
+                        ->values(),
                     'roles' => $user->getRoleNames(),
                     'brand_ids' => $user->brands()->pluck('brands.id'),
                     'relationship_manager_ids' => $user->relationshipManagers()->pluck('relationship_managers.id'),
                 ]
             ),
             'roles' => Role::pluck('name'),
-            'accounts' => $this->activeAccountOptions(),
+            'accountsByCurrency' => $this->activeAccountOptionsByCurrency(),
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
             'relationshipManagers' => RelationshipManager::where('is_active', true)
                 ->orWhereIn('id', $user->relationshipManagers()->pluck('relationship_managers.id'))
@@ -97,65 +106,77 @@ class UserController extends Controller
             $data['password'] = $request->validated('password');
         }
 
-        $data = [...$data, ...$this->resolveAccountColumns($request)];
-
         $user->update($data);
         $user->syncRoles([$request->validated('role')]);
         $this->syncMappings($user, $request);
+        $this->syncPaymentAccounts($user, $request);
 
         return redirect()->route('admin.users.index')
             ->with('success', 'User updated.');
     }
 
     /**
-     * Union of active Stripe + Revolut + Square accounts as
-     * { id, account_name, provider } for the agent payment-account selector.
+     * account_name per provider/account_id, so the users index can display a
+     * per-currency payment-account summary without an N+1 per row.
      *
-     * @return Collection<int, array{id: int, account_name: string, provider: string}>
+     * @return array<string, array<int, string>>
+     */
+    private function accountNameLookup(): array
+    {
+        return [
+            'stripe' => StripeAccount::pluck('account_name', 'id')->all(),
+            'revolut' => RevolutAccount::pluck('account_name', 'id')->all(),
+            'square' => SquareAccount::pluck('account_name', 'id')->all(),
+            'viva' => VivaAccount::pluck('account_name', 'id')->all(),
+        ];
+    }
+
+    /**
+     * Union of active Stripe + Revolut + Square + Viva accounts as
+     * { id, account_name, provider, currency } for the agent payment-account selector.
+     *
+     * @return Collection<int, array{id: int, account_name: string, provider: string, currency: ?string}>
      */
     private function activeAccountOptions(): Collection
     {
         $stripe = StripeAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
-            ->map(fn (StripeAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'stripe']);
+            ->map(fn (StripeAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'stripe', 'currency' => null]);
 
         $revolut = RevolutAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
-            ->map(fn (RevolutAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'revolut']);
+            ->map(fn (RevolutAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'revolut', 'currency' => null]);
 
-        $square = SquareAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
-            ->map(fn (SquareAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'square']);
+        $square = SquareAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'currency'])
+            ->map(fn (SquareAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'square', 'currency' => $a->currency]);
 
         $viva = VivaAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
-            ->map(fn (VivaAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'viva']);
+            ->map(fn (VivaAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'viva', 'currency' => null]);
 
         return $stripe->concat($revolut)->concat($square)->concat($viva)->values();
     }
 
     /**
-     * Resolve the payment-account FK columns from the request. Only agents carry
-     * an account; for other roles all columns are cleared.
+     * Active accounts grouped by SupportedCurrency, for the two independent
+     * per-currency payment-account selectors on the agent create/edit forms.
      *
-     * @return array{stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int}
+     * @return array<string, array<int, array{id: int, account_name: string, provider: string}>>
      */
-    private function resolveAccountColumns(StoreUserRequest|UpdateUserRequest $request): array
+    private function activeAccountOptionsByCurrency(): array
     {
-        if ($request->validated('role') !== 'agent') {
-            return ['stripe_account_id' => null, 'revolut_account_id' => null, 'square_account_id' => null, 'viva_account_id' => null];
-        }
+        $accounts = $this->activeAccountOptions();
 
-        $provider = $request->validated('provider');
-        $accountId = (int) $request->validated('account_id');
-
-        return [
-            'stripe_account_id' => $provider === 'stripe' ? $accountId : null,
-            'revolut_account_id' => $provider === 'revolut' ? $accountId : null,
-            'square_account_id' => $provider === 'square' ? $accountId : null,
-            'viva_account_id' => $provider === 'viva' ? $accountId : null,
-        ];
+        return collect(SupportedCurrency::cases())
+            ->mapWithKeys(fn (SupportedCurrency $currency) => [
+                $currency->value => $accounts
+                    ->filter(fn (array $a) => CurrencySupportResolver::supports($a['provider'], $a['currency'], $currency->value))
+                    ->map(fn (array $a) => ['id' => $a['id'], 'account_name' => $a['account_name'], 'provider' => $a['provider']])
+                    ->values(),
+            ])
+            ->all();
     }
 
     /**
      * Sync an agent's brand and relationship-manager mappings.
-     * Mappings are cleared for non-agent roles, mirroring the payment account.
+     * Mappings are cleared for non-agent roles, mirroring the payment accounts.
      */
     private function syncMappings(User $user, StoreUserRequest|UpdateUserRequest $request): void
     {
@@ -163,6 +184,27 @@ class UserController extends Controller
 
         $user->brands()->sync($isAgent ? $request->validated('brand_ids', []) : []);
         $user->relationshipManagers()->sync($isAgent ? $request->validated('relationship_manager_ids', []) : []);
+    }
+
+    /**
+     * Sync an agent's per-currency payment account assignments. Cleared for
+     * non-agent roles, mirroring syncMappings(). Zero-currency agents are
+     * allowed — this simply leaves no rows.
+     */
+    private function syncPaymentAccounts(User $user, StoreUserRequest|UpdateUserRequest $request): void
+    {
+        $isAgent = $request->validated('role') === 'agent';
+        $entries = $isAgent ? $request->validated('payment_accounts', []) : [];
+
+        $user->paymentAccounts()->delete();
+
+        foreach ($entries as $entry) {
+            $user->paymentAccounts()->create([
+                'currency' => $entry['currency'],
+                'provider' => $entry['provider'],
+                'account_id' => $entry['account_id'],
+            ]);
+        }
     }
 
     public function destroy(Request $request, User $user): RedirectResponse

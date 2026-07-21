@@ -109,8 +109,7 @@ it('creating agent can update their own pending payment', function () {
     $agent->assignRole('agent');
 
     $account = StripeAccount::factory()->create(['is_active' => true]);
-    $agent->stripe_account_id = $account->id;
-    $agent->save();
+    $agent->paymentAccounts()->create(['currency' => 'gbp', 'provider' => 'stripe', 'account_id' => $account->id]);
 
     $brand = Brand::factory()->create();
     $rm = RelationshipManager::factory()->create();
@@ -139,8 +138,7 @@ it('agent cannot update a payment they did not create', function () {
     $other->assignRole('agent');
 
     $account = StripeAccount::factory()->create(['is_active' => true]);
-    $other->stripe_account_id = $account->id;
-    $other->save();
+    $other->paymentAccounts()->create(['currency' => 'gbp', 'provider' => 'stripe', 'account_id' => $account->id]);
 
     $brand = Brand::factory()->create();
     $rm = RelationshipManager::factory()->create();
@@ -165,8 +163,7 @@ it('agent stripe_account is forced on update regardless of submitted value', fun
 
     $agentAccount = StripeAccount::factory()->create(['is_active' => true]);
     $otherAccount = StripeAccount::factory()->create(['is_active' => true]);
-    $agent->stripe_account_id = $agentAccount->id;
-    $agent->save();
+    $agent->paymentAccounts()->create(['currency' => 'gbp', 'provider' => 'stripe', 'account_id' => $agentAccount->id]);
 
     $brand = Brand::factory()->create();
     $rm = RelationshipManager::factory()->create();
@@ -357,8 +354,7 @@ it('nulls stripe_payment_intent_id when an agent update forces a different accou
 
     $agentAccount = StripeAccount::factory()->create(['is_active' => true]);
     $otherAccount = StripeAccount::factory()->create(['is_active' => true]);
-    $agent->stripe_account_id = $agentAccount->id;
-    $agent->save();
+    $agent->paymentAccounts()->create(['currency' => 'gbp', 'provider' => 'stripe', 'account_id' => $agentAccount->id]);
 
     $brand = Brand::factory()->create();
     $rm = RelationshipManager::factory()->create();

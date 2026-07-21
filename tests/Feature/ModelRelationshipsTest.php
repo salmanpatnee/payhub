@@ -40,9 +40,10 @@ it('brand has many payments', function () {
     expect($brand->payments)->toHaveCount(3);
 });
 
-it('square payment belongs to a square account and user belongs to a square account', function () {
+it('square payment belongs to a square account and user has a square payment account', function () {
     $squareAccount = SquareAccount::factory()->create();
-    $user = User::factory()->create(['square_account_id' => $squareAccount->id]);
+    $user = User::factory()->create();
+    $user->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'square', 'account_id' => $squareAccount->id]);
 
     $payment = Payment::factory()->square()->create([
         'square_account_id' => $squareAccount->id,
@@ -51,7 +52,7 @@ it('square payment belongs to a square account and user belongs to a square acco
 
     expect($payment->squareAccount->id)->toBe($squareAccount->id);
     expect($payment->stripe_account_id)->toBeNull();
-    expect($user->squareAccount->id)->toBe($squareAccount->id);
+    expect($user->paymentAccounts->first()->account_id)->toBe($squareAccount->id);
     expect($squareAccount->payments->pluck('id'))->toContain($payment->id);
 });
 
