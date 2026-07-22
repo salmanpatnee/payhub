@@ -22,6 +22,7 @@ import {
 type SquareAccountProp = {
     id: number;
     account_name: string;
+    prefix: string | null;
     application_id: string;
     location_id: string;
     environment: 'sandbox' | 'production';
@@ -45,6 +46,7 @@ const props = defineProps<{ squareAccount: SquareAccountProp }>();
 const form = useForm({
     _method:                'PUT',
     account_name:           props.squareAccount.account_name,
+    prefix:                 props.squareAccount.prefix ?? '',
     application_id:          props.squareAccount.application_id,
     location_id:            props.squareAccount.location_id,
     environment:            props.squareAccount.environment,
@@ -138,6 +140,23 @@ function submit() {
                             required
                         />
                         <InputError :message="form.errors.account_name" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="prefix">Reference Prefix</Label>
+                        <Input
+                            id="prefix"
+                            v-model="form.prefix"
+                            type="text"
+                            placeholder="e.g. SPER"
+                            maxlength="10"
+                            style="text-transform: uppercase"
+                            @input="form.prefix = (form.prefix as string).toUpperCase()"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            Optional. Uppercase letters and digits only, max 10 chars. Used in payment reference codes (e.g. SPER-001254).
+                        </p>
+                        <InputError :message="form.errors.prefix" />
                     </div>
 
                     <div class="grid gap-2">

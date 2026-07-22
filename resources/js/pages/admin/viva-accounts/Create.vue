@@ -114,14 +114,19 @@ function submit() {
                     </div>
 
                     <div class="grid gap-2">
-                        <Label for="prefix">Reference prefix <span class="text-muted-foreground text-xs">(optional)</span></Label>
+                        <Label for="prefix">Reference Prefix</Label>
                         <Input
                             id="prefix"
                             v-model="form.prefix"
                             type="text"
                             placeholder="e.g. ACME"
-                            autocomplete="off"
+                            maxlength="10"
+                            style="text-transform: uppercase"
+                            @input="form.prefix = (form.prefix as string).toUpperCase()"
                         />
+                        <p class="text-xs text-muted-foreground">
+                            Optional. Uppercase letters and digits only, max 10 chars. Used in payment reference codes (e.g. SPER-001254).
+                        </p>
                         <InputError :message="form.errors.prefix" />
                     </div>
 
