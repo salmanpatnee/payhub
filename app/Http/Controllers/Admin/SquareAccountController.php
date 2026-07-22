@@ -26,6 +26,7 @@ class SquareAccountController extends Controller
                 ->map(fn (SquareAccount $account) => [
                     'id' => $account->id,
                     'account_name' => $account->account_name,
+                    'prefix' => $account->prefix,
                     'application_id_preview' => substr($account->application_id, 0, 14).'••••••••',
                     'environment' => $account->environment,
                     'currency' => $account->currency,
@@ -69,6 +70,7 @@ class SquareAccountController extends Controller
             'squareAccount' => [
                 'id' => $squareAccount->id,
                 'account_name' => $squareAccount->account_name,
+                'prefix' => $squareAccount->prefix,
                 'application_id' => $squareAccount->application_id,
                 'location_id' => $squareAccount->location_id,
                 'environment' => $squareAccount->environment,

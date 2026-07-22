@@ -23,6 +23,7 @@ class VivaAccountController extends Controller
                 ->map(fn (VivaAccount $account) => [
                     'id' => $account->id,
                     'account_name' => $account->account_name,
+                    'prefix' => $account->prefix,
                     'client_id_preview' => substr($account->client_id, 0, 8).'••••••••',
                     'environment' => $account->environment,
                     'is_active' => $account->is_active,
