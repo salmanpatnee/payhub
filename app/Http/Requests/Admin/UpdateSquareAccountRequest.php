@@ -17,6 +17,7 @@ class UpdateSquareAccountRequest extends FormRequest
 
         return [
             'account_name' => ['required', 'string', 'max:255'],
+            'prefix' => ['nullable', 'string', 'max:10', 'regex:/^[A-Z0-9]+$/'],
             'application_id' => ['required', 'string', 'max:255'],
             'location_id' => ['required', 'string', 'max:255'],
             'environment' => ['required', 'string', 'in:sandbox,production'],

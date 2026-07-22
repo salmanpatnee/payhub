@@ -16,6 +16,7 @@ import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 type VivaAccountRow = {
     id: number;
     account_name: string;
+    prefix: string | null;
     client_id_preview: string;
     environment: 'demo' | 'production';
     is_active: boolean;
@@ -113,6 +114,7 @@ function executeDelete() {
                 <thead>
                     <tr class="bg-[#F7F5F2] border-b border-border">
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account Name</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Prefix</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client ID</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Environment</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
@@ -126,6 +128,7 @@ function executeDelete() {
                         class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                     >
                         <td class="px-5 py-3.5 font-medium">{{ account.account_name }}</td>
+                        <td class="px-5 py-3.5 font-mono text-xs text-muted-foreground">{{ account.prefix ?? '—' }}</td>
                         <td class="px-5 py-3.5 font-mono text-xs text-muted-foreground">
                             {{ account.client_id_preview }}
                         </td>
@@ -194,7 +197,7 @@ function executeDelete() {
                     </tr>
 
                     <tr v-if="vivaAccounts.length === 0">
-                        <td colspan="5" class="px-5 py-16 text-center text-muted-foreground text-sm">
+                        <td colspan="6" class="px-5 py-16 text-center text-muted-foreground text-sm">
                             No Viva accounts yet. Add an account to enable GBP payment collection via Viva.
                         </td>
                     </tr>
