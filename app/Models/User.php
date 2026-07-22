@@ -57,4 +57,14 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(RelationshipManager::class);
     }
+
+    /**
+     * Company bank accounts assigned to this user for client-facing sharing.
+     *
+     * @return BelongsToMany<BankAccount, $this>
+     */
+    public function bankAccounts(): BelongsToMany
+    {
+        return $this->belongsToMany(BankAccount::class);
+    }
 }
