@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
-import { Building2, CreditCard, Landmark, LayoutDashboard, Settings, UserCheck2, Users, Wallet } from 'lucide-vue-next';
+import { Banknote, Building2, CreditCard, Landmark, LayoutDashboard, Settings, UserCheck2, Users, Wallet } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -35,6 +35,7 @@ const mainNavItems = computed((): NavItem[] => [
         { title: 'RMs',             href: '/admin/relationship-managers',   icon: UserCheck2 } as NavItem,
     ] : []),
     { title: 'Payments', href: '/payments', icon: CreditCard },
+    { title: 'Bank Accounts', href: '/bank-accounts', icon: Banknote },
     ...(isAdmin.value ? [
         { title: 'Settings', href: '/settings/profile', icon: Settings } as NavItem,
     ] : []),

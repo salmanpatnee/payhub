@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\SquareAccountController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VivaAccountController;
+use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentController;
@@ -51,6 +52,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('throttle:30,1');
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])
         ->name('payments.destroy');
+
+    Route::resource('bank-accounts', BankAccountController::class)->except(['show']);
+
+    Route::patch('bank-accounts/{bank_account}/deactivate', [BankAccountController::class, 'deactivate'])
+        ->name('bank-accounts.deactivate');
+
+    Route::patch('bank-accounts/{bank_account}/activate', [BankAccountController::class, 'activate'])
+        ->name('bank-accounts.activate');
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])
