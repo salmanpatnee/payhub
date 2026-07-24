@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -24,6 +25,10 @@ class SendPaymentNotification implements ShouldQueue
 
     public function handle(): void
     {
+        if (! Config::get('mail.payment_notifications_enabled')) {
+            return;
+        }
+
         $admins = User::role('admin')->get();
 
         foreach ($admins as $admin) {
