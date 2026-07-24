@@ -115,4 +115,16 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Notification Emails
+    |--------------------------------------------------------------------------
+    |
+    | Controls whether admins are emailed on successful payments. Disabled
+    | while there is no working mail transport configured.
+    |
+    */
+
+    'payment_notifications_enabled' => env('PAYMENT_EMAIL_NOTIFICATIONS_ENABLED', true),
+
 ];
