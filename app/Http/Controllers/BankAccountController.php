@@ -46,7 +46,10 @@ class BankAccountController extends Controller
                     ->where('is_active', true)
                     ->orderBy('bank_name')
                     ->get()
-                    ->map(fn (BankAccount $account) => $this->accountData($account))
+                    ->map(fn (BankAccount $account) => array_merge(
+                        $this->accountData($account),
+                        ['bank_address' => null],
+                    ))
                 : [],
             'filters' => [
                 'search' => $search,

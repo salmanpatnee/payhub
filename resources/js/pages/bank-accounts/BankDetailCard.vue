@@ -26,7 +26,7 @@ type LedgerRow = {
     breakAll?: boolean;
 };
 
-const props = defineProps<{ account: BankDetailAccount }>();
+const props = defineProps<{ account: BankDetailAccount; hideBankAddress?: boolean }>();
 
 const rows = computed((): LedgerRow[] => {
     const account = props.account;
@@ -51,7 +51,7 @@ const rows = computed((): LedgerRow[] => {
         list.push({ label: 'SWIFT/BIC', value: account.swift_bic, mono: true });
     }
 
-    if (account.bank_address) {
+    if (account.bank_address && !props.hideBankAddress) {
         list.push({ label: 'Bank Address', value: account.bank_address });
     }
 

@@ -349,7 +349,7 @@ const deleteDescription = (account: BankAccountRow | null): string => {
             </div>
 
             <div v-else class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                <BankDetailCard v-for="account in myAccounts" :key="account.id" :account="account" />
+                <BankDetailCard v-for="account in myAccounts" :key="account.id" :account="account" hide-bank-address />
             </div>
         </div>
     </div>
