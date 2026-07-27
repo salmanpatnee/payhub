@@ -7,6 +7,7 @@ use App\Http\Requests\StoreBankAccountRequest;
 use App\Http\Requests\UpdateBankAccountRequest;
 use App\Models\BankAccount;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -46,7 +47,10 @@ class BankAccountController extends Controller
                     ->where('is_active', true)
                     ->orderBy('bank_name')
                     ->get()
-                    ->map(fn (BankAccount $account) => $this->accountData($account))
+                    ->map(fn (BankAccount $account) => array_merge(
+                        $this->accountData($account),
+                        ['bank_address' => null],
+                    ))
                 : [],
             'filters' => [
                 'search' => $search,
@@ -66,12 +70,14 @@ class BankAccountController extends Controller
         ]);
     }
 
-    public function store(StoreBankAccountRequest $request): RedirectResponse
+    public function store(StoreBankAccountRequest $request, ActivityLogger $activityLogger): RedirectResponse
     {
         Gate::authorize('create', BankAccount::class);
 
         $bankAccount = BankAccount::create($request->safe()->except('user_ids'));
         $bankAccount->assignedUsers()->sync($request->validated('user_ids', []));
+
+        $activityLogger->created($bankAccount, $request->user());
 
         return redirect()->route('bank-accounts.index')
             ->with('success', 'Bank account saved.');
@@ -95,21 +101,32 @@ class BankAccountController extends Controller
         ]);
     }
 
-    public function update(UpdateBankAccountRequest $request, BankAccount $bankAccount): RedirectResponse
+    public function update(UpdateBankAccountRequest $request, BankAccount $bankAccount, ActivityLogger $activityLogger): RedirectResponse
     {
         Gate::authorize('update', $bankAccount);
+
+        $originalAttributes = $bankAccount->only([
+            'bank_name', 'account_name', 'account_number', 'currency',
+            'sort_code', 'routing_number', 'iban', 'swift_bic',
+            'bank_address', 'bank_country', 'is_active',
+        ]);
+        $originalUserIds = $bankAccount->assignedUsers()->pluck('users.id')->all();
 
         $bankAccount->fill($request->safe()->except('user_ids'));
         $bankAccount->save();
         $bankAccount->assignedUsers()->sync($request->validated('user_ids', []));
 
+        $activityLogger->updated($bankAccount, $request->user(), $originalAttributes, $originalUserIds);
+
         return redirect()->route('bank-accounts.index')
             ->with('success', 'Bank account updated.');
     }
 
-    public function destroy(BankAccount $bankAccount): RedirectResponse
+    public function destroy(Request $request, BankAccount $bankAccount, ActivityLogger $activityLogger): RedirectResponse
     {
         Gate::authorize('delete', $bankAccount);
+
+        $activityLogger->deleted($bankAccount, $request->user());
 
         $bankAccount->delete();
 
@@ -117,21 +134,27 @@ class BankAccountController extends Controller
             ->with('success', 'Bank account deleted.');
     }
 
-    public function deactivate(BankAccount $bankAccount): RedirectResponse
+    public function deactivate(Request $request, BankAccount $bankAccount, ActivityLogger $activityLogger): RedirectResponse
     {
         Gate::authorize('update', $bankAccount);
 
+        $wasActive = $bankAccount->is_active;
         $bankAccount->update(['is_active' => false]);
+
+        $activityLogger->statusChanged($bankAccount, $request->user(), $wasActive, false);
 
         return redirect()->route('bank-accounts.index')
             ->with('success', 'Account deactivated.');
     }
 
-    public function activate(BankAccount $bankAccount): RedirectResponse
+    public function activate(Request $request, BankAccount $bankAccount, ActivityLogger $activityLogger): RedirectResponse
     {
         Gate::authorize('update', $bankAccount);
 
+        $wasActive = $bankAccount->is_active;
         $bankAccount->update(['is_active' => true]);
+
+        $activityLogger->statusChanged($bankAccount, $request->user(), $wasActive, true);
 
         return redirect()->route('bank-accounts.index')
             ->with('success', 'Account activated.');
