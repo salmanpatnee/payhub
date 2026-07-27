@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import {
+    ArrowRight,
     ChevronDown,
     Clock,
     Pencil,
@@ -10,7 +11,6 @@ import {
     Trash2,
 } from 'lucide-vue-next';
 import { computed, reactive, watch } from 'vue';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
@@ -153,31 +153,66 @@ function goToPage(page: number): void {
     );
 }
 
-const actionMeta: Record<string, { badge: string; icon: typeof Plus }> = {
-    created: { badge: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400', icon: Plus },
-    updated: { badge: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400', icon: Pencil },
-    activated: { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400', icon: Power },
-    deactivated: { badge: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400', icon: PowerOff },
-    deleted: { badge: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400', icon: Trash2 },
+type ActionMeta = {
+    icon: typeof Plus;
+    badge: string;
+    markerBg: string;
+    markerText: string;
+    markerBorder: string;
+    cardBorder: string;
 };
 
-function metaFor(action: string) {
-    return actionMeta[action] ?? actionMeta.updated;
-}
+const actionMeta: Record<string, ActionMeta> = {
+    created: {
+        icon: Plus,
+        badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
+        markerBg: 'bg-emerald-50 dark:bg-emerald-500/10',
+        markerText: 'text-emerald-600 dark:text-emerald-400',
+        markerBorder: 'border-emerald-200 dark:border-emerald-500/30',
+        cardBorder: 'border-l-emerald-400 dark:border-l-emerald-500/50',
+    },
+    updated: {
+        icon: Pencil,
+        badge: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+        markerBg: 'bg-blue-50 dark:bg-blue-500/10',
+        markerText: 'text-blue-600 dark:text-blue-400',
+        markerBorder: 'border-blue-200 dark:border-blue-500/30',
+        cardBorder: 'border-l-blue-400 dark:border-l-blue-500/50',
+    },
+    activated: {
+        icon: Power,
+        badge: 'bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-400',
+        markerBg: 'bg-teal-50 dark:bg-teal-500/10',
+        markerText: 'text-teal-600 dark:text-teal-400',
+        markerBorder: 'border-teal-200 dark:border-teal-500/30',
+        cardBorder: 'border-l-teal-400 dark:border-l-teal-500/50',
+    },
+    deactivated: {
+        icon: PowerOff,
+        badge: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+        markerBg: 'bg-amber-50 dark:bg-amber-500/10',
+        markerText: 'text-amber-600 dark:text-amber-400',
+        markerBorder: 'border-amber-200 dark:border-amber-500/30',
+        cardBorder: 'border-l-amber-400 dark:border-l-amber-500/50',
+    },
+    deleted: {
+        icon: Trash2,
+        badge: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400',
+        markerBg: 'bg-rose-50 dark:bg-rose-500/10',
+        markerText: 'text-rose-600 dark:text-rose-400',
+        markerBorder: 'border-rose-200 dark:border-rose-500/30',
+        cardBorder: 'border-l-rose-400 dark:border-l-rose-500/50',
+    },
+};
 
-function initials(name: string): string {
-    return name
-        .split(' ')
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0]?.toUpperCase() ?? '')
-        .join('');
+function metaFor(action: string): ActionMeta {
+    return actionMeta[action] ?? actionMeta.updated;
 }
 
 function formatDateTime(iso: string): string {
     const d = new Date(iso);
     const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const time = d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
     return `${date}, ${time}`;
 }
 
@@ -275,75 +310,89 @@ function formatValue(value: unknown): string {
         </div>
 
         <!-- Timeline -->
-        <div class="space-y-3">
-            <Card v-for="log in logs.data" :key="log.id" class="py-4">
-                <CardContent class="px-4">
-                    <div class="flex items-start gap-3">
-                        <Avatar class="size-9 shrink-0">
-                            <AvatarFallback class="text-xs font-semibold">{{ initials(log.actor_name) }}</AvatarFallback>
-                        </Avatar>
+        <div v-if="logs.data.length > 0" class="relative">
+            <div v-for="(log, index) in logs.data" :key="log.id" class="relative flex gap-4 pb-5 last:pb-0">
+                <span
+                    v-if="index !== logs.data.length - 1"
+                    aria-hidden="true"
+                    class="absolute top-9 bottom-0 left-[17px] w-px bg-border"
+                />
 
-                        <div class="flex-1 min-w-0 space-y-1.5">
+                <div
+                    :class="[
+                        'relative z-10 flex size-9 shrink-0 items-center justify-center rounded-full border',
+                        metaFor(log.action).markerBg,
+                        metaFor(log.action).markerText,
+                        metaFor(log.action).markerBorder,
+                    ]"
+                >
+                    <component :is="metaFor(log.action).icon" class="size-4" />
+                </div>
+
+                <Card :class="['flex-1 gap-0 border-l-[3px] py-0 shadow-sm transition-shadow hover:shadow-md', metaFor(log.action).cardBorder]">
+                    <CardContent class="p-4">
+                        <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                             <div class="flex flex-wrap items-center gap-2">
-                                <span class="font-medium text-sm">{{ log.actor_name }}</span>
-                                <span class="text-xs text-muted-foreground capitalize">({{ log.actor_role }})</span>
+                                <span class="text-sm font-semibold text-foreground">{{ log.actor_name }}</span>
+                                <span class="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                    {{ log.actor_role }}
+                                </span>
                                 <span
                                     :class="[
-                                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                                        'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold',
                                         metaFor(log.action).badge,
                                     ]"
                                 >
-                                    <component :is="metaFor(log.action).icon" class="size-3" />
                                     {{ log.action_label }}
                                 </span>
                             </div>
 
-                            <p class="text-sm text-foreground">
-                                {{ log.description }} — <span class="font-medium">{{ log.subject_label }}</span>
-                            </p>
-
-                            <div class="flex items-center gap-1 text-xs text-muted-foreground">
+                            <div class="flex shrink-0 items-center gap-1 text-xs whitespace-nowrap text-muted-foreground">
                                 <Clock class="size-3" />
                                 {{ formatDateTime(log.created_at) }}
                             </div>
-
-                            <Collapsible v-if="log.changes && log.changes.length > 0">
-                                <CollapsibleTrigger class="group flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
-                                    <ChevronDown class="size-3.5 transition-transform group-data-[state=open]:rotate-180" />
-                                    Changed Fields ({{ log.changes.length }})
-                                </CollapsibleTrigger>
-                                <CollapsibleContent class="mt-2">
-                                    <table class="w-full text-xs border border-border/60 rounded-lg overflow-hidden">
-                                        <thead>
-                                            <tr class="bg-muted/50">
-                                                <th class="text-left px-3 py-1.5 font-semibold text-muted-foreground">Field</th>
-                                                <th class="text-left px-3 py-1.5 font-semibold text-muted-foreground">Before</th>
-                                                <th class="text-left px-3 py-1.5 font-semibold text-muted-foreground">After</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr v-for="change in log.changes" :key="change.field" class="border-t border-border/50">
-                                                <td class="px-3 py-1.5 font-medium">{{ change.label }}</td>
-                                                <td class="px-3 py-1.5 text-muted-foreground">{{ formatValue(change.before) }}</td>
-                                                <td class="px-3 py-1.5">{{ formatValue(change.after) }}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </CollapsibleContent>
-                            </Collapsible>
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
 
-            <div v-if="logs.data.length === 0" class="rounded-xl border border-border/70 bg-card p-16 text-center text-sm text-muted-foreground">
-                <template v-if="hasActiveFilters">
-                    No activity matches your filters.
-                </template>
-                <template v-else>
-                    No activity recorded yet.
-                </template>
+                        <p class="mt-2 text-sm leading-relaxed text-foreground/90">
+                            {{ log.description }} <span class="font-medium text-foreground">{{ log.subject_label }}</span>
+                        </p>
+
+                        <Collapsible v-if="log.changes && log.changes.length > 0">
+                            <CollapsibleTrigger class="group mt-3 inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                                <ChevronDown class="size-3.5 transition-transform group-data-[state=open]:rotate-180" />
+                                {{ log.changes.length }} field{{ log.changes.length > 1 ? 's' : '' }} changed
+                            </CollapsibleTrigger>
+                            <CollapsibleContent class="mt-2.5">
+                                <div class="divide-y divide-border/40 rounded-lg border border-border/60 bg-muted/20 px-3">
+                                    <div
+                                        v-for="change in log.changes"
+                                        :key="change.field"
+                                        class="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 text-xs"
+                                    >
+                                        <span class="w-full font-medium text-foreground/70 sm:w-28 sm:shrink-0">{{ change.label }}</span>
+                                        <span class="max-w-[45%] truncate rounded bg-red-50 px-1.5 py-0.5 font-mono text-[11px] text-red-700 line-through decoration-red-300 dark:bg-red-500/10 dark:text-red-400 dark:decoration-red-800">
+                                            {{ formatValue(change.before) }}
+                                        </span>
+                                        <ArrowRight class="size-3 shrink-0 text-muted-foreground" />
+                                        <span class="max-w-[45%] truncate rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                                            {{ formatValue(change.after) }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </CollapsibleContent>
+                        </Collapsible>
+                    </CardContent>
+                </Card>
             </div>
+        </div>
+
+        <div v-else class="rounded-xl border border-border/70 bg-card p-16 text-center text-sm text-muted-foreground">
+            <template v-if="hasActiveFilters">
+                No activity matches your filters.
+            </template>
+            <template v-else>
+                No activity recorded yet.
+            </template>
         </div>
 
         <div v-if="logs.last_page > 1" class="flex items-center justify-center border-t border-border/50 px-5 py-3.5">
