@@ -21,4 +21,9 @@ class BankAccountPolicy
     {
         return $user->hasRole('admin') || $user->hasRole('account');
     }
+
+    public function viewActivityLog(User $user): bool
+    {
+        return $user->hasRole('admin') || $user->hasRole('account');
+    }
 }

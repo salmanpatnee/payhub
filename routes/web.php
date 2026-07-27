@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\SquareAccountController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VivaAccountController;
+use App\Http\Controllers\BankAccountActivityLogController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\DashboardController;
@@ -52,6 +53,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('throttle:30,1');
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])
         ->name('payments.destroy');
+
+    // Must be registered before the resource route — otherwise `bank-accounts/activity-log`
+    // is captured by the `bank-accounts/{bank_account}/edit` show/edit routes.
+    Route::get('bank-accounts/activity-log', [BankAccountActivityLogController::class, 'index'])
+        ->name('bank-accounts.activity-log');
 
     Route::resource('bank-accounts', BankAccountController::class)->except(['show']);
 

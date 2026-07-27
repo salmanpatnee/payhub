@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { CheckCircle2, ChevronDown, ChevronUp, Pencil, Plus, Power, PowerOff, Search, Trash2, XCircle } from 'lucide-vue-next';
+import { CheckCircle2, ChevronDown, ChevronUp, History, Pencil, Plus, Power, PowerOff, Search, Trash2, XCircle } from 'lucide-vue-next';
 import { reactive, ref, watch } from 'vue';
 import { index as bankAccountsIndex } from '@/actions/App/Http/Controllers/BankAccountController';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
@@ -194,12 +194,20 @@ const deleteDescription = (account: BankAccountRow | null): string => {
         <template v-if="canManage">
             <div class="flex items-center justify-between">
                 <h1 class="text-2xl font-semibold tracking-tight">Bank Accounts</h1>
-                <Button as-child>
-                    <Link href="/bank-accounts/create">
-                        <Plus class="size-4 mr-1" />
-                        Add account
-                    </Link>
-                </Button>
+                <div class="flex items-center gap-2">
+                    <Button as-child variant="outline">
+                        <Link href="/bank-accounts/activity-log">
+                            <History class="size-4 mr-1" />
+                            Activity Log
+                        </Link>
+                    </Button>
+                    <Button as-child>
+                        <Link href="/bank-accounts/create">
+                            <Plus class="size-4 mr-1" />
+                            Add account
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             <div class="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
@@ -291,6 +299,14 @@ const deleteDescription = (account: BankAccountRow | null): string => {
                                 <div class="flex items-center justify-end gap-1">
                                     <Button variant="ghost" size="icon" as-child>
                                         <Link
+                                            :href="`/bank-accounts/activity-log?bank_account_id=${account.id}`"
+                                            :aria-label="`View history for ${account.account_name}`"
+                                        >
+                                            <History class="size-4" />
+                                        </Link>
+                                    </Button>
+                                    <Button variant="ghost" size="icon" as-child>
+                                        <Link
                                             :href="`/bank-accounts/${account.id}/edit`"
                                             :aria-label="`Edit ${account.account_name}`"
                                         >
@@ -349,7 +365,7 @@ const deleteDescription = (account: BankAccountRow | null): string => {
             </div>
 
             <div v-else class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                <BankDetailCard v-for="account in myAccounts" :key="account.id" :account="account" />
+                <BankDetailCard v-for="account in myAccounts" :key="account.id" :account="account" hide-bank-address />
             </div>
         </div>
     </div>
