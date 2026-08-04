@@ -240,12 +240,78 @@ it('filters the index by currency', function () {
     $admin = User::factory()->create()->assignRole('admin');
     $usd = BankAccount::factory()->create(['currency' => 'usd']);
     BankAccount::factory()->create(['currency' => 'gbp']);
+    BankAccount::factory()->create(['currency' => 'pkr']);
 
     $this->actingAs($admin)->get('/bank-accounts?currency=usd')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->has('bankAccounts', 1)
             ->where('bankAccounts.0.id', $usd->id)
+        );
+});
+
+// Currency filter also works for PKR
+it('filters the index by pkr currency', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    BankAccount::factory()->create(['currency' => 'usd']);
+    BankAccount::factory()->create(['currency' => 'gbp']);
+    $pkr = BankAccount::factory()->create(['currency' => 'pkr']);
+
+    $this->actingAs($admin)->get('/bank-accounts?currency=pkr')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('bankAccounts', 1)
+            ->where('bankAccounts.0.id', $pkr->id)
+        );
+});
+
+// Bank accounts can be created and updated in any supported currency, including PKR
+it('admin can create a bank account in each supported currency', function (string $currency) {
+    $admin = User::factory()->create()->assignRole('admin');
+
+    $this->actingAs($admin)->post('/bank-accounts', validBankAccountPayload(['currency' => $currency]))
+        ->assertSessionHasNoErrors()
+        ->assertRedirect('/bank-accounts');
+
+    $this->assertDatabaseHas('bank_accounts', ['bank_name' => 'Test Bank', 'currency' => $currency]);
+})->with(['usd', 'gbp', 'pkr']);
+
+it('admin can update a bank account to each supported currency', function (string $currency) {
+    $admin = User::factory()->create()->assignRole('admin');
+    $account = BankAccount::factory()->create(['currency' => 'usd']);
+
+    $this->actingAs($admin)->put("/bank-accounts/{$account->id}", validBankAccountPayload(['currency' => $currency]))
+        ->assertSessionHasNoErrors()
+        ->assertRedirect('/bank-accounts');
+
+    $this->assertDatabaseHas('bank_accounts', ['id' => $account->id, 'currency' => $currency]);
+})->with(['usd', 'gbp', 'pkr']);
+
+// An unsupported currency is still rejected
+it('rejects an unsupported currency', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+
+    $this->actingAs($admin)->post('/bank-accounts', validBankAccountPayload(['currency' => 'eur']))
+        ->assertSessionHasErrors(['currency']);
+});
+
+// A PKR bank account renders correctly on the index and in "My Bank Accounts"
+it('renders a pkr bank account on the index and my accounts card', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $agent = User::factory()->create()->assignRole('agent');
+    $account = BankAccount::factory()->create(['currency' => 'pkr', 'is_active' => true]);
+    $account->assignedUsers()->attach($agent);
+
+    $this->actingAs($admin)->get('/bank-accounts')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('bankAccounts.0.currency', 'pkr')
+        );
+
+    $this->actingAs($agent)->get('/bank-accounts')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('myAccounts.0.currency', 'pkr')
         );
 });
 

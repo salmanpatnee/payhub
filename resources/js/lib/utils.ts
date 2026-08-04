@@ -13,10 +13,12 @@ export function toUrl(href: NonNullable<InertiaLinkProps['href']>) {
 
 /**
  * Format an integer-cents amount as a localized currency string.
- * USD and GBP only; never mix currencies in a single figure.
+ * USD, GBP, and PKR (Bank Accounts only); never mix currencies in a single figure.
  */
 export function formatMoney(cents: number, currency: string): string {
-    return new Intl.NumberFormat(currency === 'gbp' ? 'en-GB' : 'en-US', {
+    const locale = currency === 'gbp' ? 'en-GB' : currency === 'pkr' ? 'en-PK' : 'en-US';
+
+    return new Intl.NumberFormat(locale, {
         style: 'currency',
         currency: currency.toUpperCase(),
     }).format(cents / 100);

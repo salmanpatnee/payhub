@@ -15,6 +15,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { BANK_ACCOUNT_CURRENCIES, BANK_ACCOUNT_CURRENCY_LABELS } from '@/lib/bank-account-currencies';
 
 type NamedOption = { id: number; name: string };
 
@@ -102,8 +103,13 @@ function submit() {
                                     <SelectValue placeholder="Select a currency" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="usd">USD</SelectItem>
-                                    <SelectItem value="gbp">GBP</SelectItem>
+                                    <SelectItem
+                                        v-for="currency in BANK_ACCOUNT_CURRENCIES"
+                                        :key="currency"
+                                        :value="currency"
+                                    >
+                                        {{ BANK_ACCOUNT_CURRENCY_LABELS[currency] }}
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                             <InputError :message="form.errors.currency" />
