@@ -22,6 +22,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { BANK_ACCOUNT_CURRENCIES, BANK_ACCOUNT_CURRENCY_LABELS } from '@/lib/bank-account-currencies';
 import BankDetailCard from './BankDetailCard.vue';
 
 type BankAccountRow = {
@@ -233,8 +234,13 @@ const deleteDescription = (account: BankAccountRow | null): string => {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All currencies</SelectItem>
-                                <SelectItem value="usd">USD</SelectItem>
-                                <SelectItem value="gbp">GBP</SelectItem>
+                                <SelectItem
+                                    v-for="currency in BANK_ACCOUNT_CURRENCIES"
+                                    :key="currency"
+                                    :value="currency"
+                                >
+                                    {{ BANK_ACCOUNT_CURRENCY_LABELS[currency] }}
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

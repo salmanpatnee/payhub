@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\SupportedCurrency;
+use App\Enums\BankAccountCurrency;
 use App\Http\Requests\StoreBankAccountRequest;
 use App\Http\Requests\UpdateBankAccountRequest;
 use App\Models\BankAccount;
@@ -25,7 +25,7 @@ class BankAccountController extends Controller
         $sort = $request->input('sort') === 'account_name' ? 'account_name' : 'bank_name';
         $direction = $request->input('direction') === 'desc' ? 'desc' : 'asc';
         $search = $request->input('search');
-        $currency = in_array($request->input('currency'), SupportedCurrency::values(), true)
+        $currency = in_array($request->input('currency'), BankAccountCurrency::values(), true)
             ? $request->input('currency')
             : null;
 
