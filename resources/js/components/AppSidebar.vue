@@ -25,6 +25,8 @@ const mainNavItems = computed((): NavItem[] => [
     ...(canViewDashboard.value ? [
         { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard } as NavItem,
     ] : []),
+    { title: 'Payments', href: '/payments', icon: CreditCard },
+    { title: 'Bank Accounts', href: '/bank-accounts', icon: Banknote },
     ...(isAdmin.value ? [
         { title: 'Brands',          href: '/admin/brands',                  icon: Building2  } as NavItem,
         { title: 'Stripe Accounts', href: '/admin/stripe-accounts',         icon: Wallet     } as NavItem,
@@ -34,8 +36,6 @@ const mainNavItems = computed((): NavItem[] => [
         { title: 'Users',           href: '/admin/users',                   icon: Users      } as NavItem,
         { title: 'RMs',             href: '/admin/relationship-managers',   icon: UserCheck2 } as NavItem,
     ] : []),
-    { title: 'Payments', href: '/payments', icon: CreditCard },
-    { title: 'Bank Accounts', href: '/bank-accounts', icon: Banknote },
     ...(isAdmin.value ? [
         { title: 'Settings', href: '/settings/profile', icon: Settings } as NavItem,
     ] : []),
