@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\ActivityAction;
-use App\Enums\SupportedCurrency;
 use App\Models\ActivityLog;
 use App\Models\BankAccount;
 use App\Models\User;
@@ -129,8 +128,8 @@ class ActivityLogger
 
         if ($field === 'currency') {
             return [
-                $before instanceof SupportedCurrency ? $before->label() : $before,
-                $after instanceof SupportedCurrency ? $after->label() : $after,
+                $before instanceof \BackedEnum && method_exists($before, 'label') ? $before->label() : $before,
+                $after instanceof \BackedEnum && method_exists($after, 'label') ? $after->label() : $after,
             ];
         }
 

@@ -58,7 +58,7 @@ Two roles: `admin` and `agent`. See `docs/agent.md` for nav access matrix, imple
 - Square webhooks verified via `x-square-hmacsha256-signature` header against `webhook_signature_key` (Square SDK's `WebhooksHelper`); idempotency tracked in `ProcessedSquareEvent`
 - Secrets exposed to the page (Stripe `client_secret` / Revolut `orderToken`) never logged, stored in URLs, or exposed beyond the page load response. (Square's `application_id`/`location_id` are public SDK identifiers, not secrets — safe to expose, unlike `access_token`)
 - Amounts always stored as integer cents/minor units — no floats
-- Currency: USD and GBP only
+- Currency: Payments support USD and GBP only. Bank Accounts additionally support PKR (`App\Enums\BankAccountCurrency`, decoupled from `App\Enums\SupportedCurrency`).
 
 ## Commands
 

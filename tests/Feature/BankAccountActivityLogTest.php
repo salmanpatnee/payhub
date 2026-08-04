@@ -100,6 +100,29 @@ it('joins two changed field labels naturally in the update description', functio
     expect(ActivityLog::first()->description)->toBe('Updated Bank Name and Currency');
 });
 
+it('shows a readable USD to PKR label when currency changes to pkr', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $account = BankAccount::factory()->create(['currency' => 'usd']);
+
+    $this->actingAs($admin)->put(
+        "/bank-accounts/{$account->id}",
+        validActivityLogBankAccountPayload([
+            'bank_name' => $account->bank_name,
+            'account_name' => $account->account_name,
+            'account_number' => $account->account_number,
+            'currency' => 'pkr',
+            'sort_code' => $account->sort_code,
+        ])
+    )->assertSessionHasNoErrors();
+
+    $log = ActivityLog::first();
+    $currencyChange = collect($log->changes)->firstWhere('field', 'currency');
+
+    expect($currencyChange['before'])->toBe('USD')
+        ->and($currencyChange['after'])->toBe('PKR')
+        ->and($log->description)->toBe('Updated Currency');
+});
+
 it('joins three changed field labels naturally in the update description', function () {
     $admin = User::factory()->create()->assignRole('admin');
     $account = BankAccount::factory()->create(['currency' => 'gbp']);

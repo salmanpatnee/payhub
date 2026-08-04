@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Enums\SupportedCurrency;
+use App\Enums\BankAccountCurrency;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -21,7 +21,7 @@ class BankAccount extends Model
     protected function casts(): array
     {
         return [
-            'currency' => SupportedCurrency::class,
+            'currency' => BankAccountCurrency::class,
             'is_active' => 'boolean',
         ];
     }

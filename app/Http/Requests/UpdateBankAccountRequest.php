@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\SupportedCurrency;
+use App\Enums\BankAccountCurrency;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -19,7 +19,7 @@ class UpdateBankAccountRequest extends FormRequest
             'bank_name' => ['required', 'string', 'max:255'],
             'account_name' => ['required', 'string', 'max:255'],
             'account_number' => ['required', 'string', 'max:255'],
-            'currency' => ['required', 'string', 'in:'.implode(',', SupportedCurrency::values())],
+            'currency' => ['required', 'string', 'in:'.implode(',', BankAccountCurrency::values())],
             'sort_code' => ['nullable', 'string', 'max:255'],
             'routing_number' => ['nullable', 'string', 'max:255'],
             'iban' => ['nullable', 'string', 'max:255'],

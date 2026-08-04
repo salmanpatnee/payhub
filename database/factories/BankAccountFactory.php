@@ -12,7 +12,7 @@ class BankAccountFactory extends Factory
             'bank_name' => $this->faker->company().' Bank',
             'account_name' => $this->faker->company(),
             'account_number' => $this->faker->numerify('########'),
-            'currency' => $this->faker->randomElement(['usd', 'gbp']),
+            'currency' => $this->faker->randomElement(['usd', 'gbp', 'pkr']),
             'sort_code' => $this->faker->numerify('##-##-##'),
             'routing_number' => null,
             'iban' => null,
