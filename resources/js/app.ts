@@ -1,3 +1,4 @@
+import '@/polyfills';
 import { createApp, h } from 'vue';
 import * as Sentry from '@sentry/vue';
 import { createInertiaApp } from '@inertiajs/vue3';
