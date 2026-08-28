@@ -91,10 +91,7 @@ class UserController extends Controller
             'roles' => Role::pluck('name'),
             'accountsByCurrency' => $this->activeAccountOptionsByCurrency(),
             'brands' => Brand::orderBy('name')->get(['id', 'name']),
-            'relationshipManagers' => RelationshipManager::where('is_active', true)
-                ->orWhereIn('id', $user->relationshipManagers()->pluck('relationship_managers.id'))
-                ->orderBy('name')
-                ->get(['id', 'name']),
+            'relationshipManagers' => RelationshipManager::active()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 

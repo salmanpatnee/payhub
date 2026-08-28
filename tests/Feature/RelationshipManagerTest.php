@@ -152,6 +152,61 @@ class RelationshipManagerTest extends TestCase
         $this->assertDatabaseHas('relationship_managers', ['id' => $rm->id, 'is_active' => false]);
     }
 
+    public function test_deactivating_rm_detaches_all_assigned_users(): void
+    {
+        $rm = RelationshipManager::factory()->create();
+        $agentOne = $this->agentUser();
+        $agentTwo = $this->agentUser();
+        $rm->users()->sync([$agentOne->id, $agentTwo->id]);
+
+        $this->actingAs($this->adminUser())
+            ->patch(route('admin.relationship-managers.deactivate', $rm));
+
+        $this->assertDatabaseMissing('relationship_manager_user', ['relationship_manager_id' => $rm->id, 'user_id' => $agentOne->id]);
+        $this->assertDatabaseMissing('relationship_manager_user', ['relationship_manager_id' => $rm->id, 'user_id' => $agentTwo->id]);
+    }
+
+    public function test_deactivating_rm_with_no_users_is_a_no_op(): void
+    {
+        $rm = RelationshipManager::factory()->create();
+
+        $this->actingAs($this->adminUser())
+            ->patch(route('admin.relationship-managers.deactivate', $rm))
+            ->assertRedirect(route('admin.relationship-managers.index'));
+
+        $this->assertDatabaseHas('relationship_managers', ['id' => $rm->id, 'is_active' => false]);
+    }
+
+    public function test_toggling_is_active_off_via_update_also_detaches_users(): void
+    {
+        $rm = RelationshipManager::factory()->create();
+        $agent = $this->agentUser();
+        $rm->users()->sync([$agent->id]);
+
+        $this->actingAs($this->adminUser())
+            ->put(route('admin.relationship-managers.update', $rm), ['name' => $rm->name, 'is_active' => false])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('relationship_manager_user', ['relationship_manager_id' => $rm->id, 'user_id' => $agent->id]);
+    }
+
+    public function test_reactivating_rm_does_not_restore_prior_assignments(): void
+    {
+        $rm = RelationshipManager::factory()->create();
+        $agent = $this->agentUser();
+        $rm->users()->sync([$agent->id]);
+
+        $this->actingAs($this->adminUser())
+            ->patch(route('admin.relationship-managers.deactivate', $rm));
+
+        $this->actingAs($this->adminUser())
+            ->patch(route('admin.relationship-managers.activate', $rm))
+            ->assertRedirect(route('admin.relationship-managers.index'));
+
+        $this->assertDatabaseHas('relationship_managers', ['id' => $rm->id, 'is_active' => true]);
+        $this->assertDatabaseMissing('relationship_manager_user', ['relationship_manager_id' => $rm->id, 'user_id' => $agent->id]);
+    }
+
     public function test_agent_cannot_access_rm_routes(): void
     {
         $this->actingAs($this->agentUser())
