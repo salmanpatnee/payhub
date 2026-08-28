@@ -195,19 +195,40 @@ class AdminUserManagementTest extends TestCase
         $this->assertDatabaseHas('relationship_managers', ['id' => $inactive->id, 'is_active' => false]);
     }
 
-    public function test_edit_includes_assigned_inactive_rm(): void
+    public function test_edit_excludes_inactive_rms_from_dropdown(): void
     {
+        $active = RelationshipManager::factory()->create();
         $inactive = RelationshipManager::factory()->inactive()->create();
         $target = User::factory()->create(['email_verified_at' => now()]);
         $target->syncRoles(['agent']);
-        $target->relationshipManagers()->sync([$inactive->id]);
 
         $this->actingAs($this->adminUser())
             ->get(route('admin.users.edit', $target))
             ->assertInertia(fn ($page) => $page
                 ->has('relationshipManagers', 1)
-                ->where('relationshipManagers.0.id', $inactive->id)
+                ->where('relationshipManagers.0.id', $active->id)
             );
+
+        $this->assertDatabaseHas('relationship_managers', ['id' => $inactive->id, 'is_active' => false]);
+    }
+
+    public function test_deactivating_rm_removes_it_from_assigned_users(): void
+    {
+        $rm = RelationshipManager::factory()->create();
+        $target = User::factory()->create(['email_verified_at' => now()]);
+        $target->syncRoles(['agent']);
+        $target->relationshipManagers()->sync([$rm->id]);
+
+        $this->assertDatabaseHas('relationship_manager_user', ['relationship_manager_id' => $rm->id, 'user_id' => $target->id]);
+
+        $this->actingAs($this->adminUser())
+            ->patch(route('admin.relationship-managers.deactivate', $rm));
+
+        $this->assertDatabaseMissing('relationship_manager_user', ['relationship_manager_id' => $rm->id, 'user_id' => $target->id]);
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.users.edit', $target))
+            ->assertInertia(fn ($page) => $page->where('user.relationship_manager_ids', []));
     }
 
     public function test_creating_agent_requires_at_least_one_brand_and_rm(): void

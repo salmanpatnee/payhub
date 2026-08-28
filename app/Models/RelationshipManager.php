@@ -21,6 +21,15 @@ class RelationshipManager extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::updated(function (RelationshipManager $relationshipManager): void {
+            if ($relationshipManager->wasChanged('is_active') && ! $relationshipManager->is_active) {
+                $relationshipManager->users()->detach();
+            }
+        });
+    }
+
     /**
      * Scope to only active relationship managers.
      *

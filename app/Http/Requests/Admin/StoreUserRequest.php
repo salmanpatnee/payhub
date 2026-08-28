@@ -45,7 +45,7 @@ class StoreUserRequest extends FormRequest
                 'array',
                 Rule::when($this->input('role') === 'agent', ['min:1']),
             ],
-            'relationship_manager_ids.*' => ['integer', 'exists:relationship_managers,id'],
+            'relationship_manager_ids.*' => ['integer', Rule::exists('relationship_managers', 'id')->where('is_active', true)],
         ];
     }
 
