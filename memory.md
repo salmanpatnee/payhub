@@ -1,46 +1,48 @@
-# Memory — Sentry Triage + Remove Delete Account Feature
+# Memory — Remove Inactive RM Associations
 
-Last updated: 2026-08-17
+Last updated: 2026-08-28
 
 ## What was built
 
-**Sentry issue triage** (org `cis-2r`, project `payhub-backend`):
-- **PAYHUB-BACKEND-1N** (`Cannot read properties of undefined (reading 'M_ID')` on `/dashboard`) — resolved. Traced to a browser extension's injected script (`chrome-extension://eppiocemhmnlbhjplcgkofciiegomcon`), not app code.
-- **PAYHUB-BACKEND-1M** (`ReferenceError: zaloJSV2 is not defined` on `/pay/{uuid}`) — resolved. Traced to the Zalo in-app browser's own WebView bridge, not app code.
-- **PAYHUB-BACKEND-K** (`Failed to fetch dynamically imported module` on `/payments`) — set to **ignored (untilEscalating)**, not fixed. Root cause identified: classic Vite stale-chunk-after-deploy — `resources/js/app.ts` has no explicit `resolve` key; `@inertiajs/vite` (in `vite.config.ts`) injects one at build time via AST transform using `import.meta.glob('./pages/**/*.vue', {eager:false})`, and that dynamic `import()` 404s when a user's stale tab requests a chunk hash that a newer deploy removed. Idiomatic fix identified but **not implemented** (user chose to leave as-is, then ignore in Sentry instead): a global `window.addEventListener('vite:preloadError', () => window.location.reload())` in `app.ts`, with a sessionStorage guard to avoid a reload loop if a deploy is genuinely broken. Revisit if this issue escalates.
+**Fix: deactivating a Relationship Manager (RM) now detaches them from all assigned users**, closing the bug where an inactive RM stayed checkmarked/selected on the admin User edit page.
 
-**Removed "Delete account" feature from `/settings/profile`** (admin-only self-destroy-account flow):
-- Deleted `resources/js/components/DeleteUser.vue`, `app/Http/Requests/Settings/ProfileDeleteRequest.php`.
-- `resources/js/pages/settings/Profile.vue` — removed `<DeleteUser />` usage and import.
-- `app/Http/Controllers/Settings/ProfileController.php` — removed `destroy()` action and unused imports.
-- `routes/settings.php` — removed `DELETE settings/profile` route (`profile.destroy`).
-- `tests/Feature/Settings/ProfileUpdateTest.php` — removed the two tests covering delete-account.
-- Regenerated Wayfinder actions with `php artisan wayfinder:generate --with-form` (must use `--with-form` to match `vite.config.ts`'s `wayfinder({ formVariants: true })`, otherwise `.form()` call sites across the app break type-checking).
-- Kept `PasswordValidationRules` trait — still shared by `CreateNewUser`, `ResetUserPassword`, `PasswordUpdateRequest`.
+- `app/Models/RelationshipManager.php` — added a `booted()` hook: on the model's `updated` event, if `is_active` changed to `false`, calls `$this->users()->detach()`. Centralized so it fires regardless of entry point (dedicated `deactivate` action, general `update` form, etc.).
+- `app/Http/Controllers/Admin/UserController.php` — `edit()` simplified to `RelationshipManager::active()->orderBy('name')->get(['id','name'])`, same as `create()`. Removed the old special-case query that included assigned-but-inactive RMs (no longer needed/reachable since the pivot can't hold an inactive RM anymore).
+- `app/Http/Requests/Admin/StoreUserRequest.php` / `UpdateUserRequest.php` — `relationship_manager_ids.*` validation now uses `Rule::exists('relationship_managers','id')->where('is_active', true)` (defense in depth, mirrors the existing `payment_accounts` active-check pattern).
+- `database/migrations/2026_08_28_000001_detach_inactive_relationship_managers_from_users.php` — one-time cleanup: deletes any `relationship_manager_user` rows already left stale by RMs deactivated before this fix existed. No-op on current dev DB (no stale rows found); **not yet run on prod**.
+- Tests updated/added:
+  - `tests/Feature/Auth/AdminUserManagementTest.php` — replaced `test_edit_includes_assigned_inactive_rm` (old, now-wrong expectation) with `test_edit_excludes_inactive_rms_from_dropdown` and `test_deactivating_rm_removes_it_from_assigned_users`.
+  - `tests/Feature/RelationshipManagerTest.php` — added `test_deactivating_rm_detaches_all_assigned_users`, `test_deactivating_rm_with_no_users_is_a_no_op`, `test_toggling_is_active_off_via_update_also_detaches_users`, `test_reactivating_rm_does_not_restore_prior_assignments`.
+
+**Explicitly untouched (by design, confirmed with user):** `Payment.relationship_manager_id` (historical FK, `nullOnDelete`) and the existing Payment/Dashboard RM filter logic (`RelationshipManager::where(fn($q)=>$q->where('is_active',true)->orWhere('id',$currentId))`) — that pattern was already correct and is the reference behavior the fix was measured against.
 
 ## Decisions made
 
-- For PAYHUB-BACKEND-K: chose not to implement the `vite:preloadError` fix — impact is negligible (0 users, 2 events in 6 weeks) — and instead marked the Sentry issue ignored-until-escalating so it stops resurfacing on isolated recurrences but will reopen if frequency spikes.
-- Delete-account removal was full-stack (frontend + backend + tests), not just UI-hiding, per explicit user instruction.
+- **Deactivation auto-removes the pivot association** (hard delete via `detach()`), rather than keeping the pivot row and just graying it out in the UI. User's explicit choice.
+- **Centralized via a model-level event hook**, not inline in the controller action — catches every code path that flips `is_active`, not just the dedicated deactivate button.
+- **Re-activating an RM does NOT restore prior user assignments** — admin must manually re-assign. Confirmed via test `test_reactivating_rm_does_not_restore_prior_assignments`.
+- Went through the `architect` skill first: aligned on "RM association" = the `relationship_manager_user` pivot only (not Payment's historical FK), before implementing.
 
 ## Problems solved
 
-- Wayfinder regeneration silently drops `.form()` variants unless `--with-form` is passed to the CLI (the vite plugin's `formVariants: true` option only applies during `vite build`/dev, not `php artisan wayfinder:generate` run standalone). Caused a broad but false-looking wave of `vue-tsc` errors across unrelated files (Login.vue, Security.vue, TwoFactorChallenge.vue, etc.) until re-run with the flag.
+- Root cause of the reported "checkmark" bug was purely a stale-pivot-data issue exposed by a UI gap — `UserController::edit()` was already using the same active-or-current pattern as the Payment filter, it just never actually needed to include inactive RMs once the detach-on-deactivate rule was added, so the special-case code was deleted rather than patched.
 
 ## Current state
 
-- All 3 Sentry issues triaged (2 resolved, 1 ignored).
-- Delete-account removal fully implemented, tested (`ProfileUpdateTest` 3/3 pass, full Pest suite passed, `vue-tsc --noEmit` shows only the 3 known pre-existing errors — `ssr.ts` overload mismatch, `viva-accounts/Edit.vue` ref-typing x2), committed, and merged all the way up:
-  - Commit `90331ce` (feature removal) + `f32ca42` (rebuilt assets) on `fix/multi-issue-fixes`, pushed.
-  - Merged into `staging` (`27ae1e9..6e68b05`), pushed.
-  - Merged `staging` into `master` (`4f641e6..81bd926`) via the separate worktree at `C:/Users/salmanabdul.ghani/Herd/payhub-fix-stale-pi` (master is checked out there, not in the main `payhub` dir — must `cd` there for any master-branch git operations), pushed.
-- **Prod (Hostinger) has NOT been updated** — pushing to `master` does not auto-deploy; still needs a manual `git pull` + opcache reset on the box.
-- `.claude/settings.local.json` has an unrelated pre-existing local modification that was deliberately left out of every commit this session (consistent with prior sessions).
+- Full Pest suite: 425 tests, 409 passed, 1 pre-existing unrelated failure (`NotificationTest::...queues_PaymentSucceeded_mail...`, confirmed failing identically on `git stash` of these changes — not caused by this work), 15 skipped, 1 incomplete.
+- Migration applied and verified locally (`php artisan migrate --force`), SQL previewed via `--pretend` first.
+- Commits:
+  - `83c2191` (fix) + `6668cd2` (rebuilt assets) on `fix/multi-issue-fixes`, pushed to origin.
+  - Merged into `staging` (`6e68b05`), pushed.
+  - Merged `staging` into `master` (`81bd926..94041c5`) via the separate worktree at `C:/Users/salmanabdul.ghani/Herd/payhub-fix-stale-pi` (master is checked out there, not in the main `payhub` dir — must `cd` there for any master-branch git operations), pushed.
+- **Prod (Hostinger) has NOT been updated.** Migration command prepared for the user:
+  `/opt/alt/php83/usr/bin/php artisan migrate --path=database/migrations/2026_08_28_000001_detach_inactive_relationship_managers_from_users.php --force`
+  (run from app root on the server; only migrates this one file — if other migrations are pending, follow with a plain `php artisan migrate --force`).
+- `.claude/settings.local.json` has an unrelated pre-existing local modification, deliberately left out of every commit (consistent with prior sessions).
 
 ## Next session starts with
 
-- Nothing code-related queued. If the user wants this live, next step is deploying `master` to Hostinger prod (manual `git pull` + opcache reset).
-- If PAYHUB-BACKEND-K (stale-chunk-on-deploy) recurs/escalates, implement the `vite:preloadError` listener fix in `resources/js/app.ts` (design already discussed and ready to execute — see "What was built" above).
+- Nothing code-related queued. If the user wants this live, next step is deploying `master` to Hostinger prod: manual `git pull` + opcache reset + run the migration command above.
 
 ## Open questions
 
