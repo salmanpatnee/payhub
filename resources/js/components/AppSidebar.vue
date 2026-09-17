@@ -3,6 +3,7 @@ import { usePage } from '@inertiajs/vue3';
 import { Banknote, Building2, CreditCard, Landmark, LayoutDashboard, Settings, UserCheck2, Users, Wallet } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
+import CloverIcon from '@/components/icons/CloverIcon.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
@@ -33,7 +34,7 @@ const mainNavItems = computed((): NavItem[] => [
         { title: 'Square Accounts', href: '/admin/square-accounts',         icon: Wallet     } as NavItem,
         { title: 'Revolut Accounts', href: '/admin/revolut-accounts',       icon: Landmark   } as NavItem,
         { title: 'Viva Accounts',   href: '/admin/viva-accounts',           icon: Landmark   } as NavItem,
-        { title: 'Clover Accounts', href: '/admin/clover-accounts',         icon: Wallet     } as NavItem,
+        { title: 'Clover Accounts', href: '/admin/clover-accounts',         icon: CloverIcon } as NavItem,
         { title: 'Users',           href: '/admin/users',                   icon: Users      } as NavItem,
         { title: 'RMs',             href: '/admin/relationship-managers',   icon: UserCheck2 } as NavItem,
     ] : []),
