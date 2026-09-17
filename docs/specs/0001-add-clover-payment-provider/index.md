@@ -1,7 +1,7 @@
 # 0001. Add Clover as a fifth payment provider
 
 **Date**: 2026-09-16
-**Status**: In Progress
+**Status**: Superseded by [0002](../0002-clover-hosted-iframe-integration/index.md)
 
 ## Summary
 
