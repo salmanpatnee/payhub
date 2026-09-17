@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Brand;
+use App\Models\CloverAccount;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
 use App\Models\SquareAccount;
@@ -69,6 +70,25 @@ function validVivaPaymentPayload(Brand $brand, VivaAccount $account): array
         'account_id' => $account->id,
         'relationship_manager_id' => $rm->id,
         'currency' => 'gbp',
+        'amount' => '25.00',
+        'client_name' => 'Alice Smith',
+        'client_email' => 'alice@example.com',
+        'service' => 'Web Design',
+        'package' => 'standard',
+        'note' => null,
+    ];
+}
+
+function validCloverPaymentPayload(Brand $brand, CloverAccount $account): array
+{
+    $rm = RelationshipManager::factory()->create();
+
+    return [
+        'brand_id' => $brand->id,
+        'provider' => 'clover',
+        'account_id' => $account->id,
+        'relationship_manager_id' => $rm->id,
+        'currency' => 'usd',
         'amount' => '25.00',
         'client_name' => 'Alice Smith',
         'client_email' => 'alice@example.com',
@@ -325,6 +345,38 @@ it('accepts a viva payment whose currency is gbp', function () {
     $account = VivaAccount::factory()->create(['is_active' => true]);
 
     $payload = validVivaPaymentPayload($brand, $account);
+
+    $this->actingAs($admin)->post('/payments', $payload)
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect(Payment::count())->toBe(1);
+});
+
+// Clover is USD-only as a flat platform rule: submitting a non-USD currency is rejected.
+it('rejects a clover payment whose currency is not usd', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = CloverAccount::factory()->create(['is_active' => true]);
+
+    $payload = validCloverPaymentPayload($brand, $account);
+    $payload['currency'] = 'gbp';
+
+    $this->actingAs($admin)->post('/payments', $payload)
+        ->assertSessionHasErrors(['currency' => 'This Clover account only accepts USD payments.']);
+
+    expect(Payment::count())->toBe(0);
+});
+
+// USD currency succeeds for a Clover payment.
+it('accepts a clover payment whose currency is usd', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $brand = Brand::factory()->create();
+    $account = CloverAccount::factory()->create(['is_active' => true]);
+
+    $payload = validCloverPaymentPayload($brand, $account);
 
     $this->actingAs($admin)->post('/payments', $payload)
         ->assertSessionHasNoErrors()
@@ -637,6 +689,37 @@ it('agent with both currencies configured routes to the correct provider account
     $gbpPayment = Payment::where('id', '!=', $usdPayment->id)->first();
     expect($gbpPayment->provider->value)->toBe('viva');
     expect($gbpPayment->viva_account_id)->toBe($vivaAccount->id);
+});
+
+// Clover competes with Stripe/Square for the single usd account slot — confirms an
+// agent locked to a Clover account (rather than Stripe) is routed there correctly.
+it('agent with a clover usd payment account is routed to clover', function () {
+    $agent = User::factory()->create();
+    $agent->assignRole('agent');
+
+    $cloverAccount = CloverAccount::factory()->create(['is_active' => true]);
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'clover', 'account_id' => $cloverAccount->id]);
+
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+    $agent->brands()->sync([$brand->id]);
+    $agent->relationshipManagers()->sync([$rm->id]);
+
+    $payload = [
+        'brand_id' => $brand->id,
+        'relationship_manager_id' => $rm->id,
+        'currency' => 'usd',
+        'amount' => '25.00',
+        'client_name' => 'Alice Smith',
+    ];
+
+    $this->actingAs($agent)->post('/payments', $payload)
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $payment = Payment::first();
+    expect($payment->provider->value)->toBe('clover');
+    expect($payment->clover_account_id)->toBe($cloverAccount->id);
 });
 
 it('zero-currency agent is redirected from the payment create page', function () {

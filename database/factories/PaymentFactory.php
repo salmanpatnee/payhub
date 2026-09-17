@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Brand;
+use App\Models\CloverAccount;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
@@ -23,6 +24,7 @@ class PaymentFactory extends Factory
             'revolut_account_id' => null,
             'square_account_id' => null,
             'viva_account_id' => null,
+            'clover_account_id' => null,
             'user_id' => User::factory(),
             'amount' => $this->faker->numberBetween(500, 100000),
             'currency' => $this->faker->randomElement(['usd', 'gbp']),
@@ -40,6 +42,10 @@ class PaymentFactory extends Factory
             'square_payment_id' => null,
             'viva_transaction_id' => null,
             'viva_order_code' => null,
+            'clover_checkout_session_id' => null,
+            'clover_checkout_url' => null,
+            'clover_checkout_expires_at' => null,
+            'clover_payment_id' => null,
             'expires_at' => null,
             'paid_at' => null,
         ];
@@ -81,6 +87,21 @@ class PaymentFactory extends Factory
             'stripe_account_id' => null,
             'viva_account_id' => VivaAccount::factory(),
             'currency' => 'gbp',
+        ]);
+    }
+
+    /**
+     * Clover-provider payment: nulls the Stripe account and attaches a Clover
+     * account. Clover is USD-only — currency is forced to 'usd' to match the
+     * platform rule enforced in Store/UpdatePaymentRequest.
+     */
+    public function clover(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'provider' => 'clover',
+            'stripe_account_id' => null,
+            'clover_account_id' => CloverAccount::factory(),
+            'currency' => 'usd',
         ]);
     }
 }

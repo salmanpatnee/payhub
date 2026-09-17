@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\Brand;
+use App\Models\CloverAccount;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
@@ -125,6 +126,7 @@ class UserController extends Controller
             'revolut' => RevolutAccount::pluck('account_name', 'id')->all(),
             'square' => SquareAccount::pluck('account_name', 'id')->all(),
             'viva' => VivaAccount::pluck('account_name', 'id')->all(),
+            'clover' => CloverAccount::pluck('account_name', 'id')->all(),
         ];
     }
 
@@ -148,7 +150,10 @@ class UserController extends Controller
         $viva = VivaAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
             ->map(fn (VivaAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'viva', 'currency' => null]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->values();
+        $clover = CloverAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (CloverAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'clover', 'currency' => null]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->values();
     }
 
     /**

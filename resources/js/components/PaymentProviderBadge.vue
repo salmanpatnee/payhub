@@ -26,6 +26,13 @@ const config: Record<string, { color: string; label: string; path: string }> = {
         // mark like Stripe/Square, and this is redirect-only (no in-page SDK).
         path: 'M12 2 1 9h2v11h4v-7h10v7h4V9h2L12 2zm-4 9h8v9H8v-9z',
     },
+    clover: {
+        color: 'text-emerald-600 dark:text-emerald-400',
+        label: 'Clover',
+        // Simple landmark/bank glyph — reused from Viva/Revolut's treatment,
+        // since Clover's Hosted Checkout is also redirect-only (no in-page SDK).
+        path: 'M12 2 1 9h2v11h4v-7h10v7h4V9h2L12 2zm-4 9h8v9H8v-9z',
+    },
 };
 
 // Explicit per-provider entries are required above — falling back to

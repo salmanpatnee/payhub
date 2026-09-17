@@ -3,6 +3,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\Brand;
+use App\Models\CloverAccount;
 use App\Models\RelationshipManager;
 use App\Models\StripeAccount;
 use App\Models\User;
@@ -154,6 +155,60 @@ class AdminUserManagementTest extends TestCase
             ->assertSessionHasErrors(['payment_accounts.0.currency']);
 
         $this->assertDatabaseMissing('users', ['username' => 'badcurrency']);
+    }
+
+    public function test_admin_can_create_agent_with_two_currencies_across_stripe_and_clover(): void
+    {
+        $admin = $this->adminUser();
+        $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+        $cloverAccount = CloverAccount::factory()->create(['is_active' => true]);
+        $brand = Brand::factory()->create();
+        $rm = RelationshipManager::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'Clover Agent',
+                'username' => 'cloveragent',
+                'password' => 'Password1!',
+                'role' => 'agent',
+                'payment_accounts' => [
+                    ['currency' => 'usd', 'provider' => 'clover', 'account_id' => $cloverAccount->id],
+                ],
+                'brand_ids' => [$brand->id],
+                'relationship_manager_ids' => [$rm->id],
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('admin.users.index'));
+
+        $user = User::where('username', 'cloveragent')->firstOrFail();
+        $this->assertDatabaseHas('user_payment_accounts', [
+            'user_id' => $user->id, 'currency' => 'usd', 'provider' => 'clover', 'account_id' => $cloverAccount->id,
+        ]);
+    }
+
+    public function test_admin_cannot_assign_gbp_to_a_clover_account(): void
+    {
+        $admin = $this->adminUser();
+        // Clover is USD-only as a flat platform rule (CurrencySupportResolver).
+        $cloverAccount = CloverAccount::factory()->create(['is_active' => true]);
+        $brand = Brand::factory()->create();
+        $rm = RelationshipManager::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'Bad Clover Currency',
+                'username' => 'badclovercurrency',
+                'password' => 'Password1!',
+                'role' => 'agent',
+                'payment_accounts' => [
+                    ['currency' => 'gbp', 'provider' => 'clover', 'account_id' => $cloverAccount->id],
+                ],
+                'brand_ids' => [$brand->id],
+                'relationship_manager_ids' => [$rm->id],
+            ])
+            ->assertSessionHasErrors(['payment_accounts.0.currency']);
+
+        $this->assertDatabaseMissing('users', ['username' => 'badclovercurrency']);
     }
 
     public function test_admin_cannot_assign_an_inactive_account(): void

@@ -38,7 +38,7 @@ class UpdatePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -64,9 +64,11 @@ class UpdatePaymentRequest extends FormRequest
                         return;
                     }
 
-                    $fail($provider === 'viva'
-                        ? 'Viva payments must be in GBP.'
-                        : "This Square account only accepts {$accountCurrency} payments.");
+                    $fail(match ($provider) {
+                        'viva' => 'Viva payments must be in GBP.',
+                        'clover' => 'This Clover account only accepts USD payments.',
+                        default => "This Square account only accepts {$accountCurrency} payments.",
+                    });
                 },
             ],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
@@ -111,6 +113,7 @@ class UpdatePaymentRequest extends FormRequest
         $data['revolut_account_id'] = $provider === 'revolut' ? $accountId : null;
         $data['square_account_id'] = $provider === 'square' ? $accountId : null;
         $data['viva_account_id'] = $provider === 'viva' ? $accountId : null;
+        $data['clover_account_id'] = $provider === 'clover' ? $accountId : null;
 
         return $data;
     }

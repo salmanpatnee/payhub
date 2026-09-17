@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Brand;
+use App\Models\CloverAccount;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
 use App\Models\SquareAccount;
@@ -485,4 +486,117 @@ it('nulls viva_order_code and viva_transaction_id when the payment moves to anot
     expect($payment->viva_account_id)->toBe($vivaAccountB->id);
     expect($payment->viva_order_code)->toBeNull();
     expect($payment->viva_transaction_id)->toBeNull();
+});
+
+function updateCloverPayload(Brand $brand, CloverAccount $account, RelationshipManager $rm): array
+{
+    return [
+        'brand_id' => $brand->id,
+        'provider' => 'clover',
+        'account_id' => $account->id,
+        'relationship_manager_id' => $rm->id,
+        'currency' => 'usd',
+        'amount' => '42.50',
+        'client_name' => 'Updated Client',
+        'client_email' => 'updated@example.com',
+        'service' => 'Updated Service',
+        'package' => 'premium',
+        'note' => 'changed',
+    ];
+}
+
+it('admin can update a payment to use a clover account', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $stripeAccount = StripeAccount::factory()->create(['is_active' => true]);
+    $cloverAccount = CloverAccount::factory()->create(['is_active' => true]);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'stripe_account_id' => $stripeAccount->id,
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", updateCloverPayload($brand, $cloverAccount, $rm))
+        ->assertRedirect("/payments/{$payment->uuid}")
+        ->assertSessionHasNoErrors();
+
+    $payment->refresh();
+    expect($payment->provider->value)->toBe('clover');
+    expect($payment->clover_account_id)->toBe($cloverAccount->id);
+    expect($payment->stripe_account_id)->toBeNull();
+    expect($payment->currency)->toBe('usd');
+});
+
+// Clover is USD-only as a flat platform rule: updating to a non-USD currency is rejected.
+it('rejects updating a payment to a clover account with a non-usd currency', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $cloverAccount = CloverAccount::factory()->create(['is_active' => true]);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'clover_account_id' => $cloverAccount->id,
+        'provider' => 'clover',
+        'stripe_account_id' => null,
+        'currency' => 'usd',
+        'status' => 'pending',
+    ]);
+
+    $payload = updateCloverPayload($brand, $cloverAccount, $rm);
+    $payload['currency'] = 'gbp';
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", $payload)
+        ->assertSessionHasErrors(['currency' => 'This Clover account only accepts USD payments.']);
+
+    expect($payment->fresh()->currency)->not()->toBe('gbp');
+});
+
+// clearStaleProviderTransactionIds() must null all three Clover-scoped columns
+// (session id, session url, session expiry, payment id) when the payment moves to
+// another Clover account — otherwise a stale session from the old account lingers.
+it('nulls clover checkout session and payment id when the payment moves to another clover account', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $cloverAccountA = CloverAccount::factory()->create(['is_active' => true]);
+    $cloverAccountB = CloverAccount::factory()->create(['is_active' => true]);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'clover_account_id' => $cloverAccountA->id,
+        'provider' => 'clover',
+        'stripe_account_id' => null,
+        'currency' => 'usd',
+        'clover_checkout_session_id' => 'session_on_account_a',
+        'clover_checkout_url' => 'https://checkout.clover.com/session_on_account_a',
+        'clover_checkout_expires_at' => now()->addMinutes(15),
+        'clover_payment_id' => 'payment_on_account_a',
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", updateCloverPayload($brand, $cloverAccountB, $rm))
+        ->assertRedirect("/payments/{$payment->uuid}")
+        ->assertSessionHasNoErrors();
+
+    $payment->refresh();
+    expect($payment->clover_account_id)->toBe($cloverAccountB->id);
+    expect($payment->clover_checkout_session_id)->toBeNull();
+    expect($payment->clover_checkout_url)->toBeNull();
+    expect($payment->clover_checkout_expires_at)->toBeNull();
+    expect($payment->clover_payment_id)->toBeNull();
 });

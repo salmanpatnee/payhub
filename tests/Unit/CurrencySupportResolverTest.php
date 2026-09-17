@@ -26,12 +26,18 @@ it('resolves currency support per provider and account currency', function (stri
     ['viva', null, 'gbp', true],
     ['viva', null, 'usd', false],
     ['viva', 'usd', 'gbp', true],
+
+    // Clover: USD-only as a flat platform rule, regardless of accountCurrency.
+    ['clover', null, 'usd', true],
+    ['clover', null, 'gbp', false],
+    ['clover', 'gbp', 'usd', true],
 ]);
 
 it('lists currencies for a provider/account combination', function () {
     expect(CurrencySupportResolver::currenciesFor('stripe', null))->toBe(['usd', 'gbp']);
     expect(CurrencySupportResolver::currenciesFor('revolut', null))->toBe(['usd', 'gbp']);
     expect(CurrencySupportResolver::currenciesFor('viva', null))->toBe(['gbp']);
+    expect(CurrencySupportResolver::currenciesFor('clover', null))->toBe(['usd']);
     expect(CurrencySupportResolver::currenciesFor('square', null))->toBe(['usd', 'gbp']);
     expect(CurrencySupportResolver::currenciesFor('square', 'usd'))->toBe(['usd']);
     expect(CurrencySupportResolver::currenciesFor('square', 'gbp'))->toBe(['gbp']);

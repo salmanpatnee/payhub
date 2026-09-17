@@ -34,7 +34,7 @@ class UpdateUserRequest extends FormRequest
             'payment_accounts.*.currency' => [
                 'required', 'string', 'distinct', 'in:'.implode(',', SupportedCurrency::values()),
             ],
-            'payment_accounts.*.provider' => ['required', 'string', 'in:stripe,revolut,square,viva'],
+            'payment_accounts.*.provider' => ['required', 'string', 'in:stripe,revolut,square,viva,clover'],
             'payment_accounts.*.account_id' => ['required', 'integer'],
             'brand_ids' => [
                 Rule::requiredIf(fn () => $this->input('role') === 'agent'),

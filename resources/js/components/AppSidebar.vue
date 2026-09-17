@@ -33,6 +33,7 @@ const mainNavItems = computed((): NavItem[] => [
         { title: 'Square Accounts', href: '/admin/square-accounts',         icon: Wallet     } as NavItem,
         { title: 'Revolut Accounts', href: '/admin/revolut-accounts',       icon: Landmark   } as NavItem,
         { title: 'Viva Accounts',   href: '/admin/viva-accounts',           icon: Landmark   } as NavItem,
+        { title: 'Clover Accounts', href: '/admin/clover-accounts',         icon: Wallet     } as NavItem,
         { title: 'Users',           href: '/admin/users',                   icon: Users      } as NavItem,
         { title: 'RMs',             href: '/admin/relationship-managers',   icon: UserCheck2 } as NavItem,
     ] : []),

@@ -8,6 +8,7 @@ use App\Exports\PaymentsExport;
 use App\Http\Requests\StorePaymentRequest;
 use App\Http\Requests\UpdatePaymentRequest;
 use App\Models\Brand;
+use App\Models\CloverAccount;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
@@ -84,7 +85,7 @@ class PaymentController extends Controller
     {
         $canViewAll = $user->hasRole('admin') || $user->hasRole('account');
 
-        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'user', 'relationshipManager'])
+        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'user', 'relationshipManager'])
             ->orderByDesc('created_at');
 
         if (! $canViewAll) {
@@ -252,7 +253,10 @@ class PaymentController extends Controller
         $viva = VivaAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
             ->map(fn (VivaAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'viva', 'currency' => 'gbp']);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->values();
+        $clover = CloverAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (CloverAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'clover', 'currency' => 'usd']);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->values();
     }
 
     /**
@@ -268,7 +272,7 @@ class PaymentController extends Controller
      * whichever branch happens to be last — see CLAUDE.md's warning about the
      * two Square CSV export bugs caused by exactly this pattern.
      *
-     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int}|null
+     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int}|null
      */
     private function agentAccountData(User $user, string $currency): ?array
     {
@@ -292,6 +296,7 @@ class PaymentController extends Controller
             'revolut_account_id' => $provider === 'revolut' ? $account->account_id : null,
             'square_account_id' => $provider === 'square' ? $account->account_id : null,
             'viva_account_id' => $provider === 'viva' ? $account->account_id : null,
+            'clover_account_id' => $provider === 'clover' ? $account->account_id : null,
         ];
     }
 
@@ -360,7 +365,7 @@ class PaymentController extends Controller
                 'uuid' => $payment->uuid,
                 'brand_id' => $payment->brand_id,
                 'provider' => $payment->provider->value,
-                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id,
+                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id,
                 'relationship_manager_id' => $payment->relationship_manager_id,
                 'currency' => $payment->currency,
                 // Cents → decimal string for the amount input.
@@ -423,6 +428,10 @@ class PaymentController extends Controller
             // Viva has two ids scoped to the account: the order code (set when the pay
             // page creates the order) and the transaction id (set by the webhook).
             'viva_account_id' => ['viva_order_code', 'viva_transaction_id'],
+            // Clover has a checkout session (id + url + expiry, set when the pay page
+            // creates the session) and a payment id (set by the webhook) — all four are
+            // scoped to the account that created the session.
+            'clover_account_id' => ['clover_checkout_session_id', 'clover_checkout_url', 'clover_checkout_expires_at', 'clover_payment_id'],
         ];
 
         $cleared = [];
@@ -458,7 +467,7 @@ class PaymentController extends Controller
     public function show(Payment $payment): Response
     {
         Gate::authorize('view', $payment);
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'relationshipManager']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'relationshipManager']);
 
         $user = auth()->user();
         $canViewStripeAccount = $user->hasRole('admin') || $user->hasRole('account');
@@ -488,6 +497,7 @@ class PaymentController extends Controller
                     PaymentProvider::Revolut => $payment->revolut_order_id,
                     PaymentProvider::Square => $payment->square_payment_id,
                     PaymentProvider::Viva => $payment->viva_transaction_id ?? $payment->viva_order_code,
+                    PaymentProvider::Clover => $payment->clover_payment_id ?? $payment->clover_checkout_session_id,
                 },
                 'paid_at' => $payment->paid_at?->toISOString(),
                 'expires_at' => $payment->expires_at?->toISOString(),

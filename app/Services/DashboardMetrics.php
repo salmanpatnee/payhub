@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\PaymentProvider;
 use App\Models\Brand;
+use App\Models\CloverAccount;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
@@ -81,6 +82,7 @@ class DashboardMetrics
             ->when($accountProvider === 'revolut', fn ($q) => $q->where('revolut_account_id', $accountId))
             ->when($accountProvider === 'square', fn ($q) => $q->where('square_account_id', $accountId))
             ->when($accountProvider === 'viva', fn ($q) => $q->where('viva_account_id', $accountId))
+            ->when($accountProvider === 'clover', fn ($q) => $q->where('clover_account_id', $accountId))
             ->when($this->filters['currency'] ?? null, fn ($q, $v) => $q->where('currency', $v));
     }
 
@@ -110,7 +112,7 @@ class DashboardMetrics
 
         [$provider, $id] = explode(':', $value, 2);
 
-        return in_array($provider, ['stripe', 'revolut', 'square', 'viva'], true) && ctype_digit($id)
+        return in_array($provider, ['stripe', 'revolut', 'square', 'viva', 'clover'], true) && ctype_digit($id)
             ? [$provider, (int) $id]
             : [null, null];
     }
@@ -365,15 +367,17 @@ class DashboardMetrics
         $revolutNames = RevolutAccount::query()->pluck('account_name', 'id');
         $squareNames = SquareAccount::query()->pluck('account_name', 'id');
         $vivaNames = VivaAccount::query()->pluck('account_name', 'id');
+        $cloverNames = CloverAccount::query()->pluck('account_name', 'id');
 
         return collect(array_keys($accepted + $pending))
-            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames, $vivaNames) {
+            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames, $vivaNames, $cloverNames) {
                 [$provider, $id] = explode(':', $key);
                 $id = (int) $id;
                 $name = match ($provider) {
                     'revolut' => $revolutNames[$id] ?? "Account #{$id}",
                     'square' => $squareNames[$id] ?? "Account #{$id}",
                     'viva' => $vivaNames[$id] ?? "Account #{$id}",
+                    'clover' => $cloverNames[$id] ?? "Account #{$id}",
                     default => $stripeNames[$id] ?? "Account #{$id}",
                 };
 
@@ -400,8 +404,8 @@ class DashboardMetrics
     {
         $totals = [];
 
-        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, viva_account_id, currency, sum(amount) as s')
-            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'currency')
+        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, viva_account_id, clover_account_id, currency, sum(amount) as s')
+            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id', 'currency')
             ->get()
             ->each(function ($r) use (&$totals) {
                 $provider = $r->provider instanceof PaymentProvider ? $r->provider->value : (string) $r->provider;
@@ -409,6 +413,7 @@ class DashboardMetrics
                     'revolut' => $r->revolut_account_id,
                     'square' => $r->square_account_id,
                     'viva' => $r->viva_account_id,
+                    'clover' => $r->clover_account_id,
                     default => $r->stripe_account_id,
                 };
 
@@ -595,6 +600,13 @@ class DashboardMetrics
                 'provider' => 'viva',
             ]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->values()->all();
+        $clover = CloverAccount::query()->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (CloverAccount $a) => [
+                'value' => "clover:{$a->id}",
+                'name' => $a->account_name,
+                'provider' => 'clover',
+            ]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->values()->all();
     }
 }

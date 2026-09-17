@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\BrandController;
+use App\Http\Controllers\Admin\CloverAccountController;
 use App\Http\Controllers\Admin\RelationshipManagerController;
 use App\Http\Controllers\Admin\RevolutAccountController;
 use App\Http\Controllers\Admin\SquareAccountController;
@@ -10,6 +11,7 @@ use App\Http\Controllers\Admin\VivaAccountController;
 use App\Http\Controllers\BankAccountActivityLogController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
+use App\Http\Controllers\CloverWebhookController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RevolutWebhookController;
@@ -182,6 +184,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'viva-accounts/{viva_account}/test-connection',
             [VivaAccountController::class, 'testStoredConnection']
         )->name('viva-accounts.test-stored-connection');
+
+        Route::resource('clover-accounts', CloverAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'clover-accounts/{clover_account}/deactivate',
+            [CloverAccountController::class, 'deactivate']
+        )->name('clover-accounts.deactivate');
+
+        Route::patch(
+            'clover-accounts/{clover_account}/activate',
+            [CloverAccountController::class, 'activate']
+        )->name('clover-accounts.activate');
+
+        Route::post(
+            'clover-accounts/test-connection',
+            [CloverAccountController::class, 'testKeyConnection']
+        )->name('clover-accounts.test-connection');
+
+        Route::post(
+            'clover-accounts/{clover_account}/test-connection',
+            [CloverAccountController::class, 'testStoredConnection']
+        )->name('clover-accounts.test-stored-connection');
     });
 
 // Public payment routes — no auth middleware (CLIENT-01)
@@ -200,6 +225,13 @@ Route::get('/pay/{payment}/failed', [ClientPaymentController::class, 'failed'])-
 // and https://payhub.test/failed) so no dashboard change is needed per account.
 Route::get('/success', [ClientPaymentController::class, 'vivaReturnSuccess'])->name('pay.viva.return.success');
 Route::get('/failed', [ClientPaymentController::class, 'vivaReturnFailed'])->name('pay.viva.return.failed');
+
+// Clover Hosted Checkout return endpoint — unlike Viva, this can be a real
+// per-payment URL (Clover's redirect config supports a dynamic return URL),
+// so no query-param correlation is needed. The page shown is decided purely
+// from the payment's current DB status (AC-8), never the redirect itself.
+Route::get('/pay/{payment}/clover/return', [ClientPaymentController::class, 'cloverReturn'])
+    ->name('pay.clover.return');
 
 // Square embedded charge endpoint — public, no auth, CSRF-excluded, throttled.
 // Authoritative status still comes from the payment.updated webhook (CLAUDE.md rule).
@@ -232,6 +264,14 @@ Route::get('/webhook/viva/{vivaAccount}', [VivaWebhookController::class, 'verify
 
 Route::post('/webhook/viva/{vivaAccount}', [VivaWebhookController::class, 'handle'])
     ->name('webhook.viva')
+    ->middleware('throttle:120,1');
+
+// {cloverAccount} resolves by integer id (implicit model binding).
+// Clover's webhook carries a real HMAC signature (Clover-Signature header),
+// verified in the controller before anything else — unlike Viva's unsigned
+// webhook, a verified Clover payload is trusted directly (CLOVER-AC-5).
+Route::post('/webhook/clover/{cloverAccount}', [CloverWebhookController::class, 'handle'])
+    ->name('webhook.clover')
     ->middleware('throttle:120,1');
 
 // TEMPORARY deploy hatch — clears app caches AND resets PHP opcache so freshly

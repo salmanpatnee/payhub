@@ -18,7 +18,7 @@ const props = defineProps<{
         primary_color: string
         secondary_color: string
     }
-    provider?: 'stripe' | 'revolut' | 'square' | 'viva'
+    provider?: 'stripe' | 'revolut' | 'square' | 'viva' | 'clover'
 }>()
 
 // 16 confetti particles — static positions computed once

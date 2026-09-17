@@ -16,13 +16,14 @@ class Payment extends Model
 
     protected $fillable = [
         'uuid', 'reference_code', 'provider', 'brand_id',
-        'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id',
+        'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id',
         'user_id', 'relationship_manager_id',
         'amount', 'currency', 'status',
         'client_email', 'client_name',
         'service', 'package', 'note',
         'stripe_payment_intent_id', 'revolut_order_id', 'square_payment_id',
         'viva_transaction_id', 'viva_order_code', 'expires_at', 'paid_at',
+        'clover_checkout_session_id', 'clover_checkout_url', 'clover_checkout_expires_at', 'clover_payment_id',
     ];
 
     protected static function boot(): void
@@ -61,6 +62,8 @@ class Payment extends Model
             'amount' => 'integer',
             'expires_at' => 'datetime',
             'paid_at' => 'datetime',
+            'clover_checkout_expires_at' => 'datetime',
+            'clover_checkout_url' => 'encrypted',
         ];
     }
 
@@ -89,6 +92,11 @@ class Payment extends Model
         return $this->belongsTo(VivaAccount::class);
     }
 
+    public function cloverAccount(): BelongsTo
+    {
+        return $this->belongsTo(CloverAccount::class);
+    }
+
     /**
      * Reference code prefixed with the processing account's prefix (resolved by
      * provider), e.g. "ACME-001234". Falls back to "#001234" when no prefix.
@@ -105,6 +113,7 @@ class Payment extends Model
             PaymentProvider::Revolut => $this->revolutAccount?->prefix,
             PaymentProvider::Square => $this->squareAccount?->prefix,
             PaymentProvider::Viva => $this->vivaAccount?->prefix,
+            PaymentProvider::Clover => $this->cloverAccount?->prefix,
         };
         $number = str_pad((string) ($this->reference_code ?? 0), 6, '0', STR_PAD_LEFT);
 
@@ -124,6 +133,7 @@ class Payment extends Model
             PaymentProvider::Revolut => $this->revolutAccount?->account_name,
             PaymentProvider::Square => $this->squareAccount?->account_name,
             PaymentProvider::Viva => $this->vivaAccount?->account_name,
+            PaymentProvider::Clover => $this->cloverAccount?->account_name,
         };
     }
 

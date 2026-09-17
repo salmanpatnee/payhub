@@ -10,6 +10,7 @@ class ProviderAccountTable
             'revolut' => 'revolut_accounts',
             'square' => 'square_accounts',
             'viva' => 'viva_accounts',
+            'clover' => 'clover_accounts',
             default => 'stripe_accounts',
         };
     }

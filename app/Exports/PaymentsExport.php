@@ -72,6 +72,7 @@ class PaymentsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMap
                 PaymentProvider::Revolut => $payment->revolut_order_id,
                 PaymentProvider::Square => $payment->square_payment_id,
                 PaymentProvider::Viva => $payment->viva_transaction_id ?? $payment->viva_order_code,
+                PaymentProvider::Clover => $payment->clover_payment_id ?? $payment->clover_checkout_session_id,
             },
             $payment->relationshipManager?->name,
             ucfirst($payment->status),

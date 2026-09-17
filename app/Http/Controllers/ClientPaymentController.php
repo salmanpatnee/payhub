@@ -6,11 +6,13 @@ use App\Enums\PaymentProvider;
 use App\Http\Requests\StorePaymentConsentRequest;
 use App\Models\Brand;
 use App\Models\Payment;
+use App\Services\Clover\CloverClient;
 use App\Services\Revolut\RevolutClient;
 use App\Services\Viva\VivaClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -47,6 +49,7 @@ class ClientPaymentController extends Controller
             PaymentProvider::Revolut => $this->showRevolut($payment),
             PaymentProvider::Square => $this->showSquare($payment),
             PaymentProvider::Viva => $this->showViva($payment),
+            PaymentProvider::Clover => $this->showClover($payment),
             default => $this->showStripe($payment),
         };
     }
@@ -291,6 +294,97 @@ class ClientPaymentController extends Controller
     }
 
     /**
+     * Clover Hosted Checkout is a redirect flow, mirroring Viva's shape: PayHub
+     * creates a checkout session and sends the browser to Clover's own hosted
+     * page. Unlike Viva, Clover's webhook carries a real signature, so no
+     * re-fetch workaround is needed once it arrives.
+     *
+     * Reuses the current session while Clover's own expirationTime has not yet
+     * passed (AC-4) — recreating on every visit would leave a still-payable old
+     * session with nothing to match a later webhook to (see spec 0001's Context
+     * and Key invariants). clover_checkout_url is stored (encrypted) purely
+     * because Clover's API has no endpoint to retrieve a session's checkout URL
+     * after creation — see the migration note on clover_checkout_url.
+     */
+    private function showClover(Payment $payment): Response
+    {
+        $payment->loadMissing('cloverAccount');
+
+        $sessionStillValid = $payment->clover_checkout_session_id !== null
+            && $payment->clover_checkout_url !== null
+            && $payment->clover_checkout_expires_at !== null
+            && $payment->clover_checkout_expires_at->isFuture();
+
+        if ($sessionStillValid) {
+            $checkoutUrl = $payment->clover_checkout_url;
+        } else {
+            $clover = app()->make(CloverClient::class, [
+                'merchantId' => $payment->cloverAccount->merchant_id,
+                'privateToken' => $payment->cloverAccount->private_token,
+                'environment' => $payment->cloverAccount->environment,
+            ]);
+
+            $session = $clover->createCheckoutSession([
+                'customer' => $this->cloverCustomer($payment),
+                'shoppingCart' => [
+                    'lineItems' => [[
+                        'name' => $this->buildDescription($payment),
+                        'price' => $payment->amount, // integer cents from DB — SEC-02, never from client
+                        'unitQty' => 1,
+                    ]],
+                ],
+            ]);
+
+            $checkoutSessionId = $session['checkoutSessionId'] ?? null;
+            $checkoutUrl = $session['href'] ?? null;
+            $expirationTime = $session['expirationTime'] ?? null;
+
+            if ($checkoutSessionId === null || $checkoutUrl === null) {
+                throw new \RuntimeException('Clover checkout session creation did not return a session id/url: '.json_encode($session));
+            }
+
+            $payment->update([
+                'clover_checkout_session_id' => $checkoutSessionId,
+                'clover_checkout_url' => $checkoutUrl,
+                'clover_checkout_expires_at' => $expirationTime
+                    ? Carbon::parse($expirationTime)->setTimezone(config('app.timezone'))
+                    : now()->addMinutes(15),
+                'clover_account_id' => $payment->cloverAccount->id,
+            ]);
+        }
+
+        return Inertia::render('ClientPayment/PayClover', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'checkoutUrl' => $checkoutUrl,
+            'policies' => $this->policyProps(),
+        ]);
+    }
+
+    /**
+     * Clover's Hosted Checkout API rejects a session request with no customer
+     * object at all ("Customer can't be null"), and requires firstName,
+     * lastName, and email together whenever the merchant has "customer
+     * information" enabled. Payment only stores one free-text client_name, so
+     * it's split on the first space; a one-word name is sent as both first and
+     * last name rather than leaving lastName blank.
+     *
+     * @return array<string, string>
+     */
+    private function cloverCustomer(Payment $payment): array
+    {
+        [$firstName, $lastName] = str_contains($payment->client_name, ' ')
+            ? explode(' ', $payment->client_name, 2)
+            : [$payment->client_name, $payment->client_name];
+
+        return array_filter([
+            'firstName' => $firstName,
+            'lastName' => $lastName,
+            'email' => $payment->client_email,
+        ]);
+    }
+
+    /**
      * Create a Revolut Merchant API order from the server-side Payment record.
      * Amount is read from the DB (integer minor units) — never from the client.
      *
@@ -419,7 +513,7 @@ class ClientPaymentController extends Controller
         // The status === 'cancelled' guard below still applies regardless, and
         // the authoritative status write remains webhook-only either way.
 
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount']);
 
         // CR-02 fix: block cancelled payments from showing success via crafted URLs.
         // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,
@@ -456,6 +550,28 @@ class ClientPaymentController extends Controller
         $payment = Payment::where('viva_order_code', $request->query('s'))->firstOrFail();
 
         return redirect()->route('pay.failed', $payment);
+    }
+
+    /**
+     * Clover Hosted Checkout return endpoint. Unlike Viva's static dashboard-
+     * configured URL, Clover's redirect can carry the {payment} segment
+     * directly, so no query-param correlation is needed. The page shown is
+     * decided purely from the payment's current DB status (AC-8), never the
+     * redirect itself — completed/failed redirect into the existing generic
+     * success/failed routes, anything else (pending, the only other status
+     * reachable here) shows Unavailable.
+     */
+    public function cloverReturn(Payment $payment): Response|RedirectResponse
+    {
+        return match ($payment->status) {
+            'completed' => redirect()->route('pay.success', $payment),
+            'failed' => redirect()->route('pay.failed', $payment),
+            default => Inertia::render('ClientPayment/Unavailable', [
+                'status' => $payment->status,
+                'brand' => $this->brandProps($payment->loadMissing('brand')->brand),
+                'provider' => $payment->provider->value,
+            ]),
+        };
     }
 
     public function failed(Payment $payment): Response

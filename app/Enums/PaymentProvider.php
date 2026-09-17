@@ -8,6 +8,7 @@ enum PaymentProvider: string
     case Revolut = 'revolut';
     case Square = 'square';
     case Viva = 'viva';
+    case Clover = 'clover';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum PaymentProvider: string
             self::Revolut => 'Revolut',
             self::Square => 'Square',
             self::Viva => 'Viva',
+            self::Clover => 'Clover',
         };
     }
 }

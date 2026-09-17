@@ -123,7 +123,12 @@
       "Bash(ls .planning)",
       "Bash(echo \"exit:$?\")",
       "Skill(artifact-design)",
-      "Artifact"
+      "Artifact",
+      "mcp__sentry__search_issues",
+      "mcp__sentry__update_issue",
+      "mcp__sentry__get_sentry_resource",
+      "Bash(npx vue-tsc *)",
+      "Bash(npx eslint *)"
     ]
   },
   "enableAllProjectMcpServers": true,

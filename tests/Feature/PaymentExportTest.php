@@ -2,6 +2,7 @@
 
 use App\Exports\PaymentsExport;
 use App\Models\Brand;
+use App\Models\CloverAccount;
 use App\Models\Payment;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
@@ -76,7 +77,7 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
     expect($headings)->toContain('Provider', 'Payment Account', 'Provider Reference');
     expect($headings)->not->toContain('Stripe Account');
 
-    $with = ['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'relationshipManager'];
+    $with = ['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'relationshipManager'];
     $export = new PaymentsExport(Payment::query());
 
     $stripeAccount = StripeAccount::factory()->create(['account_name' => 'Acme Stripe']);
@@ -136,6 +137,31 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
     $pendingVivaRow = $export->map($pendingVivaPayment->load($with));
     expect($pendingVivaRow[6])->toBe('Viva');
     expect($pendingVivaRow[8])->toBe('order_888');
+
+    $cloverAccount = CloverAccount::factory()->create(['account_name' => 'Acme Clover']);
+    $cloverPayment = Payment::factory()->clover()->create([
+        'clover_account_id' => $cloverAccount->id,
+        'clover_payment_id' => 'clover_pay_555',
+    ]);
+
+    $cloverRow = $export->map($cloverPayment->load($with));
+    expect($cloverRow[6])->toBe('Clover');
+    expect($cloverRow[7])->toBe('Acme Clover');
+    expect($cloverRow[8])->toBe('clover_pay_555');
+
+    // Pending/pre-webhook Clover payments only have clover_checkout_session_id (set
+    // when the pay page creates the checkout session) — clover_payment_id is only
+    // populated once the webhook confirms payment. The export must fall back to the
+    // session id rather than showing a blank Provider Reference cell.
+    $pendingCloverPayment = Payment::factory()->clover()->create([
+        'clover_account_id' => $cloverAccount->id,
+        'clover_checkout_session_id' => 'session_888',
+        'clover_payment_id' => null,
+    ]);
+
+    $pendingCloverRow = $export->map($pendingCloverPayment->load($with));
+    expect($pendingCloverRow[6])->toBe('Clover');
+    expect($pendingCloverRow[8])->toBe('session_888');
 });
 
 it('scopes the export to the active brand filter', function () {

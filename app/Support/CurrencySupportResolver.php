@@ -7,10 +7,11 @@ use App\Enums\SupportedCurrency;
 /**
  * Single source of truth for "does this provider/account support this currency".
  *
- * Viva is GBP-only as a flat platform rule. Square is locked to whatever
- * currency the individual account was provisioned with (nullable — a Square
- * account with no currency set accepts either). Stripe and Revolut are
- * multi-currency for every account.
+ * Viva is GBP-only and Clover is USD-only, both as flat platform rules (every
+ * account is provisioned with that single currency — see CloverAccount). Square
+ * is locked to whatever currency the individual account was provisioned with
+ * (nullable — a Square account with no currency set accepts either). Stripe
+ * and Revolut are multi-currency for every account.
  */
 class CurrencySupportResolver
 {
@@ -18,6 +19,7 @@ class CurrencySupportResolver
     {
         return match ($provider) {
             'viva' => $currency === SupportedCurrency::GBP->value,
+            'clover' => $currency === SupportedCurrency::USD->value,
             'square' => $accountCurrency === null || $accountCurrency === $currency,
             default => true,
         };
