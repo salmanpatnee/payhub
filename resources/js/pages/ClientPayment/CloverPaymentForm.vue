@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
 import { AlertCircle, LockIcon } from 'lucide-vue-next'
-import { Button } from '@/components/ui/button'
+import { ref, onMounted } from 'vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 
 const props = defineProps<{
@@ -30,18 +30,37 @@ const sdkLoaded    = ref(false)
 const processing   = ref(false)
 const errorMessage = ref<string | null>(null)
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Per-field invalid state, driven by Clover's own 'change' events — lets each
+// field's wrapper show its own red ring instead of a single shared error state.
+const fieldInvalid = ref({
+    cardNumber: false,
+    cardDate: false,
+    cardCvv: false,
+    cardPostalCode: false,
+})
+
 let clover: any = null
+
+// Clover's docs show the 'change' event carrying either the field's own
+// { error, touched } directly, or that shape nested under its field-type key
+// (e.g. { CARD_NUMBER: { error, touched } }) — handle both shapes defensively.
+function isFieldInvalid(fieldType: string, event: any): boolean {
+    const state = event?.[fieldType] ?? event
+
+    return !!(state?.error && state?.touched)
+}
 
 function formatAmount(cents: number, currency: string): string {
     const formatter = new Intl.NumberFormat(
         currency === 'gbp' ? 'en-GB' : 'en-US',
         { style: 'currency', currency: currency.toUpperCase() }
     )
+
     return formatter.formatToParts(cents / 100).map((part, i, parts) => {
         if (part.type === 'currency' && parts[i + 1]?.type !== 'literal') {
             return part.value + ' '
         }
+
         return part.value
     }).join('')
 }
@@ -49,11 +68,12 @@ function formatAmount(cents: number, currency: string): string {
 // Load the environment-correct Hosted Iframe SDK. Resolves false if the CDN fails (WR-01 analog).
 function loadCloverSdk(environment: string): Promise<boolean> {
     return new Promise((resolve) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if ((window as any).Clover) {
             resolve(true)
+
             return
         }
+
         const src = environment === 'production'
             ? 'https://checkout.clover.com/sdk.js'
             : 'https://checkout.sandbox.dev.clover.com/sdk.js'
@@ -67,24 +87,35 @@ function loadCloverSdk(environment: string): Promise<boolean> {
 
 onMounted(async () => {
     const loaded = await loadCloverSdk(props.cloverAccount.environment)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const Clover = (window as any).Clover
+
     // WR-02 analog: null-guard the SDK before use
     if (!loaded || !Clover) {
         errorMessage.value = 'Payment system is unavailable. Please refresh and try again.'
+
         return
     }
 
     try {
+        // These two flags are read by clover.elements() below and switch off the
+        // "Secure Payments Powered by Clover / Privacy Policy" bar the SDK would
+        // otherwise append to document.body, outside this app's layout.
         clover = new Clover(props.cloverAccount.api_access_key, {
             merchantId: props.cloverAccount.merchant_id,
+            showSecurePayments: false,
+            showPrivacyPolicy: false,
         })
         const elements = clover.elements()
 
+        // Explicit font stack, not 'inherit' — these fields render in a cross-origin
+        // iframe, which can't inherit font-family from our page's <body>.
         const styles = {
+            body: {
+                fontFamily: '"Instrument Sans", ui-sans-serif, system-ui, sans-serif',
+            },
             input: {
                 fontSize: '15px',
-                fontFamily: 'inherit',
+                fontFamily: '"Instrument Sans", ui-sans-serif, system-ui, sans-serif',
                 color: '#0f172a',
             },
         }
@@ -93,6 +124,19 @@ onMounted(async () => {
         const cardDate = elements.create('CARD_DATE', styles)
         const cardCvv = elements.create('CARD_CVV', styles)
         const cardPostalCode = elements.create('CARD_POSTAL_CODE', styles)
+
+        cardNumber.addEventListener('change', (event: any) => {
+            fieldInvalid.value.cardNumber = isFieldInvalid('CARD_NUMBER', event)
+        })
+        cardDate.addEventListener('change', (event: any) => {
+            fieldInvalid.value.cardDate = isFieldInvalid('CARD_DATE', event)
+        })
+        cardCvv.addEventListener('change', (event: any) => {
+            fieldInvalid.value.cardCvv = isFieldInvalid('CARD_CVV', event)
+        })
+        cardPostalCode.addEventListener('change', (event: any) => {
+            fieldInvalid.value.cardPostalCode = isFieldInvalid('CARD_POSTAL_CODE', event)
+        })
 
         cardNumber.mount('#clv-card-number')
         cardDate.mount('#clv-card-date')
@@ -109,6 +153,7 @@ onMounted(async () => {
 async function submit(): Promise<void> {
     if (!clover) {
         errorMessage.value = 'Payment system is unavailable. Please refresh and try again.'
+
         return
     }
 
@@ -116,8 +161,10 @@ async function submit(): Promise<void> {
     errorMessage.value = null
 
     const consented = await props.beforeCharge()
+
     if (!consented) {
         processing.value = false
+
         return
     }
 
@@ -128,6 +175,7 @@ async function submit(): Promise<void> {
             errorMessage.value = Object.values(result.errors as Record<string, string>)[0]
                 ?? 'Please check your card details and try again.'
             processing.value = false
+
             return
         }
 
@@ -147,23 +195,27 @@ async function submit(): Promise<void> {
         if (response.status === 429) {
             errorMessage.value = data.error ?? 'Too many attempts. Please wait a while and try again.'
             processing.value = false
+
             return
         }
 
         if (!response.ok) {
             errorMessage.value = data.error ?? 'Your payment could not be processed. Please try again.'
             processing.value = false
+
             return
         }
 
         if (data.outcome === 'approved') {
             window.location.href = `/pay/${props.payment.uuid}/success`
+
             return
         }
 
         if (data.outcome === 'declined') {
             errorMessage.value = data.message ?? 'Your card was declined. Please try a different card.'
             processing.value = false
+
             return
         }
 
@@ -197,17 +249,29 @@ async function submit(): Promise<void> {
 
         <!-- The clv-card-* containers must always exist in the DOM so mount() can find them. -->
         <form v-show="sdkLoaded" @submit.prevent="submit" class="space-y-4">
-            <div class="rounded-xl border border-slate-200 bg-white overflow-hidden px-3">
+            <div
+                class="clv-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
+                :class="fieldInvalid.cardNumber ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+            >
                 <div id="clv-card-number" class="clv-field"></div>
             </div>
             <div class="grid grid-cols-3 gap-3">
-                <div class="rounded-xl border border-slate-200 bg-white overflow-hidden px-3">
+                <div
+                    class="clv-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
+                    :class="fieldInvalid.cardDate ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+                >
                     <div id="clv-card-date" class="clv-field"></div>
                 </div>
-                <div class="rounded-xl border border-slate-200 bg-white overflow-hidden px-3">
+                <div
+                    class="clv-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
+                    :class="fieldInvalid.cardCvv ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+                >
                     <div id="clv-card-cvv" class="clv-field"></div>
                 </div>
-                <div class="rounded-xl border border-slate-200 bg-white overflow-hidden px-3">
+                <div
+                    class="clv-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
+                    :class="fieldInvalid.cardPostalCode ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+                >
                     <div id="clv-card-postal-code" class="clv-field"></div>
                 </div>
             </div>
@@ -236,8 +300,27 @@ async function submit(): Promise<void> {
 </template>
 
 <style scoped>
+.clv-field-wrap {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+}
+
+/* Clover's iframe fills this node (height:100%), and the input inside it is
+   height:1.2em anchored to the top of the frame — so sizing this to the input's
+   own height (1.2 × the 15px fontSize above) and centring it with the flex
+   wrapper is what actually centres the text. Stretching it to 44px does not. */
 .clv-field {
-    height: 44px;
+    flex: 1;
+    height: 18px;
+}
+
+/* Focus ring on the wrapper when its mounted Clover iframe has focus — native
+   focus-within behavior propagates across the iframe boundary, so this needs
+   no JS from Clover's side (unlike the invalid-state ring, which does). */
+.clv-field-wrap:focus-within {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-primary) 15%, transparent);
 }
 
 .skeleton-row {
@@ -249,5 +332,18 @@ async function submit(): Promise<void> {
 @keyframes shimmer {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+}
+</style>
+
+<!-- Unscoped: the node below is appended to document.body by Clover's SDK, where
+     Vue's scoped data-v attribute never reaches. -->
+<style>
+/* showSecurePayments/showPrivacyPolicy are both off, so the footer has no
+   contents — but Clover's renderFooter() ends with
+   `n.hasChildNodes && document.body.appendChild(n)` (no parens, so always
+   truthy) and appends the empty container anyway, whose inline padding and
+   background paint a stray grey bar at the end of the page. */
+.clover-footer {
+    display: none !important;
 }
 </style>
