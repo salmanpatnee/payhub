@@ -385,6 +385,7 @@ async function copyLink(uuid: string): Promise<void> {
                             <SelectItem value="revolut">Revolut</SelectItem>
                             <SelectItem value="square">Square</SelectItem>
                             <SelectItem value="viva">Viva</SelectItem>
+                            <SelectItem value="clover">Clover</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
