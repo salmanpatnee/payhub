@@ -44,8 +44,8 @@ class CloverAccountManagementTest extends TestCase
             ->post(route('admin.clover-accounts.store'), [
                 'account_name' => 'Test Clover Account',
                 'merchant_id' => 'test-merchant-id',
+                'api_access_key' => 'test-api-access-key',
                 'private_token' => 'test-private-token',
-                'webhook_secret' => 'test-webhook-secret',
                 'environment' => 'sandbox',
             ])
             ->assertSessionHasNoErrors()
@@ -53,12 +53,13 @@ class CloverAccountManagementTest extends TestCase
 
         $this->assertDatabaseHas('clover_accounts', [
             'account_name' => 'Test Clover Account',
+            'api_access_key' => 'test-api-access-key',
             'environment' => 'sandbox',
             'currency' => 'usd',
         ]);
     }
 
-    public function test_admin_can_update_clover_account_without_changing_secrets(): void
+    public function test_admin_can_update_clover_account_without_changing_private_token(): void
     {
         $account = CloverAccount::factory()->create(['account_name' => 'Old Name']);
 
@@ -66,9 +67,9 @@ class CloverAccountManagementTest extends TestCase
             ->put(route('admin.clover-accounts.update', $account), [
                 'account_name' => 'New Name',
                 'merchant_id' => $account->merchant_id,
+                'api_access_key' => $account->api_access_key,
                 'environment' => $account->environment,
                 'private_token' => '',
-                'webhook_secret' => '',
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.clover-accounts.index'));
@@ -79,29 +80,27 @@ class CloverAccountManagementTest extends TestCase
         ]);
     }
 
-    public function test_blank_secrets_on_update_preserve_existing(): void
+    public function test_blank_private_token_on_update_preserves_existing(): void
     {
         $account = CloverAccount::factory()->create();
         $account->private_token = 'original_private_token';
-        $account->webhook_secret = 'original_webhook_secret';
         $account->save();
 
         $this->actingAs($this->adminUser())
             ->put(route('admin.clover-accounts.update', $account), [
                 'account_name' => $account->account_name,
                 'merchant_id' => $account->merchant_id,
+                'api_access_key' => $account->api_access_key,
                 'environment' => $account->environment,
                 'private_token' => '',
-                'webhook_secret' => '',
             ])
             ->assertSessionHasNoErrors();
 
         $account->refresh();
         expect($account->private_token)->toBe('original_private_token');
-        expect($account->webhook_secret)->toBe('original_webhook_secret');
     }
 
-    public function test_admin_can_update_clover_account_with_new_secrets(): void
+    public function test_admin_can_update_clover_account_with_new_private_token(): void
     {
         $account = CloverAccount::factory()->create();
 
@@ -109,37 +108,36 @@ class CloverAccountManagementTest extends TestCase
             ->put(route('admin.clover-accounts.update', $account), [
                 'account_name' => $account->account_name,
                 'merchant_id' => 'new-merchant-id',
+                'api_access_key' => 'new-api-access-key',
                 'environment' => $account->environment,
                 'private_token' => 'new_private_token',
-                'webhook_secret' => 'new_webhook_secret',
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.clover-accounts.index'));
 
         $account->refresh();
         expect($account->merchant_id)->toBe('new-merchant-id');
+        expect($account->api_access_key)->toBe('new-api-access-key');
         expect($account->private_token)->toBe('new_private_token');
-        expect($account->webhook_secret)->toBe('new_webhook_secret');
     }
 
-    public function test_edit_returns_has_secret_bools_never_raw_secrets(): void
+    public function test_edit_returns_api_access_key_and_has_private_token_bool_never_raw_token(): void
     {
         $account = CloverAccount::factory()->create();
         $account->private_token = 'private_token_value';
-        $account->webhook_secret = 'webhook_secret_value';
         $account->save();
 
         $this->actingAs($this->adminUser())
             ->get(route('admin.clover-accounts.edit', $account))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
+                ->has('cloverAccount.api_access_key')
+                ->where('cloverAccount.api_access_key', $account->api_access_key)
                 ->has('cloverAccount.has_private_token')
                 ->where('cloverAccount.has_private_token', true)
-                ->has('cloverAccount.has_webhook_secret')
-                ->where('cloverAccount.has_webhook_secret', true)
-                ->has('cloverAccount.webhook_endpoint_url')
                 ->missing('cloverAccount.private_token')
                 ->missing('cloverAccount.webhook_secret')
+                ->missing('cloverAccount.webhook_endpoint_url')
             );
     }
 
@@ -191,8 +189,8 @@ class CloverAccountManagementTest extends TestCase
             ->post(route('admin.clover-accounts.store'), [
                 'account_name' => 'Test Account',
                 'merchant_id' => 'test-merchant-id',
+                'api_access_key' => 'test-api-access-key',
                 'private_token' => 'test-private-token',
-                'webhook_secret' => 'test-webhook-secret',
                 'environment' => 'sandbox',
                 '_token' => 'test_token',
             ])

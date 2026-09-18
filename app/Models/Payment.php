@@ -23,7 +23,7 @@ class Payment extends Model
         'service', 'package', 'note',
         'stripe_payment_intent_id', 'revolut_order_id', 'square_payment_id',
         'viva_transaction_id', 'viva_order_code', 'expires_at', 'paid_at',
-        'clover_checkout_session_id', 'clover_checkout_url', 'clover_checkout_expires_at', 'clover_payment_id',
+        'clover_payment_id',
     ];
 
     protected static function boot(): void
@@ -62,8 +62,6 @@ class Payment extends Model
             'amount' => 'integer',
             'expires_at' => 'datetime',
             'paid_at' => 'datetime',
-            'clover_checkout_expires_at' => 'datetime',
-            'clover_checkout_url' => 'encrypted',
         ];
     }
 
@@ -95,6 +93,11 @@ class Payment extends Model
     public function cloverAccount(): BelongsTo
     {
         return $this->belongsTo(CloverAccount::class);
+    }
+
+    public function cloverChargeAttempts(): HasMany
+    {
+        return $this->hasMany(CloverChargeAttempt::class);
     }
 
     /**

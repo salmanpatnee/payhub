@@ -428,10 +428,9 @@ class PaymentController extends Controller
             // Viva has two ids scoped to the account: the order code (set when the pay
             // page creates the order) and the transaction id (set by the webhook).
             'viva_account_id' => ['viva_order_code', 'viva_transaction_id'],
-            // Clover has a checkout session (id + url + expiry, set when the pay page
-            // creates the session) and a payment id (set by the webhook) — all four are
-            // scoped to the account that created the session.
-            'clover_account_id' => ['clover_checkout_session_id', 'clover_checkout_url', 'clover_checkout_expires_at', 'clover_payment_id'],
+            // Clover's charge id, set by whichever path (the synchronous charge
+            // handler or the resolver job) first completes the payment.
+            'clover_account_id' => ['clover_payment_id'],
         ];
 
         $cleared = [];
@@ -497,7 +496,7 @@ class PaymentController extends Controller
                     PaymentProvider::Revolut => $payment->revolut_order_id,
                     PaymentProvider::Square => $payment->square_payment_id,
                     PaymentProvider::Viva => $payment->viva_transaction_id ?? $payment->viva_order_code,
-                    PaymentProvider::Clover => $payment->clover_payment_id ?? $payment->clover_checkout_session_id,
+                    PaymentProvider::Clover => $payment->clover_payment_id,
                 },
                 'paid_at' => $payment->paid_at?->toISOString(),
                 'expires_at' => $payment->expires_at?->toISOString(),

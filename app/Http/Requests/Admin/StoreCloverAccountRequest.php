@@ -20,6 +20,7 @@ class StoreCloverAccountRequest extends FormRequest
             'prefix' => ['nullable', 'string', 'max:10', 'regex:/^[A-Z0-9]+$/'],
             'environment' => ['required', 'string', 'in:sandbox,production'],
             'merchant_id' => ['required', 'string', 'max:255'],
+            'api_access_key' => ['required', 'string', 'max:255'],
             'private_token' => [
                 'required',
                 'string',
@@ -29,7 +30,6 @@ class StoreCloverAccountRequest extends FormRequest
                     }
                 },
             ],
-            'webhook_secret' => ['required', 'string'],
         ];
     }
 }

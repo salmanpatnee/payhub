@@ -11,24 +11,25 @@ return new class extends Migration
      *
      * Clover is a fifth payment provider, added on top of the multi-provider
      * scaffolding Viva already established. Purely additive: appends 'clover'
-     * to the provider enum and adds the Clover-specific account FK, checkout
-     * session id/expiry, and payment id. Does NOT re-touch any existing
-     * provider columns.
+     * to the provider enum and adds the Clover-specific account FK and
+     * payment id. Does NOT re-touch any existing provider columns.
+     *
+     * Edited in place for spec 0002 (Hosted Iframe): the original version of
+     * this migration also added clover_checkout_session_id/
+     * clover_checkout_expires_at — the Hosted Checkout session concept, which
+     * Hosted Iframe has no use for (there is no redirect, so nothing to
+     * resume). Dropped here rather than layering a follow-up migration,
+     * because this branch is unmerged and nothing has shipped past it yet.
      */
     public function up(): void
     {
         Schema::table('payments', function (Blueprint $table) {
             $table->foreignId('clover_account_id')->nullable()->after('viva_account_id')
                 ->constrained()->cascadeOnDelete();
-            // Clover Hosted Checkout session id — set when a session is created, only
-            // replaced once clover_checkout_expires_at has passed (see AC-4).
-            $table->string('clover_checkout_session_id')->nullable()->after('viva_order_code')->index();
-            // Copied verbatim from Clover's expirationTime response field — the single
-            // source of truth for whether the stored session can still be reused.
-            $table->timestamp('clover_checkout_expires_at')->nullable()->after('clover_checkout_session_id');
-            // Set by the webhook handler on both approval and decline (Clover assigns
-            // an id to a declined attempt too, so a decline is still traceable).
-            $table->string('clover_payment_id')->nullable()->after('clover_checkout_expires_at')->index();
+            // Set by whichever path (the synchronous charge handler or the resolver
+            // job) first completes the payment — the winning attempt's charge id
+            // (see clover_charge_attempts for the full attempt log).
+            $table->string('clover_payment_id')->nullable()->after('viva_order_code')->index();
         });
 
         // Widen the provider enum to include 'clover'. Uses the schema builder's
@@ -42,7 +43,7 @@ return new class extends Migration
     {
         Schema::table('payments', function (Blueprint $table) {
             $table->dropConstrainedForeignId('clover_account_id');
-            $table->dropColumn(['clover_checkout_session_id', 'clover_checkout_expires_at', 'clover_payment_id']);
+            $table->dropColumn(['clover_payment_id']);
         });
 
         Schema::table('payments', function (Blueprint $table) {

@@ -98,7 +98,7 @@ function executeDelete() {
             <div>
                 <h1 class="text-2xl font-semibold tracking-tight">Clover Accounts</h1>
                 <p class="text-sm text-muted-foreground mt-1">
-                    Clover payments are USD-only and redirect to Clover's hosted checkout page.
+                    Clover payments are USD-only and collected on PayHub's own pay page via Clover's embedded card form.
                 </p>
             </div>
             <Button as-child>

@@ -149,19 +149,18 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
     expect($cloverRow[7])->toBe('Acme Clover');
     expect($cloverRow[8])->toBe('clover_pay_555');
 
-    // Pending/pre-webhook Clover payments only have clover_checkout_session_id (set
-    // when the pay page creates the checkout session) — clover_payment_id is only
-    // populated once the webhook confirms payment. The export must fall back to the
-    // session id rather than showing a blank Provider Reference cell.
+    // A pending Clover payment has no charge id yet — spec 0002's Hosted Iframe
+    // integration has no pre-charge session concept (unlike spec 0001's Hosted
+    // Checkout), so the Provider Reference cell is genuinely blank until a
+    // charge attempt resolves.
     $pendingCloverPayment = Payment::factory()->clover()->create([
         'clover_account_id' => $cloverAccount->id,
-        'clover_checkout_session_id' => 'session_888',
         'clover_payment_id' => null,
     ]);
 
     $pendingCloverRow = $export->map($pendingCloverPayment->load($with));
     expect($pendingCloverRow[6])->toBe('Clover');
-    expect($pendingCloverRow[8])->toBe('session_888');
+    expect($pendingCloverRow[8])->toBeNull();
 });
 
 it('scopes the export to the active brand filter', function () {

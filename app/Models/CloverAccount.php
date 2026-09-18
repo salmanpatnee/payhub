@@ -11,17 +11,14 @@ class CloverAccount extends Model
     use HasFactory;
 
     protected $fillable = [
-        'account_name', 'prefix', 'merchant_id', 'currency', 'environment', 'is_active',
-        // private_token and webhook_secret are NOT mass-assignable — assign explicitly only
+        'account_name', 'prefix', 'merchant_id', 'api_access_key', 'currency', 'environment', 'is_active',
+        // private_token is NOT mass-assignable — assign explicitly only
     ];
 
     protected function casts(): array
     {
-        $encrypted = 'encrypted';
-
         return [
-            'private_token' => $encrypted,
-            'webhook_secret' => $encrypted,
+            'private_token' => 'encrypted',
             'is_active' => 'boolean',
         ];
     }

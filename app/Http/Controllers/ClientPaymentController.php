@@ -4,15 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Enums\PaymentProvider;
 use App\Http\Requests\StorePaymentConsentRequest;
+use App\Jobs\ResolveCloverChargeAttempt;
 use App\Models\Brand;
+use App\Models\CloverChargeAttempt;
 use App\Models\Payment;
+use App\Services\Clover\CloverChargeClassifier;
+use App\Services\Clover\CloverChargeResolver;
 use App\Services\Clover\CloverClient;
 use App\Services\Revolut\RevolutClient;
 use App\Services\Viva\VivaClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -294,93 +298,24 @@ class ClientPaymentController extends Controller
     }
 
     /**
-     * Clover Hosted Checkout is a redirect flow, mirroring Viva's shape: PayHub
-     * creates a checkout session and sends the browser to Clover's own hosted
-     * page. Unlike Viva, Clover's webhook carries a real signature, so no
-     * re-fetch workaround is needed once it arrives.
-     *
-     * Reuses the current session while Clover's own expirationTime has not yet
-     * passed (AC-4) — recreating on every visit would leave a still-payable old
-     * session with nothing to match a later webhook to (see spec 0001's Context
-     * and Key invariants). clover_checkout_url is stored (encrypted) purely
-     * because Clover's API has no endpoint to retrieve a session's checkout URL
-     * after creation — see the migration note on clover_checkout_url.
+     * Clover Hosted Iframe: the card form is embedded directly on this page
+     * (CloverPaymentForm.vue), tokenizes client-side, and POSTs the token to
+     * chargeClover(). No session/redirect concept — nothing to reuse here,
+     * unlike spec 0001's Hosted Checkout this replaces.
      */
     private function showClover(Payment $payment): Response
     {
         $payment->loadMissing('cloverAccount');
 
-        $sessionStillValid = $payment->clover_checkout_session_id !== null
-            && $payment->clover_checkout_url !== null
-            && $payment->clover_checkout_expires_at !== null
-            && $payment->clover_checkout_expires_at->isFuture();
-
-        if ($sessionStillValid) {
-            $checkoutUrl = $payment->clover_checkout_url;
-        } else {
-            $clover = app()->make(CloverClient::class, [
-                'merchantId' => $payment->cloverAccount->merchant_id,
-                'privateToken' => $payment->cloverAccount->private_token,
-                'environment' => $payment->cloverAccount->environment,
-            ]);
-
-            $session = $clover->createCheckoutSession([
-                'customer' => $this->cloverCustomer($payment),
-                'shoppingCart' => [
-                    'lineItems' => [[
-                        'name' => $this->buildDescription($payment),
-                        'price' => $payment->amount, // integer cents from DB — SEC-02, never from client
-                        'unitQty' => 1,
-                    ]],
-                ],
-            ]);
-
-            $checkoutSessionId = $session['checkoutSessionId'] ?? null;
-            $checkoutUrl = $session['href'] ?? null;
-            $expirationTime = $session['expirationTime'] ?? null;
-
-            if ($checkoutSessionId === null || $checkoutUrl === null) {
-                throw new \RuntimeException('Clover checkout session creation did not return a session id/url: '.json_encode($session));
-            }
-
-            $payment->update([
-                'clover_checkout_session_id' => $checkoutSessionId,
-                'clover_checkout_url' => $checkoutUrl,
-                'clover_checkout_expires_at' => $expirationTime
-                    ? Carbon::parse($expirationTime)->setTimezone(config('app.timezone'))
-                    : now()->addMinutes(15),
-                'clover_account_id' => $payment->cloverAccount->id,
-            ]);
-        }
-
         return Inertia::render('ClientPayment/PayClover', [
             'payment' => $this->paymentProps($payment),
             'brand' => $this->brandProps($payment->brand),
-            'checkoutUrl' => $checkoutUrl,
+            'cloverAccount' => [
+                'merchant_id' => $payment->cloverAccount->merchant_id,
+                'api_access_key' => $payment->cloverAccount->api_access_key,
+                'environment' => $payment->cloverAccount->environment,
+            ],
             'policies' => $this->policyProps(),
-        ]);
-    }
-
-    /**
-     * Clover's Hosted Checkout API rejects a session request with no customer
-     * object at all ("Customer can't be null"), and requires firstName,
-     * lastName, and email together whenever the merchant has "customer
-     * information" enabled. Payment only stores one free-text client_name, so
-     * it's split on the first space; a one-word name is sent as both first and
-     * last name rather than leaving lastName blank.
-     *
-     * @return array<string, string>
-     */
-    private function cloverCustomer(Payment $payment): array
-    {
-        [$firstName, $lastName] = str_contains($payment->client_name, ' ')
-            ? explode(' ', $payment->client_name, 2)
-            : [$payment->client_name, $payment->client_name];
-
-        return array_filter([
-            'firstName' => $firstName,
-            'lastName' => $lastName,
-            'email' => $payment->client_email,
         ]);
     }
 
@@ -495,6 +430,160 @@ class ClientPaymentController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Clover Hosted Iframe embedded charge endpoint. Unlike every other PayHub
+     * provider, Clover documents no webhook for this integration type — the
+     * synchronous response to /v1/charges IS the authoritative outcome (spec
+     * 0002's Decision), classified into approved/declined/hard_error/unknown
+     * and applied via the same guarded-update shape HandleSquareWebhookJob
+     * and HandleStripeWebhookJob already use.
+     *
+     * A clover_charge_attempts row is written *before* Clover is ever called,
+     * and a per-payment lock (spec 0002, Key invariants) guarantees at most one
+     * attempt is ever in flight, so a double-click gets 409, never a second
+     * real charge.
+     */
+    public function chargeClover(Request $request, Payment $payment): JsonResponse
+    {
+        $payment->loadMissing('cloverAccount');
+
+        if ($payment->provider !== PaymentProvider::Clover
+            || ! in_array($payment->status, ['pending', 'failed'], true)
+            || ! $payment->cloverAccount
+            || ! $payment->cloverAccount->is_active) {
+            return response()->json(['error' => 'This payment cannot be processed.'], 422);
+        }
+
+        $validated = $request->validate([
+            'token' => ['required', 'string'],
+        ]);
+
+        $lock = Cache::lock("clover-charge-attempt:{$payment->id}", 30);
+
+        if (! $lock->get()) {
+            return response()->json(['error' => 'A charge attempt is already in progress for this payment. Please wait a moment.'], 409);
+        }
+
+        try {
+            // Clover's external_reference_id caps at 12 characters (confirmed against
+            // Clover's own docs) — a full UUID (36 chars) fails Clover's own request
+            // validation with "invalid_request_error" before the card is ever looked
+            // at, which PayHub's classifier then (also wrongly) read as a decline. A
+            // short alphanumeric key satisfies the same field sent as both Clover's
+            // idempotency key and its external_reference_id (spec 0002's design).
+            $idempotencyKey = Str::random(12);
+
+            // Written before Clover is ever called — a durable local record even if
+            // the call times out, errors, or returns something PayHub can't classify.
+            $attempt = CloverChargeAttempt::create([
+                'payment_id' => $payment->id,
+                'idempotency_key' => $idempotencyKey,
+                'status' => 'pending',
+            ]);
+
+            $clover = app()->make(CloverClient::class, [
+                'merchantId' => $payment->cloverAccount->merchant_id,
+                'privateToken' => $payment->cloverAccount->private_token,
+                'environment' => $payment->cloverAccount->environment,
+            ]);
+
+            try {
+                $result = $clover->createCharge(
+                    $idempotencyKey,
+                    $idempotencyKey,
+                    $validated['token'],
+                    $payment->amount,
+                    $payment->currency,
+                    [
+                        'reference_code' => $payment->formattedReferenceCode(),
+                        'payment_uuid' => $payment->uuid,
+                    ],
+                );
+                $body = $result['body'];
+                $classification = CloverChargeClassifier::classify($result['status'], $body, $payment->amount, $payment->currency);
+
+                // POST /v1/charges never returns "order" (confirmed live,
+                // 2026-09-18) — only a follow-up GET does. One extra read, only
+                // for an approved charge, so clover_payment_id (the CSV
+                // export's/dashboard's "Provider Reference") is the value the
+                // engineer confirmed is actually searchable in Clover's own
+                // merchant dashboard, not the API-internal charge id.
+                if ($classification === 'approved' && ! isset($body['order']) && isset($body['id'])) {
+                    $orderId = $this->fetchCloverOrderId($clover, (string) $body['id'], $attempt->id);
+
+                    if ($orderId !== null) {
+                        $body['order'] = $orderId;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Timeout, connection error, or any other transport failure before a
+                // classifiable response ever arrived — resolved later by the job.
+                Log::warning('Clover charge transport failure', [
+                    'attempt_id' => $attempt->id,
+                    'payment_uuid' => $payment->uuid,
+                    'error' => $e->getMessage(),
+                ]);
+                $body = [];
+                $classification = 'unknown';
+            }
+
+            app(CloverChargeResolver::class)->resolve($attempt, $classification, $body);
+        } finally {
+            $lock->release();
+        }
+
+        if ($classification === 'unknown') {
+            ResolveCloverChargeAttempt::dispatch($attempt->id)->delay(now()->addSeconds(15));
+        }
+
+        if ($classification === 'hard_error') {
+            return response()->json(['error' => 'Could not reach the payment processor. Please try again.'], 502);
+        }
+
+        return response()->json([
+            'outcome' => $classification, // approved | declined | unknown
+            'message' => match ($classification) {
+                'approved' => 'Your payment was successful.',
+                'declined' => 'Your card was declined. Please try a different card.',
+                default => 'We could not confirm your payment yet.',
+            },
+        ]);
+    }
+
+    /**
+     * Best-effort only: the payment is already approved by the time this runs,
+     * so a failure here must never break the response — it only leaves
+     * clover_payment_id as the charge id instead of the order id.
+     */
+    private function fetchCloverOrderId(CloverClient $clover, string $chargeId, int $attemptId): ?string
+    {
+        try {
+            $order = $clover->getCharge($chargeId)['body']['order'] ?? null;
+
+            return $order !== null ? (string) $order : null;
+        } catch (\Throwable $e) {
+            Log::warning('Could not fetch clover order id for cross-checking', [
+                'attempt_id' => $attemptId,
+                'charge_id' => $chargeId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Polled by the client only while the latest Clover charge attempt is
+     * unresolved (AC-9) — read-only, Payment.status is the single source of
+     * truth here.
+     */
+    public function cloverStatus(Payment $payment): JsonResponse
+    {
+        abort_unless($payment->provider === PaymentProvider::Clover, 404);
+
+        return response()->json(['status' => $payment->status]);
+    }
+
     public function success(Payment $payment): Response|RedirectResponse
     {
         // D-04: Stripe redirects with ?redirect_status=succeeded on success.
@@ -550,28 +639,6 @@ class ClientPaymentController extends Controller
         $payment = Payment::where('viva_order_code', $request->query('s'))->firstOrFail();
 
         return redirect()->route('pay.failed', $payment);
-    }
-
-    /**
-     * Clover Hosted Checkout return endpoint. Unlike Viva's static dashboard-
-     * configured URL, Clover's redirect can carry the {payment} segment
-     * directly, so no query-param correlation is needed. The page shown is
-     * decided purely from the payment's current DB status (AC-8), never the
-     * redirect itself — completed/failed redirect into the existing generic
-     * success/failed routes, anything else (pending, the only other status
-     * reachable here) shows Unavailable.
-     */
-    public function cloverReturn(Payment $payment): Response|RedirectResponse
-    {
-        return match ($payment->status) {
-            'completed' => redirect()->route('pay.success', $payment),
-            'failed' => redirect()->route('pay.failed', $payment),
-            default => Inertia::render('ClientPayment/Unavailable', [
-                'status' => $payment->status,
-                'brand' => $this->brandProps($payment->loadMissing('brand')->brand),
-                'provider' => $payment->provider->value,
-            ]),
-        };
     }
 
     public function failed(Payment $payment): Response

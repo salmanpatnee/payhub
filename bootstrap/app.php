@@ -30,8 +30,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'webhook/revolut/*',
             'webhook/square/*',
             'webhook/viva/*',
-            'webhook/clover/*',
             'pay/*/square',
+            'pay/*/clover/charge',
         ]);
 
         $middleware->web(append: [

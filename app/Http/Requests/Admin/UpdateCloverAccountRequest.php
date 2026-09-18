@@ -20,6 +20,7 @@ class UpdateCloverAccountRequest extends FormRequest
             'prefix' => ['nullable', 'string', 'max:10', 'regex:/^[A-Z0-9]+$/'],
             'environment' => ['required', 'string', 'in:sandbox,production'],
             'merchant_id' => ['required', 'string', 'max:255'],
+            'api_access_key' => ['required', 'string', 'max:255'],
             // private_token: blank = preserve existing (mirror Square's access_token).
             'private_token' => [
                 'nullable',
@@ -33,8 +34,6 @@ class UpdateCloverAccountRequest extends FormRequest
                     }
                 },
             ],
-            // webhook_secret: blank = preserve existing.
-            'webhook_secret' => ['nullable', 'string'],
         ];
     }
 }

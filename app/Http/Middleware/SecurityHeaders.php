@@ -39,11 +39,17 @@ class SecurityHeaders
         $squareFonts = ' https://d1g145x70srn7h.cloudfront.net';
         $squareFrames = ' https://connect.squareup.com https://connect.squareupsandbox.com';
 
+        // Clover Hosted Iframe SDK: sdk.js loads from, and its card-field iframes +
+        // createToken() calls stay on, the same checkout.*.clover.com host (sandbox +
+        // prod) — scl-sandbox.dev.clover.com/scl.clover.com is the /v1/charges host
+        // CloverClient calls server-to-server only, never from the browser.
+        $clover = ' https://checkout.sandbox.dev.clover.com https://checkout.clover.com';
+
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
-            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$vite}{$scriptInline}; ".
-            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}; ".
-            "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$vite}{$viteWs}; ".
+            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$vite}{$scriptInline}; ".
+            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}; ".
+            "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$clover}{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$square}{$vite}; ".
             "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$vite};"

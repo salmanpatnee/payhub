@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Check, CheckCircle2, Copy, Loader2, XCircle, Zap } from 'lucide-vue-next';
+import { ArrowLeft, Check, CheckCircle2, Loader2, XCircle, Zap } from 'lucide-vue-next';
 import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,11 +24,10 @@ type CloverAccountProp = {
     account_name: string;
     prefix: string | null;
     merchant_id: string;
+    api_access_key: string;                 // public identifier — safe to display
     environment: 'sandbox' | 'production';
     is_active: boolean;
     has_private_token: boolean;             // boolean — never the raw token value
-    has_webhook_secret: boolean;            // boolean — never the raw secret value
-    webhook_endpoint_url: string;           // POST event delivery endpoint
 };
 
 defineOptions({
@@ -43,34 +42,17 @@ defineOptions({
 const props = defineProps<{ cloverAccount: CloverAccountProp }>();
 
 const form = useForm({
-    _method:        'PUT',
-    account_name:   props.cloverAccount.account_name,
-    prefix:         props.cloverAccount.prefix ?? '',
-    environment:    props.cloverAccount.environment,
-    merchant_id:    props.cloverAccount.merchant_id,
-    private_token:  '', // blank = preserve existing
-    webhook_secret: '', // blank = preserve existing
+    _method:         'PUT',
+    account_name:    props.cloverAccount.account_name,
+    prefix:          props.cloverAccount.prefix ?? '',
+    environment:     props.cloverAccount.environment,
+    merchant_id:     props.cloverAccount.merchant_id,
+    api_access_key:  props.cloverAccount.api_access_key,
+    private_token:   '', // blank = preserve existing
 });
 
 const testStatus = ref<'idle' | 'testing' | 'ok' | 'fail'>('idle');
 const testMessage = ref('');
-
-const copiedEndpoint = ref(false);
-
-async function copyText(text: string, flag: typeof copiedEndpoint): Promise<void> {
-    try {
-        await navigator.clipboard.writeText(text);
-    } catch {
-        const el = document.createElement('textarea');
-        el.value = text;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand('copy');
-        document.body.removeChild(el);
-    }
-    flag.value = true;
-    setTimeout(() => { flag.value = false; }, 2000);
-}
 
 function testConnection() {
     testStatus.value = 'testing';
@@ -198,6 +180,22 @@ function submit() {
                     </div>
 
                     <div class="grid gap-2">
+                        <Label for="api_access_key">Public access key</Label>
+                        <Input
+                            id="api_access_key"
+                            v-model="form.api_access_key"
+                            type="text"
+                            placeholder="Ecommerce API Access Key"
+                            autocomplete="off"
+                            required
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            Public identifier the embedded card form's SDK needs client-side. Not a secret.
+                        </p>
+                        <InputError :message="form.errors.api_access_key" />
+                    </div>
+
+                    <div class="grid gap-2">
                         <Label for="private_token">Private token</Label>
                         <div
                             v-if="cloverAccount.has_private_token"
@@ -216,43 +214,6 @@ function submit() {
                             Leave blank to keep the current token. Paste a new value to replace it.
                         </p>
                         <InputError :message="form.errors.private_token" />
-                    </div>
-
-                    <div class="grid gap-2">
-                        <Label for="webhook_secret">Webhook secret</Label>
-                        <div
-                            v-if="cloverAccount.has_webhook_secret"
-                            class="flex h-9 items-center rounded-md border border-input bg-muted/30 px-3 font-mono text-sm tracking-widest text-muted-foreground"
-                        >
-                            ••••••••••••••••••••
-                        </div>
-                        <Input
-                            id="webhook_secret"
-                            v-model="form.webhook_secret"
-                            type="password"
-                            placeholder="Paste new secret to replace"
-                            autocomplete="new-password"
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            Leave blank to keep the current secret. Paste a new value to replace it.
-                        </p>
-                        <InputError :message="form.errors.webhook_secret" />
-                    </div>
-
-                    <!-- Webhook event delivery URL (POST, read-only + copy) -->
-                    <div class="grid gap-2">
-                        <Label>Webhook Endpoint URL</Label>
-                        <div class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3">
-                            <span class="flex-1 truncate select-all font-mono text-sm">{{ cloverAccount.webhook_endpoint_url }}</span>
-                            <Button type="button" variant="outline" size="sm" @click="copyText(cloverAccount.webhook_endpoint_url, copiedEndpoint)">
-                                <Check v-if="copiedEndpoint" class="mr-1 size-4 text-green-600" />
-                                <Copy v-else class="mr-1 size-4" />
-                                {{ copiedEndpoint ? 'Copied!' : 'Copy' }}
-                            </Button>
-                        </div>
-                        <p class="text-xs text-muted-foreground">
-                            Paste this URL into the Clover webhook subscription (event: PAYMENT).
-                        </p>
                     </div>
 
                     <div

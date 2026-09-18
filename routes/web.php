@@ -11,7 +11,6 @@ use App\Http\Controllers\Admin\VivaAccountController;
 use App\Http\Controllers\BankAccountActivityLogController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
-use App\Http\Controllers\CloverWebhookController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RevolutWebhookController;
@@ -226,18 +225,23 @@ Route::get('/pay/{payment}/failed', [ClientPaymentController::class, 'failed'])-
 Route::get('/success', [ClientPaymentController::class, 'vivaReturnSuccess'])->name('pay.viva.return.success');
 Route::get('/failed', [ClientPaymentController::class, 'vivaReturnFailed'])->name('pay.viva.return.failed');
 
-// Clover Hosted Checkout return endpoint — unlike Viva, this can be a real
-// per-payment URL (Clover's redirect config supports a dynamic return URL),
-// so no query-param correlation is needed. The page shown is decided purely
-// from the payment's current DB status (AC-8), never the redirect itself.
-Route::get('/pay/{payment}/clover/return', [ClientPaymentController::class, 'cloverReturn'])
-    ->name('pay.clover.return');
-
 // Square embedded charge endpoint — public, no auth, CSRF-excluded, throttled.
 // Authoritative status still comes from the payment.updated webhook (CLAUDE.md rule).
 Route::post('/pay/{payment}/square', [ClientPaymentController::class, 'chargeSquare'])
     ->name('pay.square.charge')
     ->middleware('throttle:30,1');
+
+// Clover embedded charge endpoint — public, no auth, CSRF-excluded. Rate limited
+// per payment (not IP) via the named 'clover-charge' limiter (spec 0002, AC-11) —
+// unlike every other PayHub provider, the synchronous response here IS the
+// authoritative status source, so this route needs its own throttle shape.
+Route::post('/pay/{payment}/clover/charge', [ClientPaymentController::class, 'chargeClover'])
+    ->name('pay.clover.charge')
+    ->middleware('throttle:clover-charge');
+
+// Polled by the client only while the latest charge attempt is unresolved (AC-9).
+Route::get('/pay/{payment}/clover/status', [ClientPaymentController::class, 'cloverStatus'])
+    ->name('pay.clover.status');
 
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)
@@ -264,14 +268,6 @@ Route::get('/webhook/viva/{vivaAccount}', [VivaWebhookController::class, 'verify
 
 Route::post('/webhook/viva/{vivaAccount}', [VivaWebhookController::class, 'handle'])
     ->name('webhook.viva')
-    ->middleware('throttle:120,1');
-
-// {cloverAccount} resolves by integer id (implicit model binding).
-// Clover's webhook carries a real HMAC signature (Clover-Signature header),
-// verified in the controller before anything else — unlike Viva's unsigned
-// webhook, a verified Clover payload is trusted directly (CLOVER-AC-5).
-Route::post('/webhook/clover/{cloverAccount}', [CloverWebhookController::class, 'handle'])
-    ->name('webhook.clover')
     ->middleware('throttle:120,1');
 
 // TEMPORARY deploy hatch — clears app caches AND resets PHP opcache so freshly

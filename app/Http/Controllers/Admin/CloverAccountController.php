@@ -25,6 +25,7 @@ class CloverAccountController extends Controller
                     'account_name' => $account->account_name,
                     'prefix' => $account->prefix,
                     'merchant_id' => $account->merchant_id,
+                    'api_access_key' => $account->api_access_key,
                     'environment' => $account->environment,
                     'is_active' => $account->is_active,
                 ]),
@@ -48,9 +49,8 @@ class CloverAccountController extends Controller
             return back()->withErrors(['clover_api' => $error])->withInput();
         }
 
-        $account = new CloverAccount($request->safe()->except(['private_token', 'webhook_secret']));
+        $account = new CloverAccount($request->safe()->except(['private_token']));
         $account->private_token = $request->validated('private_token');
-        $account->webhook_secret = $request->validated('webhook_secret');
         $account->currency = 'usd';
         $account->save();
 
@@ -66,12 +66,11 @@ class CloverAccountController extends Controller
                 'account_name' => $cloverAccount->account_name,
                 'prefix' => $cloverAccount->prefix,
                 'merchant_id' => $cloverAccount->merchant_id,
+                'api_access_key' => $cloverAccount->api_access_key,
                 'environment' => $cloverAccount->environment,
                 'is_active' => $cloverAccount->is_active,
                 'has_private_token' => ! empty($cloverAccount->private_token),
-                'has_webhook_secret' => ! empty($cloverAccount->webhook_secret),
-                'webhook_endpoint_url' => route('webhook.clover', $cloverAccount),
-                // private_token / webhook_secret: NEVER included — not even masked
+                // private_token: NEVER included — not even masked
             ],
         ]);
     }
@@ -94,11 +93,7 @@ class CloverAccountController extends Controller
             $cloverAccount->private_token = $request->validated('private_token');
         }
 
-        if ($request->filled('webhook_secret')) {
-            $cloverAccount->webhook_secret = $request->validated('webhook_secret');
-        }
-
-        $cloverAccount->fill($request->safe()->except(['private_token', 'webhook_secret']));
+        $cloverAccount->fill($request->safe()->except(['private_token']));
         $cloverAccount->save();
 
         return redirect()->route('admin.clover-accounts.index')

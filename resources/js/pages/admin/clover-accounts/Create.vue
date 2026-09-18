@@ -29,12 +29,12 @@ defineOptions({
 });
 
 const form = useForm({
-    account_name:   '',
-    prefix:         '',
-    environment:    'sandbox',
-    merchant_id:    '',
-    private_token:  '',
-    webhook_secret: '',
+    account_name:    '',
+    prefix:          '',
+    environment:     'sandbox',
+    merchant_id:     '',
+    api_access_key:  '',
+    private_token:   '',
 });
 
 const testStatus = ref<'idle' | 'testing' | 'ok' | 'fail'>('idle');
@@ -87,9 +87,9 @@ function submit() {
             <CardHeader>
                 <CardTitle>Add Clover account</CardTitle>
                 <CardDescription>
-                    Clover payments are USD-only. Enter the merchant id and private token for the
-                    Ecommerce Hosted Checkout API. Secrets are stored encrypted and never displayed
-                    again after saving.
+                    Clover payments are USD-only. Enter the merchant id, public access key, and
+                    private token for the Ecommerce Hosted Iframe API. The private token is stored
+                    encrypted and never displayed again after saving.
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -154,6 +154,22 @@ function submit() {
                     </div>
 
                     <div class="grid gap-2">
+                        <Label for="api_access_key">Public access key</Label>
+                        <Input
+                            id="api_access_key"
+                            v-model="form.api_access_key"
+                            type="text"
+                            placeholder="Ecommerce API Access Key"
+                            autocomplete="off"
+                            required
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            Public identifier the embedded card form's SDK needs client-side. Not a secret.
+                        </p>
+                        <InputError :message="form.errors.api_access_key" />
+                    </div>
+
+                    <div class="grid gap-2">
                         <Label for="private_token">Private token</Label>
                         <Input
                             id="private_token"
@@ -167,22 +183,6 @@ function submit() {
                             Stored encrypted. Never displayed after saving.
                         </p>
                         <InputError :message="form.errors.private_token" />
-                    </div>
-
-                    <div class="grid gap-2">
-                        <Label for="webhook_secret">Webhook secret</Label>
-                        <Input
-                            id="webhook_secret"
-                            v-model="form.webhook_secret"
-                            type="password"
-                            placeholder="Webhook signing secret"
-                            autocomplete="new-password"
-                            required
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            Used to verify the Clover-Signature header on every webhook delivery. Stored encrypted.
-                        </p>
-                        <InputError :message="form.errors.webhook_secret" />
                     </div>
 
                     <div

@@ -562,10 +562,10 @@ it('rejects updating a payment to a clover account with a non-usd currency', fun
     expect($payment->fresh()->currency)->not()->toBe('gbp');
 });
 
-// clearStaleProviderTransactionIds() must null all three Clover-scoped columns
-// (session id, session url, session expiry, payment id) when the payment moves to
-// another Clover account — otherwise a stale session from the old account lingers.
-it('nulls clover checkout session and payment id when the payment moves to another clover account', function () {
+// clearStaleProviderTransactionIds() must null clover_payment_id when the
+// payment moves to another Clover account — otherwise a stale charge id from
+// the old account lingers.
+it('nulls clover_payment_id when the payment moves to another clover account', function () {
     $admin = User::factory()->create();
     $admin->assignRole('admin');
 
@@ -581,9 +581,6 @@ it('nulls clover checkout session and payment id when the payment moves to anoth
         'provider' => 'clover',
         'stripe_account_id' => null,
         'currency' => 'usd',
-        'clover_checkout_session_id' => 'session_on_account_a',
-        'clover_checkout_url' => 'https://checkout.clover.com/session_on_account_a',
-        'clover_checkout_expires_at' => now()->addMinutes(15),
         'clover_payment_id' => 'payment_on_account_a',
         'status' => 'pending',
     ]);
@@ -595,8 +592,5 @@ it('nulls clover checkout session and payment id when the payment moves to anoth
 
     $payment->refresh();
     expect($payment->clover_account_id)->toBe($cloverAccountB->id);
-    expect($payment->clover_checkout_session_id)->toBeNull();
-    expect($payment->clover_checkout_url)->toBeNull();
-    expect($payment->clover_checkout_expires_at)->toBeNull();
     expect($payment->clover_payment_id)->toBeNull();
 });
