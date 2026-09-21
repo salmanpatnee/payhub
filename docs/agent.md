@@ -9,6 +9,9 @@ payments export feature in a future phase). It sees **all** payments (no `user_i
 like admin) but cannot create, edit, delete, copy links, or open the Show page — index +
 filters only. It has no Stripe account / brand / RM mappings (like admin).
 
+The `account` role is read-only for Payments only. For **Bank Accounts** it has the same
+full manage rights as admin (see the Bank Accounts section below).
+
 ### Nav access matrix
 
 | Nav item        | Admin | Agent | Account |
@@ -18,6 +21,7 @@ filters only. It has no Stripe account / brand / RM mappings (like admin).
 | Square Accounts | ✓     | ✗     | ✗       |
 | Users           | ✓     | ✗     | ✗       |
 | Payments        | ✓     | ✓     | ✓ (read-only) |
+| Bank Accounts   | ✓ (manage) | ✓ (own assigned, view only) | ✓ (manage) |
 | Settings        | ✓     | ✗     | ✗       |
 
 ### Implementation rules
@@ -37,6 +41,22 @@ filters only. It has no Stripe account / brand / RM mappings (like admin).
 | admin@payhub.test   | admin   | password |
 | agent@payhub.test   | agent   | password |
 | account@payhub.test | account | password |
+
+---
+
+## Bank Accounts
+
+Bank details that agents share with clients for bank-transfer payments. Independent of the
+payment providers.
+
+- **Access**: `BankAccountPolicy` — `admin` and `account` can create, update, delete, activate/deactivate and view the activity log. `agent` can only view the index, limited to **active** accounts assigned to them (`bank_account_user` pivot); `bank_address` is hidden from agents. Nav item is visible to all three roles.
+- **Assignment**: only `agent`-role users are offered in the Create/Edit dropdowns; already-assigned users stay listed on Edit.
+- **Currency**: `App\Enums\BankAccountCurrency` — USD, GBP, PKR (Payments themselves stay USD/GBP only).
+- **Validation**: `StoreBankAccountRequest` / `UpdateBankAccountRequest` — at least one of sort code, routing number, or IBAN is required.
+- **Soft delete**: `bank_accounts.deleted_at`; deleted accounts drop out of the index and agents' assigned list, but stay visible in the activity log.
+- **Activity log**: `App\Services\ActivityLogger` writes created / updated / deleted / activated / deactivated rows to `activity_logs` (subject = `BankAccount`, with field-level before/after and assigned-user changes). Viewed at `bank-accounts/activity-log` (`BankAccountActivityLogController`), which must be registered **before** the resource route.
+- **Routes**: `bank-accounts` resource (no `show`), plus `PATCH bank-accounts/{id}/activate` and `/deactivate`.
+- **Tests**: `tests/Feature/BankAccountManagementTest.php`, `tests/Feature/BankAccountActivityLogTest.php`.
 
 ---
 

@@ -45,7 +45,11 @@ PayHub supports three parallel providers behind the `PaymentProvider` enum (`str
 
 ## RBAC
 
-Two roles: `admin` and `agent`. See `docs/agent.md` for nav access matrix, implementation rules, and seeded users.
+Three roles: `admin`, `agent`, and `account` (read-only Payments viewer, but full manage rights on Bank Accounts). See `docs/agent.md` for nav access matrix, implementation rules, and seeded users.
+
+## Bank Accounts
+
+Separate from the payment providers. Admin/account roles manage them; agents only see active accounts assigned to them (`bank_account_user` pivot). Soft-deleted, with an activity log (`ActivityLogger`, `bank-accounts/activity-log`). At least one of sort code / routing number / IBAN is required. Full details in `docs/agent.md` → "Bank Accounts".
 
 ## Critical rules
 
