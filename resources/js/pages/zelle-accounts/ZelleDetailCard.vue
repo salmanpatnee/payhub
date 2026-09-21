@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Check, Copy, Send } from 'lucide-vue-next';
+import { Check, Copy } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
+import ZelleIcon from '@/components/icons/ZelleIcon.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -76,7 +77,7 @@ function copyAll(): Promise<void> {
             <div class="flex items-start justify-between gap-4">
                 <div class="flex items-center gap-3 min-w-0">
                     <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
-                        <Send class="size-4 text-muted-foreground" />
+                        <ZelleIcon class="size-4 text-muted-foreground" />
                     </div>
                     <h3 class="truncate font-semibold leading-snug">{{ account.account_name }}</h3>
                 </div>
