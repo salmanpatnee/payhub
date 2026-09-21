@@ -11,7 +11,7 @@ _Steps derived from spec 0003 acceptance criteria. `/check verify` runs these; `
 - [x] Create 16 accounts; list shows 15, page 2 shows 1; set currency filter then go to page 2, filter stays → AC-7
 - [x] Search partial email, `555 123`, `(555)123`, and `%` → correct rows, `%` matches nothing → AC-8, Value sourcing (admin list)
 - [ ] Log in as the assigned agent → only active, assigned accounts appear as cards; deactivate one as admin, it disappears; reactivate, it returns → AC-5, AC-9, Value sourcing (agent list)
-- [ ] On an agent card click each copy icon and "Copy all" → "Copied" shows; pasted block has name, email, mobile (skipped when empty), currency → AC-10, Value sourcing (copy all)
+- [ ] On an agent card click each copy icon and "Copy all" → "Copied" shows; pasted block has name, email, mobile (skipped when empty), no currency line → AC-10, Value sourcing (copy all)
 - [x] Sidebar shows "Zelle Accounts" for admin, agent, account; a user with no role sees the empty state → AC-11
 - [x] Type a lowercase-vs-uppercase email and edit an account without touching assignments → assignments unchanged → AC-6, Value sourcing (assigned users)
 

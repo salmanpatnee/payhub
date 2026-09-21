@@ -34,8 +34,6 @@ const rows = computed((): LedgerRow[] => {
         list.push({ label: 'Mobile', value: account.mobile_number, mono: true });
     }
 
-    list.push({ label: 'Currency', value: account.currency.toUpperCase() });
-
     return list;
 });
 

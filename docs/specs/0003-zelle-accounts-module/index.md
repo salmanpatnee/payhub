@@ -23,7 +23,7 @@ You are adding a new "Zelle Accounts" tab that works like Bank Accounts. Admin a
 - **AC-6**: Admin and account role users can assign users to an account. Only users with the agent role are accepted, and the server rejects any other id. An update request with no `user_ids` key leaves assignments unchanged.
 - **AC-7**: The admin list shows all non deleted accounts, paginated 15 per page, with one search box, a currency filter and a status filter (all, active, inactive). Filters survive pagination.
 - **AC-8**: Search matches part of the email or part of the mobile number. Spaces, dashes and brackets are ignored when matching mobile numbers, and `%` and `_` in the search text are treated as normal characters.
-- **AC-9**: An agent opening the Zelle tab sees only accounts that are active, not deleted, and assigned to them. Cards are read only and show holder name, email, mobile number (when present) and currency.
+- **AC-9**: An agent opening the Zelle tab sees only accounts that are active, not deleted, and assigned to them. Cards are read only and show holder name, email, mobile number (when present). The currency shows only as a badge in the card header.
 - **AC-10**: Each value on an agent card has a copy button, and a "Copy all" button copies a formatted block. A short "Copied" confirmation shows after copying.
 - **AC-11**: The "Zelle Accounts" sidebar item shows for all three roles. Users with no role or no assignments see an empty state.
 - **AC-12**: No activity log is written for Zelle accounts.
@@ -83,7 +83,7 @@ There is no `show` route (same as Bank Accounts). A 404 also covers soft deleted
 | Create / edit form | agent choices | `User::role('agent')`, plus already assigned ids on edit |
 | Store / update | lowercase email | the request `email` input, lowercased in `prepareForValidation` |
 | Store / update | assigned users | `user_ids` input, validated as agent role ids |
-| Copy all block | text lines | the card's own values: name, email, mobile (line skipped if empty), currency label |
+| Copy all block | text lines | the card's own values: name, email, mobile (line skipped if empty); currency is not copied |
 | Flash messages | success text | fixed strings in the controller |
 
 **Key invariants**:
