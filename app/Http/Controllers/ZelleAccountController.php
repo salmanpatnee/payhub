@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\SupportedCurrency;
 use App\Http\Requests\StoreZelleAccountRequest;
 use App\Http\Requests\UpdateZelleAccountRequest;
 use App\Models\User;
@@ -24,9 +23,6 @@ class ZelleAccountController extends Controller
         $isAgent = $user->hasRole('agent');
 
         $search = trim((string) $request->input('search'));
-        $currency = in_array($request->input('currency'), SupportedCurrency::values(), true)
-            ? $request->input('currency')
-            : null;
         $status = in_array($request->input('status'), ['active', 'inactive'], true)
             ? $request->input('status')
             : null;
@@ -37,7 +33,6 @@ class ZelleAccountController extends Controller
             'zelleAccounts' => $canManage
                 ? ZelleAccount::withCount('assignedUsers')
                     ->when($search !== '', fn (Builder $q) => $this->applySearch($q, $search))
-                    ->when($currency, fn (Builder $q, string $v) => $q->where('currency', $v))
                     ->when($status, fn (Builder $q, string $v) => $q->where('is_active', $v === 'active'))
                     ->orderBy('account_name')
                     ->orderBy('id')
@@ -54,7 +49,6 @@ class ZelleAccountController extends Controller
                 : [],
             'filters' => [
                 'search' => $search === '' ? null : $search,
-                'currency' => $currency,
                 'status' => $status,
             ],
         ]);
@@ -75,7 +69,7 @@ class ZelleAccountController extends Controller
 
         DB::transaction(function () use ($request): void {
             $zelleAccount = ZelleAccount::create($request->safe()->except('user_ids'));
-            $zelleAccount->assignedUsers()->sync($request->validated('user_ids', []));
+            $zelleAccount->assignedUsers()->sync($request->validated('user_ids'));
         });
 
         return redirect()->route('zelle-accounts.index')
@@ -102,10 +96,7 @@ class ZelleAccountController extends Controller
         DB::transaction(function () use ($request, $zelleAccount): void {
             $zelleAccount->update($request->safe()->except('user_ids'));
 
-            // A missing key leaves assignments alone; an empty array clears them.
-            if ($request->has('user_ids')) {
-                $zelleAccount->assignedUsers()->sync($request->validated('user_ids', []));
-            }
+            $zelleAccount->assignedUsers()->sync($request->validated('user_ids'));
         });
 
         return redirect()->route('zelle-accounts.index')

@@ -1,1 +1,0 @@
-var e=[`usd`,`gbp`],t={usd:`USD`,gbp:`GBP`};export{t as n,e as t};

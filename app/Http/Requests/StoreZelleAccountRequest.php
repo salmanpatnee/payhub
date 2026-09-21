@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\SupportedCurrency;
 use App\Models\User;
 use App\Models\ZelleAccount;
 use Illuminate\Foundation\Http\FormRequest;
@@ -35,9 +34,8 @@ class StoreZelleAccountRequest extends FormRequest
             'account_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', $this->uniqueEmailRule()],
             'mobile_number' => ['nullable', 'string', 'max:20', 'regex:/^[0-9\s+\-()]+$/'],
-            'currency' => ['required', 'string', Rule::in(SupportedCurrency::values())],
             'is_active' => ['boolean'],
-            'user_ids' => ['array'],
+            'user_ids' => ['required', 'array', 'min:1'],
             'user_ids.*' => ['integer', Rule::in(User::role('agent')->pluck('id')->all())],
         ];
     }
@@ -49,6 +47,8 @@ class StoreZelleAccountRequest extends FormRequest
     {
         return [
             'mobile_number.regex' => 'The mobile number may only contain digits, spaces, +, -, ( and ).',
+            'user_ids.required' => 'Select at least one user.',
+            'user_ids.min' => 'Select at least one user.',
             'user_ids.*.in' => 'Only users with the agent role can be assigned.',
         ];
     }
