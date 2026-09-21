@@ -28,17 +28,40 @@ const mainNavItems = computed((): NavItem[] => [
         { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard } as NavItem,
     ] : []),
     { title: 'Payments', href: '/payments', icon: CreditCard },
-    { title: 'Bank Accounts', href: '/bank-accounts', icon: Banknote },
-    { title: 'Zelle Accounts', href: '/zelle-accounts', icon: ZelleIcon },
     ...(isAdmin.value ? [
-        { title: 'Brands',          href: '/admin/brands',                  icon: Building2  } as NavItem,
-        { title: 'Stripe Accounts', href: '/admin/stripe-accounts',         icon: Wallet     } as NavItem,
-        { title: 'Square Accounts', href: '/admin/square-accounts',         icon: Wallet     } as NavItem,
-        { title: 'Revolut Accounts', href: '/admin/revolut-accounts',       icon: Landmark   } as NavItem,
-        { title: 'Viva Accounts',   href: '/admin/viva-accounts',           icon: Landmark   } as NavItem,
-        { title: 'Clover Accounts', href: '/admin/clover-accounts',         icon: CloverIcon } as NavItem,
-        { title: 'Users',           href: '/admin/users',                   icon: Users      } as NavItem,
-        { title: 'RMs',             href: '/admin/relationship-managers',   icon: UserCheck2 } as NavItem,
+        { title: 'Brands', href: '/admin/brands', icon: Building2 } as NavItem,
+        {
+            title: 'Payment Gateways',
+            href: '/admin/stripe-accounts',
+            icon: CreditCard,
+            children: [
+                { title: 'Stripe Accounts',  href: '/admin/stripe-accounts',  icon: Wallet },
+                { title: 'Clover Accounts',  href: '/admin/clover-accounts',  icon: CloverIcon },
+                { title: 'Revolut Accounts', href: '/admin/revolut-accounts', icon: Landmark },
+                { title: 'Square Accounts',  href: '/admin/square-accounts',  icon: Wallet },
+                { title: 'Viva Accounts',    href: '/admin/viva-accounts',    icon: Landmark },
+            ],
+        } as NavItem,
+    ] : []),
+    {
+        title: 'Banks/Wallets',
+        href: '/bank-accounts',
+        icon: Banknote,
+        children: [
+            { title: 'Bank Accounts',  href: '/bank-accounts',  icon: Banknote },
+            { title: 'Zelle Accounts', href: '/zelle-accounts', icon: ZelleIcon },
+        ],
+    },
+    ...(isAdmin.value ? [
+        {
+            title: 'People',
+            href: '/admin/users',
+            icon: Users,
+            children: [
+                { title: 'Users', href: '/admin/users',                 icon: Users },
+                { title: 'RMs',   href: '/admin/relationship-managers', icon: UserCheck2 },
+            ],
+        } as NavItem,
     ] : []),
     ...(isAdmin.value ? [
         { title: 'Settings', href: '/settings/profile', icon: Settings } as NavItem,
