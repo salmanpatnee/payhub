@@ -12,7 +12,7 @@ class ZelleAccountFactory extends Factory
             'account_name' => $this->faker->company(),
             'email' => $this->faker->unique()->safeEmail(),
             'mobile_number' => $this->faker->numerify('+1 ### ### ####'),
-            'currency' => $this->faker->randomElement(['usd', 'gbp']),
+            'currency' => 'usd',
             'is_active' => true,
         ];
     }

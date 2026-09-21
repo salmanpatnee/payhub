@@ -8,14 +8,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { ZELLE_ACCOUNT_CURRENCIES, ZELLE_ACCOUNT_CURRENCY_LABELS } from '@/lib/zelle-account-currencies';
 
 type NamedOption = { id: number; name: string };
 
@@ -36,7 +28,6 @@ const form = useForm({
     account_name: '',
     email: '',
     mobile_number: '',
-    currency: '',
     is_active: true,
     user_ids: [] as number[],
 });
@@ -67,50 +58,27 @@ function submit() {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <form id="create-zelle-account-form" class="space-y-4" @submit.prevent="submit">
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div class="grid gap-2">
-                            <Label for="account_name">Account holder name</Label>
-                            <Input id="account_name" v-model="form.account_name" type="text" required autofocus />
-                            <InputError :message="form.errors.account_name" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="currency">Currency</Label>
-                            <Select v-model="form.currency">
-                                <SelectTrigger id="currency" class="w-full">
-                                    <SelectValue placeholder="Select a currency" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem
-                                        v-for="currency in ZELLE_ACCOUNT_CURRENCIES"
-                                        :key="currency"
-                                        :value="currency"
-                                    >
-                                        {{ ZELLE_ACCOUNT_CURRENCY_LABELS[currency] }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError :message="form.errors.currency" />
-                        </div>
-                    </div>
-
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div class="grid gap-2">
-                            <Label for="email">Email</Label>
-                            <Input id="email" v-model="form.email" type="email" required />
-                            <InputError :message="form.errors.email" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="mobile_number">Mobile number</Label>
-                            <Input id="mobile_number" v-model="form.mobile_number" type="text" maxlength="20" placeholder="e.g. +1 555 123 4567" />
-                            <InputError :message="form.errors.mobile_number" />
-                        </div>
+                <form id="create-zelle-account-form" class="space-y-4 sm:w-[calc(50%-0.5rem)]" @submit.prevent="submit">
+                    <div class="grid gap-2">
+                        <Label for="account_name">Account holder name <span class="text-destructive">*</span></Label>
+                        <Input id="account_name" v-model="form.account_name" type="text" required autofocus />
+                        <InputError :message="form.errors.account_name" />
                     </div>
 
                     <div class="grid gap-2">
-                        <Label>Assigned users</Label>
+                        <Label for="email">Email <span class="text-destructive">*</span></Label>
+                        <Input id="email" v-model="form.email" type="email" required />
+                        <InputError :message="form.errors.email" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="mobile_number">Mobile number</Label>
+                        <Input id="mobile_number" v-model="form.mobile_number" type="text" maxlength="20" placeholder="e.g. +1 555 123 4567" />
+                        <InputError :message="form.errors.mobile_number" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label>Assigned users <span class="text-destructive">*</span></Label>
                         <MultiSelectCombobox
                             v-model="form.user_ids"
                             :options="users"

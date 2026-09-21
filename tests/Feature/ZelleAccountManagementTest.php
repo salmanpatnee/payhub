@@ -23,9 +23,8 @@ function validZellePayload(array $overrides = []): array
         'account_name' => 'Acme Holdings',
         'email' => 'Pay@Acme.test',
         'mobile_number' => '+1 (555) 123-4567',
-        'currency' => 'usd',
         'is_active' => true,
-        'user_ids' => [],
+        'user_ids' => [zelleUser('agent')->id],
     ], $overrides);
 }
 
@@ -47,10 +46,10 @@ it('lets an admin create, edit, deactivate, reactivate and delete an account', f
         ->and($account->is_active)->toBeTrue();
 
     $this->actingAs($admin)
-        ->put("/zelle-accounts/{$account->id}", validZellePayload(['account_name' => 'Renamed', 'currency' => 'gbp']))
+        ->put("/zelle-accounts/{$account->id}", validZellePayload(['account_name' => 'Renamed']))
         ->assertRedirect(route('zelle-accounts.index'));
     expect($account->fresh()->account_name)->toBe('Renamed')
-        ->and($account->fresh()->currency->value)->toBe('gbp');
+        ->and($account->fresh()->currency->value)->toBe('usd');
 
     $this->actingAs($admin)->patch("/zelle-accounts/{$account->id}/deactivate")->assertRedirect();
     expect($account->fresh()->is_active)->toBeFalse();
@@ -121,8 +120,26 @@ it('validates required fields, mobile characters and currency', function (array 
     'invalid email' => [['email' => 'not-an-email'], 'email'],
     'letters in mobile' => [['mobile_number' => '555-CALL'], 'mobile_number'],
     'mobile too long' => [['mobile_number' => str_repeat('1', 21)], 'mobile_number'],
-    'pkr currency' => [['currency' => 'pkr'], 'currency'],
 ]);
+
+it('defaults new accounts to usd and ignores a submitted currency', function () {
+    $admin = zelleUser('admin');
+
+    $this->actingAs($admin)->post('/zelle-accounts', validZellePayload(['currency' => 'gbp']))
+        ->assertSessionDoesntHaveErrors();
+
+    expect(ZelleAccount::firstOrFail()->currency->value)->toBe('usd');
+});
+
+it('keeps an existing gbp account on gbp when edited', function () {
+    $admin = zelleUser('admin');
+    $account = ZelleAccount::factory()->create(['currency' => 'gbp']);
+
+    $this->actingAs($admin)->put("/zelle-accounts/{$account->id}", validZellePayload(['email' => 'new@acme.test']))
+        ->assertSessionDoesntHaveErrors();
+
+    expect($account->fresh()->currency->value)->toBe('gbp');
+});
 
 it('allows an empty mobile number', function () {
     $admin = zelleUser('admin');
@@ -146,21 +163,20 @@ it('assigns agents and rejects users without the agent role', function () {
     expect(ZelleAccount::count())->toBe(1);
 });
 
-it('keeps assignments when user_ids is absent and clears them when empty', function () {
+it('requires at least one assigned user on create and update', function () {
     $admin = zelleUser('admin');
     $agent = zelleUser('agent');
     $account = ZelleAccount::factory()->create();
     $account->assignedUsers()->attach($agent);
 
-    $payload = validZellePayload();
-    unset($payload['user_ids']);
+    $missing = validZellePayload();
+    unset($missing['user_ids']);
 
-    $this->actingAs($admin)->put("/zelle-accounts/{$account->id}", $payload)->assertSessionDoesntHaveErrors();
-    expect($account->assignedUsers()->count())->toBe(1);
-
+    $this->actingAs($admin)->post('/zelle-accounts', $missing)->assertSessionHasErrors('user_ids');
+    $this->actingAs($admin)->post('/zelle-accounts', validZellePayload(['user_ids' => []]))->assertSessionHasErrors('user_ids');
     $this->actingAs($admin)->put("/zelle-accounts/{$account->id}", validZellePayload(['user_ids' => []]))
-        ->assertSessionDoesntHaveErrors();
-    expect($account->assignedUsers()->count())->toBe(0);
+        ->assertSessionHasErrors('user_ids');
+    expect($account->assignedUsers()->count())->toBe(1);
 });
 
 it('keeps assignments when an account is deactivated', function () {
@@ -209,14 +225,13 @@ it('returns 404 for a soft deleted account', function () {
 });
 
 // AC-7: list, filters, pagination
-it('filters the admin list by currency and status', function () {
+it('filters the admin list by status', function () {
     $admin = zelleUser('admin');
-    ZelleAccount::factory()->create(['currency' => 'usd']);
-    ZelleAccount::factory()->create(['currency' => 'gbp']);
-    ZelleAccount::factory()->inactive()->create(['currency' => 'gbp']);
+    ZelleAccount::factory()->count(2)->create();
+    ZelleAccount::factory()->inactive()->create();
 
-    $this->actingAs($admin)->get('/zelle-accounts?currency=gbp&status=active')
-        ->assertInertia(fn (Assert $page) => $page->has('zelleAccounts.data', 1));
+    $this->actingAs($admin)->get('/zelle-accounts?status=active')
+        ->assertInertia(fn (Assert $page) => $page->has('zelleAccounts.data', 2));
     $this->actingAs($admin)->get('/zelle-accounts?status=inactive')
         ->assertInertia(fn (Assert $page) => $page->has('zelleAccounts.data', 1));
     $this->actingAs($admin)->get('/zelle-accounts')
@@ -225,15 +240,15 @@ it('filters the admin list by currency and status', function () {
 
 it('paginates 15 per page and keeps filters in page links', function () {
     $admin = zelleUser('admin');
-    ZelleAccount::factory()->count(16)->create(['currency' => 'usd']);
+    ZelleAccount::factory()->count(16)->create();
 
-    $this->actingAs($admin)->get('/zelle-accounts?currency=usd')
+    $this->actingAs($admin)->get('/zelle-accounts?status=active')
         ->assertInertia(fn (Assert $page) => $page
             ->has('zelleAccounts.data', 15)
             ->where('zelleAccounts.last_page', 2)
-            ->where('zelleAccounts.next_page_url', fn ($url) => str_contains($url, 'currency=usd') && str_contains($url, 'page=2')));
+            ->where('zelleAccounts.next_page_url', fn ($url) => str_contains($url, 'status=active') && str_contains($url, 'page=2')));
 
-    $this->actingAs($admin)->get('/zelle-accounts?currency=usd&page=2')
+    $this->actingAs($admin)->get('/zelle-accounts?status=active&page=2')
         ->assertInertia(fn (Assert $page) => $page->has('zelleAccounts.data', 1));
 });
 

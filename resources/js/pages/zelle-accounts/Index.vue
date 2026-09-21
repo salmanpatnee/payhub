@@ -22,7 +22,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { ZELLE_ACCOUNT_CURRENCIES, ZELLE_ACCOUNT_CURRENCY_LABELS } from '@/lib/zelle-account-currencies';
 import ZelleDetailCard from './ZelleDetailCard.vue';
 
 type ZelleAccountRow = {
@@ -53,7 +52,7 @@ const props = defineProps<{
     isAgent: boolean;
     zelleAccounts: Paginated<ZelleAccountRow> | null;
     myAccounts: MyZelleAccount[];
-    filters: { search?: string | null; currency?: string | null; status?: string | null };
+    filters: { search?: string | null; status?: string | null };
 }>();
 
 defineOptions({
@@ -66,7 +65,6 @@ defineOptions({
 
 const filters = reactive({
     search: props.filters.search || '',
-    currency: props.filters.currency || 'all',
     status: props.filters.status || 'all',
 });
 
@@ -75,10 +73,6 @@ function buildQuery(): Record<string, string> {
 
     if (filters.search) {
         query.search = filters.search;
-    }
-
-    if (filters.currency !== 'all') {
-        query.currency = filters.currency;
     }
 
     if (filters.status !== 'all') {
@@ -217,25 +211,6 @@ const deleteDescription = (account: ZelleAccountRow | null): string => {
                     </div>
 
                     <div class="flex flex-col gap-1.5 w-full max-w-[10rem]">
-                        <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Currency</Label>
-                        <Select v-model="filters.currency">
-                            <SelectTrigger class="w-full">
-                                <SelectValue placeholder="All currencies" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All currencies</SelectItem>
-                                <SelectItem
-                                    v-for="currency in ZELLE_ACCOUNT_CURRENCIES"
-                                    :key="currency"
-                                    :value="currency"
-                                >
-                                    {{ ZELLE_ACCOUNT_CURRENCY_LABELS[currency] }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div class="flex flex-col gap-1.5 w-full max-w-[10rem]">
                         <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</Label>
                         <Select v-model="filters.status">
                             <SelectTrigger class="w-full">
@@ -256,7 +231,6 @@ const deleteDescription = (account: ZelleAccountRow | null): string => {
                             <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account Name</th>
                             <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Email</th>
                             <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Mobile</th>
-                            <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Currency</th>
                             <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                             <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                         </tr>
@@ -270,7 +244,6 @@ const deleteDescription = (account: ZelleAccountRow | null): string => {
                             <td class="px-5 py-3.5 font-medium">{{ account.account_name }}</td>
                             <td class="px-5 py-3.5">{{ account.email }}</td>
                             <td class="px-5 py-3.5 text-muted-foreground">{{ account.mobile_number ?? '—' }}</td>
-                            <td class="px-5 py-3.5 uppercase text-xs text-muted-foreground">{{ account.currency }}</td>
                             <td class="px-5 py-3.5">
                                 <div v-if="account.is_active" class="inline-flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-500">
                                     <CheckCircle2 class="size-4" />
