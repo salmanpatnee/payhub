@@ -4,12 +4,21 @@ namespace App\Http\Requests;
 
 use App\Enums\SupportedCurrency;
 use App\Models\User;
+use App\Models\ZelleAccount;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Unique;
 
 class StoreZelleAccountRequest extends FormRequest
 {
+    /**
+     * Runs before validation, so agents get a 403 rather than a 422 that leaks the rules.
+     */
+    public function authorize(): bool
+    {
+        return $this->user()->can('create', ZelleAccount::class);
+    }
+
     protected function prepareForValidation(): void
     {
         if (is_string($this->input('email'))) {

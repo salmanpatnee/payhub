@@ -191,6 +191,15 @@ it('forbids agents from every management action', function () {
         ->and($account->fresh()->is_active)->toBeTrue();
 });
 
+it('returns 403 to agents on store and update before validation runs', function () {
+    $agent = zelleUser('agent');
+    $account = ZelleAccount::factory()->create();
+
+    $this->actingAs($agent)->post('/zelle-accounts', [])->assertForbidden();
+    $this->actingAs($agent)->put("/zelle-accounts/{$account->id}", [])->assertForbidden();
+    $this->actingAs($agent)->put("/zelle-accounts/{$account->id}", ['email' => 'not-an-email'])->assertForbidden();
+});
+
 it('returns 404 for a soft deleted account', function () {
     $admin = zelleUser('admin');
     $account = ZelleAccount::factory()->create();
