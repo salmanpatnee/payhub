@@ -63,10 +63,10 @@ payment providers.
 
 ## Zelle Accounts
 
-Zelle details (holder name, email, optional mobile, USD/GBP) that agents share with clients. Independent of the payment providers. Spec: `docs/specs/0003-zelle-accounts-module/index.md`.
+Zelle details (holder name, email, optional mobile; currency is not an input, new accounts default to USD) that agents share with clients. Independent of the payment providers. Spec: `docs/specs/0003-zelle-accounts-module/index.md`.
 
 - **Access**: `ZelleAccountPolicy` — `admin` and `account` can create, update, delete, activate/deactivate. `agent` sees only **active**, non-deleted accounts assigned to them (`user_zelle_account` pivot) as read-only cards with copy buttons. Nav item is visible to all three roles.
-- **Assignment**: only `agent`-role ids are accepted (server-side). An update with no `user_ids` key leaves assignments alone; `user_ids: []` clears them.
+- **Assignment**: only `agent`-role ids are accepted (server-side). `user_ids` is required with at least one agent, on both create and update.
 - **Validation**: `StoreZelleAccountRequest` / `UpdateZelleAccountRequest` — email lowercased and unique among non-deleted rows (app-level, no DB index); mobile allows digits, spaces, `+ - ( )`, max 20.
 - **List**: admin/account list is paginated 15/page with search (email or mobile, punctuation ignored, `%`/`_` literal), currency and status filters.
 - **No activity log**, by design.

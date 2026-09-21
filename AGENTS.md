@@ -53,7 +53,7 @@ Separate from the payment providers. Admin/account roles manage them; agents onl
 
 ## Zelle Accounts
 
-Separate from the payment providers and from Bank Accounts. Same roles/assignment model, but no activity log; paginated admin list, USD/GBP only (`SupportedCurrency`). Full details in `docs/agent.md` → "Zelle Accounts".
+Separate from the payment providers and from Bank Accounts. Same roles/assignment model, but no activity log; paginated admin list, no currency input (new accounts default to USD; the card still shows the currency badge). Full details in `docs/agent.md` → "Zelle Accounts".
 
 ## Critical rules
 

@@ -13,6 +13,10 @@ class ZelleAccount extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $attributes = [
+        'currency' => 'usd',
+    ];
+
     protected $fillable = [
         'account_name', 'email', 'mobile_number', 'currency', 'is_active',
     ];
