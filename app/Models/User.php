@@ -67,4 +67,14 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(BankAccount::class);
     }
+
+    /**
+     * Zelle accounts assigned to this user for client-facing sharing.
+     *
+     * @return BelongsToMany<ZelleAccount, $this>
+     */
+    public function zelleAccounts(): BelongsToMany
+    {
+        return $this->belongsToMany(ZelleAccount::class, 'user_zelle_account');
+    }
 }
