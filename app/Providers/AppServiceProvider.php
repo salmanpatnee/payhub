@@ -4,8 +4,10 @@ namespace App\Providers;
 
 use App\Models\BankAccount;
 use App\Models\Payment;
+use App\Models\ZelleAccount;
 use App\Policies\BankAccountPolicy;
 use App\Policies\PaymentPolicy;
+use App\Policies\ZelleAccountPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -34,6 +36,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         Gate::policy(Payment::class, PaymentPolicy::class);
         Gate::policy(BankAccount::class, BankAccountPolicy::class);
+        Gate::policy(ZelleAccount::class, ZelleAccountPolicy::class);
 
         // Payment-UUID keyed, not the default IP keyed throttle — the pay page is
         // public and unauthenticated, so IP alone would let one client exhaust every

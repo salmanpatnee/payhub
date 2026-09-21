@@ -51,6 +51,10 @@ Three roles: `admin`, `agent`, and `account` (read-only Payments viewer, but ful
 
 Separate from the payment providers. Admin/account roles manage them; agents only see active accounts assigned to them (`bank_account_user` pivot). Soft-deleted, with an activity log (`ActivityLogger`, `bank-accounts/activity-log`). At least one of sort code / routing number / IBAN is required. Full details in `docs/agent.md` → "Bank Accounts".
 
+## Zelle Accounts
+
+Separate from the payment providers and from Bank Accounts. Same roles/assignment model, but no activity log; paginated admin list, USD/GBP only (`SupportedCurrency`). Full details in `docs/agent.md` → "Zelle Accounts".
+
 ## Critical rules
 
 - **Never** instantiate a global payment client — always per-account: `new StripeClient($account->secret_key)` / `app()->make(RevolutClient::class, ['secretKey' => $account->secret_key])` / `new SquareClient($account->access_token, options: [...])`. Never `Stripe::setApiKey()` globally

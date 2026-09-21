@@ -17,6 +17,7 @@ use App\Http\Controllers\RevolutWebhookController;
 use App\Http\Controllers\SquareWebhookController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\VivaWebhookController;
+use App\Http\Controllers\ZelleAccountController;
 use App\Support\Navigation;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
@@ -67,6 +68,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::patch('bank-accounts/{bank_account}/activate', [BankAccountController::class, 'activate'])
         ->name('bank-accounts.activate');
+
+    Route::resource('zelle-accounts', ZelleAccountController::class)->except(['show']);
+
+    Route::patch('zelle-accounts/{zelle_account}/deactivate', [ZelleAccountController::class, 'deactivate'])
+        ->name('zelle-accounts.deactivate');
+
+    Route::patch('zelle-accounts/{zelle_account}/activate', [ZelleAccountController::class, 'activate'])
+        ->name('zelle-accounts.activate');
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])

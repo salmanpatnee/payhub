@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
-import { Banknote, Building2, CreditCard, Landmark, LayoutDashboard, Settings, UserCheck2, Users, Wallet } from 'lucide-vue-next';
+import { Banknote, Building2, CreditCard, Landmark, LayoutDashboard, Send, Settings, UserCheck2, Users, Wallet } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import CloverIcon from '@/components/icons/CloverIcon.vue';
@@ -28,6 +28,7 @@ const mainNavItems = computed((): NavItem[] => [
     ] : []),
     { title: 'Payments', href: '/payments', icon: CreditCard },
     { title: 'Bank Accounts', href: '/bank-accounts', icon: Banknote },
+    { title: 'Zelle Accounts', href: '/zelle-accounts', icon: Send },
     ...(isAdmin.value ? [
         { title: 'Brands',          href: '/admin/brands',                  icon: Building2  } as NavItem,
         { title: 'Stripe Accounts', href: '/admin/stripe-accounts',         icon: Wallet     } as NavItem,
