@@ -18,6 +18,7 @@ beforeEach(function () {
     app()[PermissionRegistrar::class]->forgetCachedPermissions();
     Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
     Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
+    Http::preventStrayRequests();
 });
 
 function chargeClover(string $uuid, array $body = ['token' => 'clv_test_token']): TestResponse
@@ -77,6 +78,66 @@ it('sends the reference code and payment uuid as clover metadata for cross-check
             && ($metadata['reference_code'] ?? null) === $payment->formattedReferenceCode()
             && ($metadata['payment_uuid'] ?? null) === $payment->uuid;
     });
+});
+
+// Charge metadata never shows in Clover's merchant dashboard, so the reference
+// code is also sent as the charge description and written to the order note.
+it('sends the reference code as the clover charge description', function () {
+    $payment = Payment::factory()->clover()->create(['status' => 'pending', 'amount' => 5000, 'currency' => 'usd']);
+    fakeCloverCharge(['id' => 'chg_desc', 'paid' => true, 'captured' => true, 'amount' => 5000, 'currency' => 'usd']);
+
+    chargeClover($payment->uuid)->assertOk();
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://scl-sandbox.dev.clover.com/v1/charges'
+        && $request['description'] === $payment->formattedReferenceCode());
+});
+
+it('writes the reference code to the clover order note on an approved charge', function () {
+    $payment = Payment::factory()->clover()->create(['status' => 'pending', 'amount' => 5000, 'currency' => 'usd']);
+    $merchantId = $payment->cloverAccount->merchant_id;
+    Http::fake([
+        'scl-sandbox.dev.clover.com/v1/charges' => Http::response(
+            ['id' => 'chg_note', 'paid' => true, 'captured' => true, 'amount' => 5000, 'currency' => 'usd'], 200
+        ),
+        'scl-sandbox.dev.clover.com/v1/charges/*' => Http::response(
+            ['id' => 'chg_note', 'order' => 'ORDNOTE1', 'paid' => true, 'captured' => true, 'amount' => 5000, 'currency' => 'usd'], 200
+        ),
+        'apisandbox.dev.clover.com/*' => Http::response(['id' => 'ORDNOTE1'], 200),
+    ]);
+
+    chargeClover($payment->uuid)->assertOk()->assertJson(['outcome' => 'approved']);
+
+    Http::assertSent(fn ($request) => $request->method() === 'POST'
+        && $request->url() === "https://apisandbox.dev.clover.com/v3/merchants/{$merchantId}/orders/ORDNOTE1"
+        && $request['note'] === $payment->formattedReferenceCode());
+});
+
+it('still completes the payment if writing the clover order note fails', function () {
+    $payment = Payment::factory()->clover()->create(['status' => 'pending', 'amount' => 5000, 'currency' => 'usd']);
+    Http::fake([
+        'scl-sandbox.dev.clover.com/v1/charges' => Http::response(
+            ['id' => 'chg_nf', 'paid' => true, 'captured' => true, 'amount' => 5000, 'currency' => 'usd'], 200
+        ),
+        'scl-sandbox.dev.clover.com/v1/charges/*' => Http::response(
+            ['id' => 'chg_nf', 'order' => 'ORDNF1', 'paid' => true, 'captured' => true, 'amount' => 5000, 'currency' => 'usd'], 200
+        ),
+        'apisandbox.dev.clover.com/*' => Http::response(['message' => 'Unauthorized'], 401),
+    ]);
+
+    chargeClover($payment->uuid)->assertOk()->assertJson(['outcome' => 'approved']);
+
+    $payment->refresh();
+    expect($payment->status)->toBe('completed');
+    expect($payment->clover_payment_id)->toBe('ORDNF1');
+});
+
+it('does not write a clover order note when the charge is declined', function () {
+    $payment = Payment::factory()->clover()->create(['status' => 'pending', 'amount' => 5000, 'currency' => 'usd']);
+    fakeCloverCharge(['id' => 'chg_dec', 'order' => 'ORDDEC1', 'paid' => false, 'captured' => false, 'status' => 'failed', 'amount' => 5000, 'currency' => 'usd']);
+
+    chargeClover($payment->uuid)->assertOk();
+
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), '/orders/'));
 });
 
 // Regression (2026-09-18): live verification of AC-10 found the CSV export's
@@ -406,6 +467,7 @@ it('reports the payment status via the status poll endpoint', function () {
 
 it('does not expose the clover private token on the pay page', function () {
     $payment = Payment::factory()->clover()->create(['status' => 'pending']);
+    Http::fake();
 
     test()->get("/pay/{$payment->uuid}")
         ->assertInertia(fn ($page) => $page
