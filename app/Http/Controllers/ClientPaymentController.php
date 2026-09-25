@@ -498,6 +498,7 @@ class ClientPaymentController extends Controller
                         'reference_code' => $payment->formattedReferenceCode(),
                         'payment_uuid' => $payment->uuid,
                     ],
+                    $payment->formattedReferenceCode(),
                 );
                 $body = $result['body'];
                 $classification = CloverChargeClassifier::classify($result['status'], $body, $payment->amount, $payment->currency);
@@ -514,6 +515,10 @@ class ClientPaymentController extends Controller
                     if ($orderId !== null) {
                         $body['order'] = $orderId;
                     }
+                }
+
+                if ($classification === 'approved' && isset($body['order'])) {
+                    $this->noteCloverOrder($clover, (string) $body['order'], $payment, $attempt->id);
                 }
             } catch (\Throwable $e) {
                 // Timeout, connection error, or any other transport failure before a
@@ -569,6 +574,25 @@ class ClientPaymentController extends Controller
             ]);
 
             return null;
+        }
+    }
+
+    /**
+     * Best-effort only, like fetchCloverOrderId(): writes the reference code
+     * onto the Clover order so it shows in Clover's merchant dashboard. A
+     * failure (e.g. a token without order-write permission) is logged and
+     * never affects the already-approved payment.
+     */
+    private function noteCloverOrder(CloverClient $clover, string $orderId, Payment $payment, int $attemptId): void
+    {
+        try {
+            $clover->updateOrderNote($orderId, $payment->formattedReferenceCode());
+        } catch (\Throwable $e) {
+            Log::warning('Could not write reference code to clover order note', [
+                'attempt_id' => $attemptId,
+                'order_id' => $orderId,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
