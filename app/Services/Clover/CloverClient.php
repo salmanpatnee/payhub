@@ -55,10 +55,14 @@ class CloverClient
      * against PayHub's reference code, the same way they already can for
      * Stripe/Revolut.
      *
+     * Metadata is never shown in Clover's merchant dashboard, though, so the
+     * reference code is also sent as description (the one charge field Clover
+     * documents as displayed) — see also updateOrderNote().
+     *
      * @param  array<string, string>  $metadata
      * @return array{status: int, body: array<string, mixed>}
      */
-    public function createCharge(string $idempotencyKey, string $externalReferenceId, string $token, int $amount, string $currency, array $metadata = []): array
+    public function createCharge(string $idempotencyKey, string $externalReferenceId, string $token, int $amount, string $currency, array $metadata = [], ?string $description = null): array
     {
         $payload = [
             'source' => $token,
@@ -69,6 +73,10 @@ class CloverClient
 
         if ($metadata !== []) {
             $payload['metadata'] = $metadata;
+        }
+
+        if ($description !== null) {
+            $payload['description'] = $description;
         }
 
         $response = $this->chargesRequest()
@@ -129,6 +137,20 @@ class CloverClient
         }
 
         return null;
+    }
+
+    /**
+     * Set the note on the Clover order a charge created, so PayHub's reference
+     * code shows on the order in Clover's merchant dashboard (charge metadata
+     * never does). Lives on the /v3 host, not the /v1/charges one.
+     *
+     * @throws RequestException on auth/HTTP error
+     */
+    public function updateOrderNote(string $orderId, string $note): void
+    {
+        $this->merchantsRequest()
+            ->post("/v3/merchants/{$this->merchantId}/orders/{$orderId}", ['note' => $note])
+            ->throw();
     }
 
     /**
