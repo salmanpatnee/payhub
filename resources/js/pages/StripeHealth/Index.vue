@@ -1,8 +1,26 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { CheckCircle2, RefreshCw, XCircle } from 'lucide-vue-next';
+import {
+    Banknote,
+    CalendarClock,
+    CheckCircle2,
+    CircleAlert,
+    CircleHelp,
+    CircleX,
+    Clock,
+    CreditCard,
+    Hourglass,
+    Info,
+    Landmark,
+    RefreshCw,
+    XCircle,
+} from 'lucide-vue-next';
+import { computed } from 'vue';
+import type { Component } from 'vue';
 import StripeHealthBadge from '@/components/StripeHealthBadge.vue';
 import { Button } from '@/components/ui/button';
+import { healthStatus } from '@/lib/stripeHealth';
+import type { HealthStatusKey } from '@/lib/stripeHealth';
 
 type Requirements = {
     currently_due: string[];
@@ -41,11 +59,11 @@ type Account = {
     };
 };
 
-defineProps<{ accounts: Account[] }>();
+const props = defineProps<{ accounts: Account[] }>();
 
 defineOptions({
     layout: {
-        breadcrumbs: [{ title: 'Stripe Health', href: '/stripe-health' }],
+        breadcrumbs: [{ title: 'Account Health', href: '/stripe-health' }],
     },
 });
 
@@ -60,73 +78,120 @@ function checkOne(id: number) {
     checkForm.post(`/stripe-health/${id}/check`, { preserveScroll: true });
 }
 
-function rate(completed: number, failed: number): string {
-    const total = completed + failed;
-
-    if (total === 0) {
-return 'No data';
-}
-
-    return `${Math.round((completed / total) * 100)}%`;
-}
-
 function ago(iso: string | null): string {
     if (!iso) {
-return '—';
-}
+        return '—';
+    }
 
     const seconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
 
     if (seconds < 60) {
-return 'just now';
-}
+        return 'just now';
+    }
 
     const minutes = Math.floor(seconds / 60);
 
     if (minutes < 60) {
-return `${minutes} min ago`;
-}
+        return `${minutes} min ago`;
+    }
 
     const hours = Math.floor(minutes / 60);
 
     if (hours < 24) {
-return `${hours} h ago`;
-}
+        return `${hours} h ago`;
+    }
 
     return `${Math.floor(hours / 24)} d ago`;
-}
-
-function since(iso: string | null): string {
-    const text = ago(iso);
-
-    return text === 'just now' || text === '—' ? text : text.replace(' ago', '');
 }
 
 function deadline(ts: number | null): string | null {
     return ts ? new Date(ts * 1000).toLocaleDateString() : null;
 }
 
-const requirementGroups: { key: 'past_due' | 'currently_due' | 'eventually_due' | 'pending_verification'; label: string }[] = [
-    { key: 'past_due', label: 'Overdue' },
-    { key: 'currently_due', label: 'Due now' },
-    { key: 'eventually_due', label: 'Due later' },
-    { key: 'pending_verification', label: 'Pending verification' },
+const requirementGroups: {
+    key: 'past_due' | 'currently_due' | 'eventually_due' | 'pending_verification';
+    label: string;
+    icon: Component;
+    text: string;
+    chip: string;
+}[] = [
+    {
+        key: 'past_due',
+        label: 'Overdue',
+        icon: CircleX,
+        text: 'text-red-600 dark:text-red-400',
+        chip: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900',
+    },
+    {
+        key: 'currently_due',
+        label: 'Due now',
+        icon: CircleAlert,
+        text: 'text-amber-600 dark:text-amber-400',
+        chip: 'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900',
+    },
+    {
+        key: 'eventually_due',
+        label: 'Due later',
+        icon: CalendarClock,
+        text: 'text-sky-600 dark:text-sky-400',
+        chip: 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900',
+    },
+    {
+        key: 'pending_verification',
+        label: 'Pending verification',
+        icon: Hourglass,
+        text: 'text-zinc-500 dark:text-zinc-400',
+        chip: 'bg-zinc-100 text-zinc-600 ring-zinc-200 dark:bg-zinc-800/50 dark:text-zinc-300 dark:ring-zinc-700',
+    },
 ];
+
+function capabilities(health: Health) {
+    return [
+        { label: 'Charges', icon: CreditCard, on: health.charges_enabled },
+        { label: 'Payouts', icon: Banknote, on: health.payouts_enabled },
+    ];
+}
+
+const summary = computed(() => {
+    const order: HealthStatusKey[] = ['healthy', 'needs_attention', 'restricted', 'unreachable'];
+
+    return order
+        .map((key) => ({
+            key,
+            style: healthStatus[key],
+            count: props.accounts.filter((a) => (a.health?.status ?? 'none') === key).length,
+        }));
+});
 </script>
 
 <template>
-    <Head title="Stripe Health" />
+    <Head title="Account Health" />
 
-    <div class="p-6 space-y-6">
-        <div class="flex items-center justify-between">
-            <h1 class="text-2xl font-semibold tracking-tight">Stripe Health</h1>
+    <div class="mx-auto w-full max-w-6xl space-y-6 p-6">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h1 class="text-2xl font-semibold tracking-tight">Account Health</h1>
+                <p class="mt-1 text-sm text-muted-foreground">
+                    Live status of every connected Stripe account. Checked automatically every 15 minutes.
+                </p>
+            </div>
             <Button class="cursor-pointer" :disabled="checkAllForm.processing" @click="checkAll">
                 <RefreshCw :class="['size-4 mr-1', checkAllForm.processing && 'animate-spin']" />
                 Check all now
             </Button>
         </div>
 
-        <div v-if="accounts.length === 0" class="rounded-xl border border-border/70 bg-card px-5 py-16 text-center text-sm text-muted-foreground">
+        <div class="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-sm md:grid-cols-4 md:divide-y-0">
+            <div v-for="s in summary" :key="s.key" class="px-5 py-4">
+                <p class="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span :class="['size-2 rounded-full', s.style.dot]" />
+                    {{ s.style.label }}
+                </p>
+                <p class="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{{ s.count }}</p>
+            </div>
+        </div>
+
+        <div v-if="accounts.length === 0" class="rounded-lg border border-border bg-card px-5 py-16 text-center text-sm text-muted-foreground shadow-sm">
             No Stripe accounts yet.
         </div>
 
@@ -134,115 +199,136 @@ const requirementGroups: { key: 'past_due' | 'currently_due' | 'eventually_due' 
             <div
                 v-for="account in accounts"
                 :key="account.id"
-                class="rounded-xl border border-border/70 bg-card shadow-sm p-5 space-y-4"
+                class="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
             >
-                <div class="flex items-start justify-between gap-3">
-                    <div class="space-y-1">
-                        <div class="flex items-center gap-2">
-                            <h2 class="font-semibold">{{ account.account_name }}</h2>
-                            <span v-if="account.prefix" class="font-mono text-xs text-muted-foreground">{{ account.prefix }}</span>
+                <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <div class="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50 text-muted-foreground">
+                            <Landmark class="size-4.5" />
                         </div>
-                        <div
-                            class="inline-flex items-center gap-1 text-xs font-medium"
-                            :class="account.is_active ? 'text-green-600 dark:text-green-500' : 'text-red-500 dark:text-red-400'"
-                        >
-                            <CheckCircle2 v-if="account.is_active" class="size-3.5" />
-                            <XCircle v-else class="size-3.5" />
-                            {{ account.is_active ? 'Active' : 'Inactive' }}
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h2 class="truncate text-sm font-semibold">{{ account.account_name }}</h2>
+                                <span
+                                    v-if="account.prefix"
+                                    class="rounded border border-border bg-muted/50 px-1.5 py-px font-mono text-[11px] text-muted-foreground"
+                                >
+                                    {{ account.prefix }}
+                                </span>
+                            </div>
+                            <p
+                                class="mt-0.5 flex items-center gap-1 text-xs"
+                                :class="account.is_active ? 'text-muted-foreground' : 'text-red-500 dark:text-red-400'"
+                            >
+                                <CheckCircle2 v-if="account.is_active" class="size-3.5 text-emerald-500" />
+                                <XCircle v-else class="size-3.5" />
+                                {{ account.is_active ? 'Active in PayHub' : 'Inactive in PayHub' }}
+                            </p>
                         </div>
                     </div>
                     <StripeHealthBadge :status="account.health?.status ?? null" />
                 </div>
 
-                <template v-if="account.health">
-                    <div class="flex gap-6 text-sm">
-                        <div>
-                            <span class="text-muted-foreground">Charges</span>
-                            <span class="ml-1.5 font-medium">{{ account.health.charges_enabled === null ? '—' : account.health.charges_enabled ? 'On' : 'Off' }}</span>
-                        </div>
-                        <div>
-                            <span class="text-muted-foreground">Payouts</span>
-                            <span class="ml-1.5 font-medium">{{ account.health.payouts_enabled === null ? '—' : account.health.payouts_enabled ? 'On' : 'Off' }}</span>
-                        </div>
-                    </div>
-
-                    <p v-if="account.health.disabled_reason" class="text-sm">
-                        <span class="text-muted-foreground">Stripe's reason:</span>
-                        <span class="ml-1.5 font-mono text-xs">{{ account.health.disabled_reason }}</span>
-                    </p>
-
-                    <template v-if="account.health.requirements">
-                        <div v-for="group in requirementGroups" :key="group.key">
-                            <template v-if="account.health.requirements[group.key]?.length">
-                                <p class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{{ group.label }}</p>
-                                <ul class="mt-1 flex flex-wrap gap-1.5">
-                                    <li
-                                        v-for="item in account.health.requirements[group.key]"
-                                        :key="item"
-                                        class="rounded-md bg-muted px-2 py-0.5 font-mono text-xs"
+                <div class="space-y-4 px-5 py-4">
+                    <template v-if="account.health">
+                        <dl class="divide-y divide-border/70 text-sm">
+                            <div
+                                v-for="cap in capabilities(account.health)"
+                                :key="cap.label"
+                                class="flex items-center justify-between py-2.5 first:pt-0"
+                            >
+                                <dt class="flex items-center gap-2 text-muted-foreground">
+                                    <component :is="cap.icon" class="size-4" />
+                                    {{ cap.label }}
+                                </dt>
+                                <dd>
+                                    <span
+                                        :class="[
+                                            'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+                                            cap.on === true && 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900',
+                                            cap.on === false && 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900',
+                                            cap.on === null && 'bg-muted text-muted-foreground ring-border',
+                                        ]"
                                     >
-                                        {{ item }}
-                                    </li>
-                                </ul>
+                                        <CheckCircle2 v-if="cap.on === true" class="size-3.5" />
+                                        <XCircle v-else-if="cap.on === false" class="size-3.5" />
+                                        <CircleHelp v-else class="size-3.5" />
+                                        {{ cap.on === null ? 'Unknown' : cap.on ? 'Enabled' : 'Disabled' }}
+                                    </span>
+                                </dd>
+                            </div>
+                            <div v-if="account.health.disabled_reason" class="flex items-center justify-between py-2.5">
+                                <dt class="flex items-center gap-2 text-muted-foreground">
+                                    <CircleAlert class="size-4" />
+                                    Stripe's reason
+                                </dt>
+                                <dd class="font-mono text-xs text-red-600 dark:text-red-400">{{ account.health.disabled_reason }}</dd>
+                            </div>
+                            <div v-if="deadline(account.health.requirements?.current_deadline ?? null)" class="flex items-center justify-between py-2.5">
+                                <dt class="flex items-center gap-2 text-muted-foreground">
+                                    <CalendarClock class="size-4" />
+                                    Deadline
+                                </dt>
+                                <dd class="font-medium text-amber-600 dark:text-amber-400">
+                                    {{ deadline(account.health.requirements?.current_deadline ?? null) }}
+                                </dd>
+                            </div>
+                        </dl>
+
+                        <template v-if="account.health.requirements">
+                            <template v-for="group in requirementGroups" :key="group.key">
+                                <div v-if="account.health.requirements[group.key]?.length" class="space-y-1.5">
+                                    <p :class="['flex items-center gap-1.5 text-xs font-semibold', group.text]">
+                                        <component :is="group.icon" class="size-3.5" />
+                                        {{ group.label }}
+                                    </p>
+                                    <ul class="flex flex-wrap gap-1.5">
+                                        <li
+                                            v-for="item in account.health.requirements[group.key]"
+                                            :key="item"
+                                            :class="['rounded-md px-2 py-0.5 font-mono text-xs ring-1 ring-inset', group.chip]"
+                                        >
+                                            {{ item }}
+                                        </li>
+                                    </ul>
+                                </div>
                             </template>
+                        </template>
+
+                        <div
+                            v-if="account.health.last_error"
+                            class="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400"
+                        >
+                            <CircleX class="mt-0.5 size-4 shrink-0" />
+                            <span>{{ account.health.last_error }}</span>
                         </div>
-                        <p v-if="deadline(account.health.requirements.current_deadline)" class="text-sm">
-                            <span class="text-muted-foreground">Deadline:</span>
-                            <span class="ml-1.5 font-medium">{{ deadline(account.health.requirements.current_deadline) }}</span>
-                        </p>
+
+                        <div
+                            v-if="account.health.status === 'restricted' && !account.health.disabled_reason"
+                            class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+                        >
+                            <Info class="mt-0.5 size-4 shrink-0" />
+                            <span>Stripe did not say why. Log in to Stripe to see the reason.</span>
+                        </div>
                     </template>
-
-                    <p
-                        v-if="account.health.last_error"
-                        class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400"
+                    <div
+                        v-else
+                        class="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground"
                     >
-                        {{ account.health.last_error }}
-                    </p>
+                        <CircleHelp class="size-4 shrink-0" />
+                        This account has not been checked yet. Press Check now.
+                    </div>
+                </div>
 
-                    <p
-                        v-if="account.health.status === 'restricted' && !account.health.disabled_reason"
-                        class="text-xs text-muted-foreground"
-                    >
-                        Stripe did not say why. Log in to Stripe to see the reason.
-                    </p>
-                </template>
-                <p v-else class="text-sm text-muted-foreground">
-                    This account has not been checked yet. Press Check now.
-                </p>
-
-                <dl class="grid grid-cols-2 gap-3 border-t border-border/60 pt-4 text-sm sm:grid-cols-4">
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Success, 7 days</dt>
-                        <dd class="font-medium tabular-nums">
-                            {{ rate(account.performance.completed_7d, account.performance.failed_7d) }}
-                            <span class="text-xs font-normal text-muted-foreground">({{ account.performance.completed_7d }}/{{ account.performance.completed_7d + account.performance.failed_7d }})</span>
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Success, 30 days</dt>
-                        <dd class="font-medium tabular-nums">
-                            {{ rate(account.performance.completed_30d, account.performance.failed_30d) }}
-                            <span class="text-xs font-normal text-muted-foreground">({{ account.performance.completed_30d }}/{{ account.performance.completed_30d + account.performance.failed_30d }})</span>
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Pending over 24 h</dt>
-                        <dd class="font-medium tabular-nums">{{ account.performance.stuck_pending }}</dd>
-                    </div>
-                    <div v-if="account.health">
-                        <dt class="text-xs text-muted-foreground">In this status</dt>
-                        <dd class="font-medium">{{ since(account.health.status_changed_at) }}</dd>
-                    </div>
-                </dl>
-
-                <div class="flex items-center justify-between">
-                    <span class="text-xs text-muted-foreground">
-                        Last checked: {{ account.health ? ago(account.health.last_checked_at) : 'never' }}
+                <div class="flex items-center justify-between border-t border-border bg-muted/30 px-5 py-3">
+                    <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Clock class="size-3.5" />
+                        Last checked {{ account.health ? ago(account.health.last_checked_at) : 'never' }}
                     </span>
                     <Button
                         variant="outline"
                         size="sm"
-                        class="cursor-pointer"
+                        class="cursor-pointer bg-card"
                         :disabled="checkForm.processing"
                         @click="checkOne(account.id)"
                     >

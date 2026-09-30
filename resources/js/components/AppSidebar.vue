@@ -26,11 +26,9 @@ const canViewDashboard = computed(() => isAdmin.value || isAccount.value);
 const mainNavItems = computed((): NavItem[] => [
     ...(canViewDashboard.value ? [
         { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard } as NavItem,
+        { title: 'Account Health', href: '/stripe-health', icon: HeartPulse } as NavItem,
     ] : []),
     { title: 'Payments', href: '/payments', icon: CreditCard },
-    ...(canViewDashboard.value ? [
-        { title: 'Stripe Health', href: '/stripe-health', icon: HeartPulse } as NavItem,
-    ] : []),
     ...(isAdmin.value ? [
         { title: 'Brands', href: '/admin/brands', icon: Building2 } as NavItem,
         {
