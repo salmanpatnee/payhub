@@ -2,6 +2,8 @@
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { CheckCircle2, Pencil, Plus, Power, PowerOff, Trash2, XCircle } from 'lucide-vue-next';
 import { ref } from 'vue';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
+import StripeHealthBadge from '@/components/StripeHealthBadge.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -11,13 +13,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 
 type StripeAccountRow = {
     id: number;
     account_name: string;
     prefix: string | null;
     is_active: boolean;
+    health_status: string | null;
 };
 
 defineProps<{ stripeAccounts: StripeAccountRow[] }>();
@@ -110,6 +112,7 @@ function executeDelete() {
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account Name</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Prefix</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Health</th>
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
@@ -131,6 +134,9 @@ function executeDelete() {
                                 <XCircle class="size-4" />
                                 Inactive
                             </div>
+                        </td>
+                        <td class="px-5 py-3.5">
+                            <StripeHealthBadge :status="account.health_status" />
                         </td>
                         <td class="px-5 py-3.5 text-right">
                             <div class="flex items-center justify-end gap-1">
@@ -177,7 +183,7 @@ function executeDelete() {
                     </tr>
 
                     <tr v-if="stripeAccounts.length === 0">
-                        <td colspan="5" class="px-5 py-16 text-center text-muted-foreground text-sm">
+                        <td colspan="6" class="px-5 py-16 text-center text-muted-foreground text-sm">
                             No Stripe accounts yet. Add an account to enable payment collection.
                         </td>
                     </tr>

@@ -6,6 +6,8 @@ use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
+use Stripe\StripeClient;
 use Tests\TestCase;
 
 class StripeAccountManagementTest extends TestCase
@@ -15,7 +17,14 @@ class StripeAccountManagementTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+        // Saving an account triggers a health check (spec 0004) — never hit real Stripe here.
+        $accounts = \Mockery::mock();
+        $accounts->shouldReceive('retrieve')->andThrow(new \RuntimeException('stripe disabled in tests'));
+        $stripe = \Mockery::mock(StripeClient::class);
+        $stripe->accounts = $accounts;
+        app()->bind(StripeClient::class, fn () => $stripe);
+
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'user',  'guard_name' => 'web']);
     }
@@ -24,6 +33,7 @@ class StripeAccountManagementTest extends TestCase
     {
         $admin = User::factory()->create(['email_verified_at' => now()]);
         $admin->syncRoles(['admin']);
+
         return $admin;
     }
 
@@ -42,9 +52,9 @@ class StripeAccountManagementTest extends TestCase
     {
         $this->actingAs($this->adminUser())
             ->post(route('admin.stripe-accounts.store'), [
-                'account_name'    => 'Test Account',
+                'account_name' => 'Test Account',
                 'publishable_key' => 'pk_test_abc123',
-                'secret_key'      => 'sk_test_abc123',
+                'secret_key' => 'sk_test_abc123',
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.stripe-accounts.index'));
@@ -61,15 +71,15 @@ class StripeAccountManagementTest extends TestCase
 
         $this->actingAs($this->adminUser())
             ->put(route('admin.stripe-accounts.update', $account), [
-                'account_name'    => 'New Name',
+                'account_name' => 'New Name',
                 'publishable_key' => $account->publishable_key,
-                'secret_key'      => '',
+                'secret_key' => '',
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.stripe-accounts.index'));
 
         $this->assertDatabaseHas('stripe_accounts', [
-            'id'           => $account->id,
+            'id' => $account->id,
             'account_name' => 'New Name',
         ]);
     }
@@ -81,9 +91,9 @@ class StripeAccountManagementTest extends TestCase
 
         $this->actingAs($this->adminUser())
             ->put(route('admin.stripe-accounts.update', $account), [
-                'account_name'    => $account->account_name,
+                'account_name' => $account->account_name,
                 'publishable_key' => 'pk_test_newkey123',
-                'secret_key'      => 'sk_test_newkey123',
+                'secret_key' => 'sk_test_newkey123',
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.stripe-accounts.index'));
@@ -99,7 +109,7 @@ class StripeAccountManagementTest extends TestCase
             ->assertRedirect(route('admin.stripe-accounts.index'));
 
         $this->assertDatabaseHas('stripe_accounts', [
-            'id'        => $account->id,
+            'id' => $account->id,
             'is_active' => false,
         ]);
     }
@@ -135,10 +145,10 @@ class StripeAccountManagementTest extends TestCase
         $this->actingAs($this->adminUser())
             ->withSession(['_token' => 'test_token'])
             ->post(route('admin.stripe-accounts.store'), [
-                'account_name'    => 'Test Account',
+                'account_name' => 'Test Account',
                 'publishable_key' => 'pk_test_abc123',
-                'secret_key'      => 'sk_live_abc123',
-                '_token'          => 'test_token',
+                'secret_key' => 'sk_live_abc123',
+                '_token' => 'test_token',
             ])
             ->assertSessionHasErrors(['publishable_key']);
     }
@@ -151,10 +161,10 @@ class StripeAccountManagementTest extends TestCase
         $this->actingAs($this->adminUser())
             ->withSession(['_token' => 'test_token'])
             ->post(route('admin.stripe-accounts.store'), [
-                'account_name'    => 'Test Account',
+                'account_name' => 'Test Account',
                 'publishable_key' => 'pk_live_abc123',
-                'secret_key'      => 'sk_test_abc123',
-                '_token'          => 'test_token',
+                'secret_key' => 'sk_test_abc123',
+                '_token' => 'test_token',
             ])
             ->assertSessionHasErrors(['secret_key']);
     }

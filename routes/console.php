@@ -22,3 +22,6 @@ Schedule::call(function () {
         })
         ->each(fn (CloverChargeAttempt $attempt) => ResolveCloverChargeAttempt::dispatch($attempt->id));
 })->name('clover:resolve-stale-charge-attempts')->everyTenMinutes()->withoutOverlapping();
+
+// Ask Stripe whether each account can still take payments (spec 0004).
+Schedule::command('stripe:check-health')->everyFifteenMinutes()->withoutOverlapping();
