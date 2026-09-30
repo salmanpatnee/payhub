@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
-import { Banknote, Building2, CreditCard, Landmark, LayoutDashboard, Settings, UserCheck2, Users, Wallet } from 'lucide-vue-next';
+import { Banknote, Building2, CreditCard, HeartPulse, Landmark, LayoutDashboard, Settings, UserCheck2, Users, Wallet } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import CloverIcon from '@/components/icons/CloverIcon.vue';
@@ -28,6 +28,9 @@ const mainNavItems = computed((): NavItem[] => [
         { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard } as NavItem,
     ] : []),
     { title: 'Payments', href: '/payments', icon: CreditCard },
+    ...(canViewDashboard.value ? [
+        { title: 'Stripe Health', href: '/stripe-health', icon: HeartPulse } as NavItem,
+    ] : []),
     ...(isAdmin.value ? [
         { title: 'Brands', href: '/admin/brands', icon: Building2 } as NavItem,
         {

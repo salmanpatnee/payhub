@@ -15,6 +15,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RevolutWebhookController;
 use App\Http\Controllers\SquareWebhookController;
+use App\Http\Controllers\StripeHealthController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\VivaWebhookController;
 use App\Http\Controllers\ZelleAccountController;
@@ -41,6 +42,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('role:admin|account');
     // Must be registered before the resource route — otherwise `payments/export`
     // is captured by the `payments/{payment}` show route (payment = "export").
+    Route::middleware('role:admin|account')->group(function () {
+        Route::get('stripe-health', [StripeHealthController::class, 'index'])
+            ->name('stripe-health.index');
+        // Registered before the {stripe_account} route so `check` is not read as an id.
+        Route::post('stripe-health/check', [StripeHealthController::class, 'checkAll'])
+            ->name('stripe-health.check-all')
+            ->middleware('throttle:10,1');
+        Route::post('stripe-health/{stripe_account}/check', [StripeHealthController::class, 'check'])
+            ->name('stripe-health.check')
+            ->middleware('throttle:10,1');
+    });
+
     Route::get('payments/export', [PaymentController::class, 'export'])
         ->name('payments.export');
     Route::resource('payments', PaymentController::class)

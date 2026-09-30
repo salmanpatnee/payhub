@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreStripeAccountRequest;
 use App\Http\Requests\Admin\UpdateStripeAccountRequest;
 use App\Models\StripeAccount;
+use App\Services\Stripe\StripeAccountHealthChecker;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -20,13 +21,14 @@ class StripeAccountController extends Controller
     public function index(): Response
     {
         return Inertia::render('admin/stripe-accounts/Index', [
-            'stripeAccounts' => StripeAccount::orderBy('account_name')
+            'stripeAccounts' => StripeAccount::with('health')->orderBy('account_name')
                 ->get()
                 ->map(fn (StripeAccount $account) => [
                     'id' => $account->id,
                     'account_name' => $account->account_name,
                     'prefix' => $account->prefix,
                     'is_active' => $account->is_active,
+                    'health_status' => $account->health?->status->value,
                 ]),
         ]);
     }
@@ -41,6 +43,8 @@ class StripeAccountController extends Controller
         $account = new StripeAccount($request->safe()->except('secret_key'));
         $account->secret_key = $request->validated('secret_key');
         $account->save();
+
+        $this->checkHealthQuietly($account);
 
         return redirect()->route('admin.stripe-accounts.index')
             ->with('success', 'Stripe account saved.');
@@ -74,10 +78,28 @@ class StripeAccountController extends Controller
         }
 
         $stripeAccount->fill($request->safe()->except(['secret_key', 'webhook_secret']));
+        $keyChanged = $stripeAccount->isDirty('secret_key');
         $stripeAccount->save();
+
+        if ($keyChanged) {
+            $this->checkHealthQuietly($stripeAccount);
+        }
 
         return redirect()->route('admin.stripe-accounts.index')
             ->with('success', 'Stripe account updated.');
+    }
+
+    /**
+     * Saving must never fail because of a health check. The checker already
+     * swallows Stripe errors; this guards anything else (e.g. a DB hiccup).
+     */
+    private function checkHealthQuietly(StripeAccount $account): void
+    {
+        try {
+            app(StripeAccountHealthChecker::class)->check($account);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     public function deactivate(StripeAccount $stripeAccount): RedirectResponse
