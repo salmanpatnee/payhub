@@ -15,12 +15,12 @@ PayHub will check every Stripe account on a schedule and save whether Stripe sti
 - As an admin or account user, I want to see how payments on each account are performing so that I can spot an account that is quietly failing.
 
 **Acceptance criteria** (the contract, each criterion is IDed and independently checkable):
-- **AC-1**: Running `php artisan stripe:check-health` checks every Stripe account (active and inactive), using that account's own secret key, and saves exactly one row per account in `stripe_account_health`. Passing an account id checks only that account.
+- **AC-1**: Running `php artisan stripe:check-health` checks every active Stripe account (inactive accounts are skipped), using that account's own secret key, and saves exactly one row per checked account in `stripe_account_health`. Passing an account id checks only that account.
 - **AC-2**: The saved status follows these rules in order. `unreachable` when the Stripe call fails. `restricted` when `charges_enabled` is false. `needs_attention` when charges are on but payouts are off, or Stripe lists any overdue or currently due items. Otherwise `healthy`. A missing `requirements` field from Stripe counts as empty.
 - **AC-3**: When a check fails, the last good data is kept, the status becomes `unreachable`, and a cleaned error text is saved in `last_error`. One failing account never stops the others from being checked.
 - **AC-4**: `last_checked_at` updates on every check. `status_changed_at` updates only when the status value actually changes (and on the very first check).
 - **AC-5**: The command is scheduled every 15 minutes and cannot overlap with a run that is still going.
-- **AC-6**: The `/stripe-health` page shows one card per account (active and inactive) with: account name, prefix, active flag, status badge, charges and payouts on or off, the lists of what Stripe needs, Stripe's disabled reason when present, when it was last checked, how long it has been in this status, and the error text when unreachable. An account with no saved row shows "Not checked yet".
+- **AC-6**: The `/stripe-health` page shows one card per active account (inactive accounts are hidden) with: account name, prefix, active flag, status badge, charges and payouts on or off, the lists of what Stripe needs, Stripe's disabled reason when present, when it was last checked, how long it has been in this status, and the error text when unreachable. An account with no saved row shows "Not checked yet".
 - **AC-7**: Each card shows the 7 day and 30 day success rate (completed out of completed plus failed, ignoring pending and cancelled) with the counts, and the number of payments pending for more than 24 hours.
 - **AC-8**: Check now works per account and for all accounts. It runs inside the request, updates the saved data, and the page then shows the fresh result. It is limited to 10 requests per minute per user. Admin and account roles can use the page and the buttons. Agents receive 403.
 - **AC-9**: The Stripe Accounts list shows the same status badge on each row.
@@ -104,7 +104,7 @@ The checker never throws for a Stripe or network failure. It records `unreachabl
 - None. The scheduler must already be running (`schedule:run` every minute), as the Clover sweep needs it.
 
 **Critical test scenarios** (each maps to an acceptance criterion in ## Requirements):
-- Happy path: with Stripe faked as fully healthy, the command saves a `healthy` row for every account including inactive ones, verifies **AC-1**, **AC-2**
+- Happy path: with Stripe faked as fully healthy, the command saves a `healthy` row for every active account and none for inactive ones, verifies **AC-1**, **AC-2**
 - Status rules: charges off gives `restricted`, payouts off gives `needs_attention`, overdue items give `needs_attention`, missing `requirements` gives `healthy`, verifies **AC-2**
 - Failure case: Stripe throws for one account, that account becomes `unreachable` with old data kept and the others still update, verifies **AC-3**
 - Status timestamps: unchanged status keeps `status_changed_at`, a changed one moves it, verifies **AC-4**
