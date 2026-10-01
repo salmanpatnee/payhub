@@ -2,7 +2,7 @@
 _Steps derived from spec 0004 acceptance criteria. `/check verify` runs these; `/test` locks the durable ones._
 
 ## UI / manual
-- [x] Log in as admin, open `/stripe-health` → one card per Stripe account (active and inactive), each with a badge → AC-6
+- [x] Log in as admin, open `/stripe-health` → one card per active Stripe account (inactive ones are hidden), each with a badge → AC-6
 - [x] Add a Stripe account with a valid key on `/admin/stripe-accounts/create` → card and list row show a status right after saving → AC-10
 - [x] Add or edit an account with a key Stripe rejects → save still works, badge shows Unreachable with a cleaned error, no key text visible → AC-10, AC-11
 - [x] Press Check now on one card → toast appears, "Last checked" becomes "just now" → AC-8
@@ -17,7 +17,7 @@ _Steps derived from spec 0004 acceptance criteria. `/check verify` runs these; `
 - [x] View page source / Inertia props for `/stripe-health` and `/admin/stripe-accounts` → no `sk_`, `rk_` or `whsec_` value → AC-11
 
 ## Commands
-- [x] `php artisan stripe:check-health` → one line per account, one `stripe_account_health` row each (inactive included) → AC-1
+- [x] `php artisan stripe:check-health` → one line per account, one `stripe_account_health` row each (inactive skipped) → AC-1
 - [x] `php artisan stripe:check-health 3` → only account 3 is checked → AC-1
 - [x] `php artisan stripe:check-health 9999` → "not found", non zero exit → AC-1
 - [x] `php artisan schedule:list` → `stripe:check-health` every 15 minutes → AC-5

@@ -16,7 +16,8 @@ class StripeHealthController extends Controller
     {
         $performance = $this->performance();
 
-        $accounts = StripeAccount::with('health')
+        $accounts = StripeAccount::active()
+            ->with('health')
             ->orderBy('account_name')
             ->get()
             ->map(function (StripeAccount $account) use ($performance) {
@@ -57,7 +58,7 @@ class StripeHealthController extends Controller
 
     public function checkAll(StripeAccountHealthChecker $checker): RedirectResponse
     {
-        $accounts = StripeAccount::orderBy('id')->get();
+        $accounts = StripeAccount::active()->orderBy('id')->get();
 
         foreach ($accounts as $account) {
             $checker->check($account);

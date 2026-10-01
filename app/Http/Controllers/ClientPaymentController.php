@@ -695,25 +695,32 @@ class ClientPaymentController extends Controller
      */
     private function policyProps(): array
     {
-        return collect(config('policies'))
+        $policies = config('policies');
+
+        // One cache read for all policies instead of one query per policy (N+1 on the database cache store).
+        $cacheKeys = collect($policies)
+            ->mapWithKeys(fn (array $policy, string $key): array => [$key => "policy.html.{$key}.{$policy['version']}"])
+            ->all();
+        $cached = cache()->many(array_values($cacheKeys));
+
+        return collect($policies)
             ->map(fn (array $policy, string $key): array => [
                 'key' => $key,
                 'title' => $policy['title'],
                 'version' => $policy['version'],
-                'html' => $this->policyHtml($key, $policy['version']),
+                'html' => $cached[$cacheKeys[$key]] ?? $this->renderPolicyHtml($key, $cacheKeys[$key]),
             ])
             ->values()
             ->all();
     }
 
-    private function policyHtml(string $key, string $version): string
+    private function renderPolicyHtml(string $key, string $cacheKey): string
     {
-        return cache()->rememberForever(
-            "policy.html.{$key}.{$version}",
-            fn (): string => Str::markdown(
-                (string) file_get_contents(resource_path("policies/{$key}.md"))
-            )
-        );
+        $html = Str::markdown((string) file_get_contents(resource_path("policies/{$key}.md")));
+
+        cache()->forever($cacheKey, $html);
+
+        return $html;
     }
 
     private function brandProps(Brand $brand): array

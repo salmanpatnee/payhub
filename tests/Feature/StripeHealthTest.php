@@ -71,15 +71,16 @@ function healthyPayload(array $overrides = []): array
 }
 
 // AC-1, AC-2
-it('saves a healthy row for every account including inactive ones', function () {
-    StripeAccount::factory()->create();
-    StripeAccount::factory()->create(['is_active' => false]);
+it('saves a healthy row for every active account and skips inactive ones', function () {
+    StripeAccount::factory()->count(2)->create();
+    $inactive = StripeAccount::factory()->create(['is_active' => false]);
     fakeStripeAccounts([healthyPayload(), healthyPayload()]);
 
     $this->artisan('stripe:check-health')->assertSuccessful();
 
     expect(StripeAccountHealth::count())->toBe(2)
-        ->and(StripeAccountHealth::where('status', 'healthy')->count())->toBe(2);
+        ->and(StripeAccountHealth::where('status', 'healthy')->count())->toBe(2)
+        ->and(StripeAccountHealth::where('stripe_account_id', $inactive->id)->exists())->toBeFalse();
 });
 
 it('checks only the given account id and fails for an unknown id', function () {
@@ -170,9 +171,10 @@ it('schedules the check every 15 minutes without overlapping', function () {
 });
 
 // AC-6, AC-7
-it('shows one card per account with performance numbers', function () {
+it('shows one card per active account with performance numbers', function () {
     $checked = StripeAccount::factory()->create();
-    $never = StripeAccount::factory()->create(['is_active' => false]);
+    $never = StripeAccount::factory()->create();
+    $inactive = StripeAccount::factory()->create(['is_active' => false]);
     StripeAccountHealth::factory()->create(['stripe_account_id' => $checked->id]);
 
     $make = fn (string $status, $createdAt) => Payment::factory()->create([
@@ -193,11 +195,12 @@ it('shows one card per account with performance numbers', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('StripeHealth/Index')
             ->has('accounts', 2)
-            ->where('accounts', function ($accounts) use ($checked, $never) {
+            ->where('accounts', function ($accounts) use ($checked, $never, $inactive) {
                 $c = collect($accounts)->firstWhere('id', $checked->id);
                 $n = collect($accounts)->firstWhere('id', $never->id);
 
-                return $n['health'] === null
+                return collect($accounts)->firstWhere('id', $inactive->id) === null
+                    && $n['health'] === null
                     && $c['performance'] === [
                         'completed_7d' => 2, 'failed_7d' => 1,
                         'completed_30d' => 3, 'failed_30d' => 1,

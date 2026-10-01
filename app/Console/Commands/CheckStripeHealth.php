@@ -17,7 +17,7 @@ class CheckStripeHealth extends Command
         $id = $this->argument('account');
 
         $accounts = $id === null
-            ? StripeAccount::orderBy('id')->get()
+            ? StripeAccount::active()->orderBy('id')->get()
             : StripeAccount::whereKey($id)->get();
 
         if ($id !== null && $accounts->isEmpty()) {
