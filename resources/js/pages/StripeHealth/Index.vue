@@ -11,15 +11,14 @@ import {
     CreditCard,
     Hourglass,
     Info,
-    Landmark,
     RefreshCw,
     XCircle,
 } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { Component } from 'vue';
 import StripeHealthBadge from '@/components/StripeHealthBadge.vue';
 import { Button } from '@/components/ui/button';
-import { healthStatus } from '@/lib/stripeHealth';
+import { healthStatus, statusStyle } from '@/lib/stripeHealth';
 import type { HealthStatusKey } from '@/lib/stripeHealth';
 
 type Requirements = {
@@ -162,6 +161,30 @@ const summary = computed(() => {
             count: props.accounts.filter((a) => (a.health?.status ?? 'none') === key).length,
         }));
 });
+
+const activeFilter = ref<HealthStatusKey | null>(null);
+
+function toggleFilter(key: HealthStatusKey) {
+    activeFilter.value = activeFilter.value === key ? null : key;
+}
+
+const severity: Record<string, number> = { restricted: 0, needs_attention: 1, unreachable: 2, none: 3, healthy: 4 };
+
+const visibleAccounts = computed(() =>
+    props.accounts
+        .filter((a) => !activeFilter.value || (a.health?.status ?? 'none') === activeFilter.value)
+        .sort(
+            (a, b) =>
+                (severity[a.health?.status ?? 'none'] ?? 3) - (severity[b.health?.status ?? 'none'] ?? 3) ||
+                a.account_name.localeCompare(b.account_name),
+        ),
+);
+
+function initials(name: string): string {
+    const words = name.trim().split(/\s+/).filter(Boolean);
+
+    return (words.length > 1 ? words[0][0] + words[1][0] : name.trim().slice(0, 2)).toUpperCase();
+}
 </script>
 
 <template>
@@ -182,82 +205,112 @@ const summary = computed(() => {
         </div>
 
         <div class="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-sm md:grid-cols-4 md:divide-y-0">
-            <div v-for="s in summary" :key="s.key" class="px-5 py-4">
+            <button
+                v-for="s in summary"
+                :key="s.key"
+                type="button"
+                :aria-pressed="activeFilter === s.key"
+                :class="[
+                    'cursor-pointer px-5 py-4 text-left transition-colors hover:bg-muted/40',
+                    activeFilter === s.key && 'bg-muted/60 shadow-[inset_0_-2px_0] shadow-foreground/70',
+                ]"
+                @click="toggleFilter(s.key)"
+            >
                 <p class="flex items-center gap-2 text-sm text-muted-foreground">
                     <span :class="['size-2 rounded-full', s.style.dot]" />
                     {{ s.style.label }}
                 </p>
                 <p class="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{{ s.count }}</p>
-            </div>
+            </button>
         </div>
 
         <div v-if="accounts.length === 0" class="rounded-lg border border-border bg-card px-5 py-16 text-center text-sm text-muted-foreground shadow-sm">
             No Stripe accounts yet.
         </div>
 
-        <div class="grid gap-4 lg:grid-cols-2">
+        <div v-else-if="visibleAccounts.length === 0" class="rounded-lg border border-border bg-card px-5 py-10 text-center text-sm text-muted-foreground shadow-sm">
+            No accounts with this status.
+        </div>
+
+        <div class="grid items-stretch gap-4 lg:grid-cols-2">
             <div
-                v-for="account in accounts"
+                v-for="account in visibleAccounts"
                 :key="account.id"
-                class="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+                class="relative flex flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm"
             >
-                <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-                    <div class="flex min-w-0 items-center gap-3">
-                        <div class="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50 text-muted-foreground">
-                            <Landmark class="size-4.5" />
+                <span :class="['absolute inset-y-0 left-0 w-1', statusStyle(account.health?.status ?? null).bar]" />
+
+                <div class="flex items-center justify-between gap-3 border-b border-border py-4 pr-5 pl-6">
+                    <div class="flex min-w-0 items-center gap-3.5">
+                        <div
+                            :class="[
+                                'flex size-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold tracking-wide',
+                                statusStyle(account.health?.status ?? null).tile,
+                            ]"
+                        >
+                            {{ initials(account.account_name) }}
                         </div>
                         <div class="min-w-0">
                             <div class="flex items-center gap-2">
-                                <h2 class="truncate text-sm font-semibold">{{ account.account_name }}</h2>
+                                <h2 :class="['truncate text-base font-semibold leading-tight', !account.is_active && 'text-muted-foreground']">
+                                    {{ account.account_name }}
+                                </h2>
                                 <span
                                     v-if="account.prefix"
-                                    class="rounded border border-border bg-muted/50 px-1.5 py-px font-mono text-[11px] text-muted-foreground"
+                                    class="shrink-0 rounded border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-xs font-medium text-foreground/70"
                                 >
                                     {{ account.prefix }}
                                 </span>
                             </div>
                             <p
-                                class="mt-0.5 flex items-center gap-1 text-xs"
-                                :class="account.is_active ? 'text-muted-foreground' : 'text-red-500 dark:text-red-400'"
+                                v-if="account.is_active"
+                                class="mt-1 flex items-center gap-1 text-xs text-muted-foreground"
                             >
-                                <CheckCircle2 v-if="account.is_active" class="size-3.5 text-emerald-500" />
-                                <XCircle v-else class="size-3.5" />
-                                {{ account.is_active ? 'Active in PayHub' : 'Inactive in PayHub' }}
+                                <CheckCircle2 class="size-3.5 text-emerald-500" />
+                                Active in PayHub
+                            </p>
+                            <p
+                                v-else
+                                class="mt-1 inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                            >
+                                <XCircle class="size-3.5" />
+                                Inactive in PayHub
                             </p>
                         </div>
                     </div>
                     <StripeHealthBadge :status="account.health?.status ?? null" />
                 </div>
 
-                <div class="space-y-4 px-5 py-4">
+                <div class="flex-1 space-y-4 py-4 pr-5 pl-6">
                     <template v-if="account.health">
-                        <dl class="divide-y divide-border/70 text-sm">
+                        <div class="grid grid-cols-2 gap-3">
                             <div
                                 v-for="cap in capabilities(account.health)"
                                 :key="cap.label"
-                                class="flex items-center justify-between py-2.5 first:pt-0"
+                                class="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/20 px-3 py-2"
                             >
-                                <dt class="flex items-center gap-2 text-muted-foreground">
+                                <span class="flex items-center gap-2 text-sm text-muted-foreground">
                                     <component :is="cap.icon" class="size-4" />
                                     {{ cap.label }}
-                                </dt>
-                                <dd>
-                                    <span
-                                        :class="[
-                                            'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
-                                            cap.on === true && 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900',
-                                            cap.on === false && 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900',
-                                            cap.on === null && 'bg-muted text-muted-foreground ring-border',
-                                        ]"
-                                    >
-                                        <CheckCircle2 v-if="cap.on === true" class="size-3.5" />
-                                        <XCircle v-else-if="cap.on === false" class="size-3.5" />
-                                        <CircleHelp v-else class="size-3.5" />
-                                        {{ cap.on === null ? 'Unknown' : cap.on ? 'Enabled' : 'Disabled' }}
-                                    </span>
-                                </dd>
+                                </span>
+                                <span
+                                    :class="[
+                                        'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+                                        cap.on === true && 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900',
+                                        cap.on === false && 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900',
+                                        cap.on === null && 'bg-muted text-muted-foreground ring-border',
+                                    ]"
+                                >
+                                    <CheckCircle2 v-if="cap.on === true" class="size-3.5" />
+                                    <XCircle v-else-if="cap.on === false" class="size-3.5" />
+                                    <CircleHelp v-else class="size-3.5" />
+                                    {{ cap.on === null ? 'Unknown' : cap.on ? 'Enabled' : 'Disabled' }}
+                                </span>
                             </div>
-                            <div v-if="account.health.disabled_reason" class="flex items-center justify-between py-2.5">
+                        </div>
+
+                        <dl v-if="account.health.disabled_reason || deadline(account.health.requirements?.current_deadline ?? null)" class="divide-y divide-border/70 text-sm">
+                            <div v-if="account.health.disabled_reason" class="flex items-center justify-between py-2.5 first:pt-0">
                                 <dt class="flex items-center gap-2 text-muted-foreground">
                                     <CircleAlert class="size-4" />
                                     Stripe's reason
@@ -320,7 +373,7 @@ const summary = computed(() => {
                     </div>
                 </div>
 
-                <div class="flex items-center justify-between border-t border-border bg-muted/30 px-5 py-3">
+                <div class="flex items-center justify-between border-t border-border bg-muted/30 py-3 pr-5 pl-6">
                     <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Clock class="size-3.5" />
                         Last checked {{ account.health ? ago(account.health.last_checked_at) : 'never' }}
