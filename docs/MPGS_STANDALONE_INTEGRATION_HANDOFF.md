@@ -71,7 +71,7 @@ Base path: `{host}api/rest/version/{v}/merchant/{MID}/`
 |---|---|---|
 | Create session | `POST session` | L1151 |
 | Verify payment | `GET order/{orderId}` | L1318 |
-| Full refund ("void") | `DELETE order/{id}/transaction/{txnId}` | L1491 |
+| Full refund ("void") | `DELETE order/{id}/transaction/{txnId}` in the plugin (L1491). **Do not copy:** the gateway docs show `PUT` with `apiOperation: VOID` and `targetTransactionId` (spec 0005 research). Unconfirmed until the sandbox spike. | L1491 |
 | Partial refund | `PUT order/{id}/transaction/refund-{time}` with `apiOperation: REFUND` | L1499 |
 | Capture (Pro) | `PUT order/{id}/transaction/capture-{time}` with `apiOperation: CAPTURE` | `class-mpgs-capture__premium_only.php` |
 
@@ -299,7 +299,7 @@ The host app implements the repository: save the indicator, mark paid, record tr
 - Trademark: the WordPress.org rename was for trademark compliance. Do not name your library "MasterCard …".
 
 **Technical and provider risks**
-- **Void implementation unverified.** The plugin voids with `DELETE …/transaction/{id}` (L1491). The e2e mock suite cannot validate that against a real gateway. Confirm the correct VOID call in the docs for your API version before porting. [Unverified]
+- **Void implementation is wrong in the plugin.** The plugin voids with `DELETE …/transaction/{id}` (L1491), which its e2e mock suite cannot validate. The gateway documentation shows `PUT` with `apiOperation: VOID` and `targetTransactionId`; what the URL id means is still ambiguous. Confirm against the sandbox before porting. PayHub spec 0005 keeps refunds and voids out of scope. Line references point to the plugin repo (`D:\code\woo-mpgs`), not this file. [Partly verified]
 - **Doc URL discrepancy.** A Mastercard sample shows the AUTHORIZE call under `/form/version/{v}/merchant/{MID}/order/{id}/transaction/{id}`. Treat that as a likely doc typo and use the REST path `/api/rest/version/{v}/merchant/{MID}/order/{id}/transaction/{id}`. Confirm in the sandbox. [Unverified]
 - **Hosted Session session-update step.** The "update the session with order amount and currency" call was seen in Mastercard guides for 3DS JS and related flows. Verify the exact fields against your API version. [Unverified]
 - **Not testable end-to-end locally.** The plugin's mock suite covers about 90% of PHP logic. Real 3DS, SDK rendering and live card authorisation need the bank sandbox. Plan one real test before launch.

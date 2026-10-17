@@ -215,12 +215,19 @@ No build approach is recorded in `AGENTS.md` or a `docs/scope/` header (this pro
 
 ## Follow-up
 
+**Build status (2026-10-17).** Steps 1 to 3, 6, 7 and 8 are built. Steps 4 and 5 are built as a shell, pending the spike:
+- Server: `MpgsPaymentController` (`session`, `pay`, `status`), `ClientPaymentController::showMpgs`, routes `pay.mpgs.session|pay|status`, limiters `mpgs-session` (20 per payment per hour) and `mpgs-pay` (10), the MPGS only CSP widening in `SecurityHeaders`. These routes stay behind CSRF (the page sends `X-XSRF-TOKEN`); only the webhook is excluded.
+- Client: `ClientPayment/PayMpgs.vue` (consent, processing poll, timed out state), `MpgsPaymentForm.vue` (prepares a session on load because hosted fields need one first, 3DS, pay, decline retry on a fresh session), and `resources/js/lib/mpgs/gateway.ts`, the single stub file for `session.js` and the 3DS library.
+- `gateway.ts` throws `MpgsNotWiredError` in all four functions (`loadLibraries`, `mountFields`, `captureCard`, `authenticatePayer`), so the pay page shows "Payment system is unavailable" until the spike fills it. The PHP field names stay provisional in `MpgsClient` and `MpgsChargeClassifier`.
+- A session is prepared on every pay page load (hosted fields need it first), so a reload creates and retires an attempt. The 20 per hour session limit and the sweep bound the cost. Revisit if the spike shows a lazier flow is possible.
+- Not done: step 9 (Pest for the new controller, CSP and limiters) and step 10. `phpunit.xml` hardcodes `APP_BASE_PATH` for another machine; run tests with `APP_BASE_PATH` set to the local path.
+
 - [ ] Run the sandbox spike (Build plan step 0) and write the answer to each of the 12 Open questions here before building steps 4 to 7.
 - [ ] Decide after the spike whether the 3DS challenge stays inline or needs `fullScreenRedirect` for some banks (needs a return route and page state restore if so).
 - [ ] If the spike shows name and email are not enough for 3DS, amend AC-2, the form and the value sourcing table to collect the minimum billing fields.
 - [ ] Revisit a `currencies` column on `mpgs_accounts` if wrong currency rejections happen in practice.
 - [ ] Revisit a per account host column if a second bank or region is added.
-- [ ] Correct `docs/MPGS_STANDALONE_INTEGRATION_HANDOFF.md`: void is `PUT` with `apiOperation: VOID`, not `DELETE`, and the line references point to the plugin repo.
+- [x] Correct `docs/MPGS_STANDALONE_INTEGRATION_HANDOFF.md`: void is `PUT` with `apiOperation: VOID`, not `DELETE`, and the line references point to the plugin repo. Done 2026-10-17.
 - [ ] Update `AGENTS.md` through `/sync` once this ships: add MPGS to the provider list and name the scoped server to server exception (Clover and MPGS) in the critical rules.
 - [ ] Rate limits (10 pays and 20 sessions per payment per hour), the 30 minute prepared lifetime and the 10 minute sweep are starting defaults, not reviewed figures.
 - [ ] An `abandoned` attempt is only logged today; consider an admin view of stuck MPGS payments if it happens often.
