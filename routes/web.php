@@ -13,6 +13,7 @@ use App\Http\Controllers\BankAccountActivityLogController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MpgsPaymentController;
 use App\Http\Controllers\MpgsWebhookController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RevolutWebhookController;
@@ -289,6 +290,18 @@ Route::post('/pay/{payment}/clover/charge', [ClientPaymentController::class, 'ch
 // Polled by the client only while the latest charge attempt is unresolved (AC-9).
 Route::get('/pay/{payment}/clover/status', [ClientPaymentController::class, 'cloverStatus'])
     ->name('pay.clover.status');
+
+// MPGS Hosted Session pay thread — public (scoped by the payment UUID), rate limited
+// per payment by the named limiters in AppServiceProvider. Unlike Clover these stay
+// behind CSRF: the page sends the XSRF token (spec 0005, AC-12).
+Route::post('/pay/{payment}/mpgs/session', [MpgsPaymentController::class, 'session'])
+    ->name('pay.mpgs.session')
+    ->middleware('throttle:mpgs-session');
+Route::post('/pay/{payment}/mpgs/pay', [MpgsPaymentController::class, 'pay'])
+    ->name('pay.mpgs.pay')
+    ->middleware('throttle:mpgs-pay');
+Route::get('/pay/{payment}/mpgs/status', [MpgsPaymentController::class, 'status'])
+    ->name('pay.mpgs.status');
 
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)

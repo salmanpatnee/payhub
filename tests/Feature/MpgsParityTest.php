@@ -237,8 +237,18 @@ it('accepts provider=mpgs on the dashboard route and lists the account option', 
         );
 });
 
-it('does not 500 on the client pay page for an MPGS payment before the pay thread exists', function () {
+it('renders the MPGS pay page without the session id or any secret', function () {
     $payment = Payment::factory()->mpgs()->create();
 
-    $this->get(route('pay.show', $payment))->assertStatus(503);
+    $this->get(route('pay.show', $payment))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('ClientPayment/PayMpgs')
+            ->has('mpgsAccount', fn ($account) => $account
+                ->has('gateway_host')
+                ->has('merchant_id')
+                ->has('api_version')
+                ->missing('integration_password')
+                ->missing('webhook_secret'))
+            ->missing('session_id'));
 });

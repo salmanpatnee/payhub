@@ -60,13 +60,26 @@ class ClientPaymentController extends Controller
     }
 
     /**
-     * Placeholder until the MPGS pay thread lands (spec 0005, build plan step 4,
-     * blocked on the sandbox spike). Without this arm an MPGS payment would fall
-     * through to showStripe() and 500 on the missing Stripe account.
+     * MPGS Hosted Session: the card fields are embedded on this page
+     * (MpgsPaymentForm.vue). The session id is NOT in these props — the browser
+     * fetches it from MpgsPaymentController::session() after load.
      */
     private function showMpgs(Payment $payment): Response
     {
-        abort(503, 'MPGS payments are not available yet.');
+        $payment->loadMissing('mpgsAccount');
+
+        abort_unless($payment->mpgsAccount?->is_active, 404);
+
+        return Inertia::render('ClientPayment/PayMpgs', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'mpgsAccount' => [
+                'gateway_host' => rtrim((string) config('services.mpgs.host'), '/'),
+                'merchant_id' => $payment->mpgsAccount->merchant_id,
+                'api_version' => $payment->mpgsAccount->api_version,
+            ],
+            'policies' => $this->policyProps(),
+        ]);
     }
 
     private function showStripe(Payment $payment): Response

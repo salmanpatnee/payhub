@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\PaymentProvider;
+use App\Models\Payment;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -45,11 +47,23 @@ class SecurityHeaders
         // CloverClient calls server-to-server only, never from the browser.
         $clover = ' https://checkout.sandbox.dev.clover.com https://checkout.clover.com';
 
+        // MPGS Hosted Session (spec 0005, AC-6): session.js, the 3DS library and the
+        // card-field frames load from the configured gateway host, and the bank's 3DS
+        // challenge frame can be any https origin. Widened ONLY on the pay page of an
+        // MPGS payment; every other route keeps the strict policy.
+        $route = $request->route();
+        $routePayment = $route?->parameter('payment');
+        $isMpgsPayPage = $route?->getName() === 'pay.show'
+            && $routePayment instanceof Payment
+            && $routePayment->provider === PaymentProvider::Mpgs;
+        $mpgsHost = $isMpgsPayPage ? ' '.rtrim((string) config('services.mpgs.host'), '/') : '';
+        $mpgsFrames = $isMpgsPayPage ? ' https:' : '';
+
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
-            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$vite}{$scriptInline}; ".
-            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}; ".
-            "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$clover}{$vite}{$viteWs}; ".
+            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$vite}{$scriptInline}; ".
+            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}; ".
+            "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$square}{$vite}; ".
             "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$vite};"
