@@ -4,59 +4,50 @@ Last updated: 2026-10-17 (end of session)
 
 ## What was built
 
-Branch `feat/mpgs-hosted-session`. Committed earlier: data layer, `MpgsClient`/classifier/resolver, admin accounts + Vue pages, parity sweep, resolver job + sweep, webhook endpoint + job, sandbox spike kit (`docs/specs/0005-mpgs-hosted-session-provider/spike/`).
+Branch `feat/mpgs-hosted-session`, nothing pushed. Latest commits: `4a00814a` (spec amendment), `0b43ccf8` (gateway wiring), `7b46a3cf`, `8ac2d507`, `71ac8652` (pay page shell), plus earlier data layer, `MpgsClient`/classifier/resolver, admin accounts, parity sweep, resolver job + sweep, webhook, spike kit.
 
-This session (committed as `71ac8652` code and `8ac2d507` docs, not pushed; build plan steps 4 and 5 as a shell):
-- `app/Http/Controllers/MpgsPaymentController.php`: `session` (prepare), `pay`, `status`. One cache lock `mpgs-attempt:{payment_id}` covers prepare and pay.
-- `ClientPaymentController::showMpgs` now renders `ClientPayment/PayMpgs` (was a 503 placeholder). Props: payment, brand, `mpgsAccount {gateway_host, merchant_id, api_version}`, policies. No session id.
-- Routes `pay.mpgs.session|pay|status` in `routes/web.php`; limiters `mpgs-session` (20/h) and `mpgs-pay` (10/h) in `AppServiceProvider`. Routes stay behind CSRF (page sends `X-XSRF-TOKEN`), only the webhook is excluded.
-- `SecurityHeaders`: MPGS-only CSP widening (gateway host in script/frame/connect, `frame-src https:`) on route `pay.show` for an MPGS payment.
-- Frontend: `resources/js/pages/ClientPayment/PayMpgs.vue` (copy of PayClover), `MpgsPaymentForm.vue`, and the stub `resources/js/lib/mpgs/gateway.ts` (4 functions all throw `MpgsNotWiredError`).
-- Docs: handoff doc void note corrected; spec `## Follow-up` has a Build status block.
-- `tests/Feature/MpgsParityTest.php`: replaced the 503 placeholder test with a render test.
+Build plan status (`docs/specs/0005-mpgs-hosted-session-provider/index.md`): steps 1 to 8 built; step 0 (sandbox spike), 9 (Pest for new code) and 10 (`/sync` of `AGENTS.md`) not done.
+
+Built this session:
+- `MpgsPaymentController` (`session`, `pay`, `status`, `threeDsReturn`), routes `pay.mpgs.session|pay|status|return`, limiters `mpgs-session` 20/h and `mpgs-pay` 10/h, one lock per payment for prepare and pay. Pay routes stay behind CSRF (page sends `X-XSRF-TOKEN`).
+- `ClientPaymentController::showMpgs` renders `ClientPayment/PayMpgs`; `PayMpgs.vue`, `MpgsPaymentForm.vue`, `resources/js/lib/mpgs/gateway.ts` (written from the bank's docs, `SPIKE` comments mark guesses), `notice.ts`.
+- `SecurityHeaders`: MPGS-only CSP widening (account's host in script/frame/connect, `frame-src https:`); `pay.mpgs.return` is the only route with `X-Frame-Options: SAMEORIGIN`. View `mpgs-3ds-return.blade.php` + `public/mpgs-3ds-return.js` (external file because CSP forbids inline script).
+- `mpgs_accounts.gateway_host` (nullable, migration `..._000005`), `MpgsAccount::gatewayHost()`, admin form field, API version default 100, `MpgsClient` sends `authenticationLimit` 25 on create and `authentication.channel` + `redirectResponseUrl` on update.
+- Handoff doc void note corrected. Spec `## Follow-up` holds the doc answers and build status.
 
 ## Decisions made
 
-- Session is prepared on page load (hosted fields need a session first), re-prepared after every decline / failed 3DS / 422. Each prepare retires earlier `prepared` attempts.
-- All browser gateway calls go through `gateway.ts` only; PHP field names stay in `MpgsClient` / `MpgsChargeClassifier`. Spike corrections land in those three files.
-- Hard error and transport failure on prepare return 502 with a fixed message; gateway text never reaches the client.
-- Inactive or missing account on the pay page: 404 (`abort_unless`).
-- Earlier decisions in the spec still stand (sixth provider, full 3DS inline, name+email only, no currency column, one config host, PAY response primary, webhook signal only, refunds/voids out of scope).
+- Bank is Bank Alfalah; test host `test-bankalfalah.gateway.mastercard.com` differs from live, so host is per account with config fallback.
+- Hosted fields need a session first, so a session is prepared on every pay page load (attempt per page view; bounded by the 20/h limit and the sweep).
+- `PaymentSession.configure` and `ThreeDS.configure` run once per page load, so a decline or failed 3DS reloads the pay page; the message survives via `sessionStorage`.
+- Card fields are readonly inputs (`card-number`, `expiry-month`, `expiry-year`, `security-code`, `cardholder-name`); clickjacking mitigation is `x-frame-options`.
+- PAY response primary, webhook signal only, read only resolver; refunds/voids out of scope; name + email only for 3DS until the spike says otherwise.
+- User decisions: no live credentials for the spike (`spike.php pay` and 3DS move money; only `session` is safe on live), no new tests for now.
 
 ## Problems solved
 
-- `phpunit.xml` hardcodes `APP_BASE_PATH` for another machine (`C:\Users\salmanabdul.ghani\...`), so every test errors. Run with `APP_BASE_PATH='C:\Users\Salman\Herd\payhub' vendor/bin/pest ...`. Not fixed in the file.
-- Mastercard doc pages are JS rendered; WebFetch returns only a title. Use the sandbox or a browser.
-- Handoff void is wrong: docs show `PUT` + `apiOperation: VOID` + `targetTransactionId`.
+- `phpunit.xml` hardcodes `APP_BASE_PATH` for another machine; run tests with `APP_BASE_PATH='C:\Users\Salman\Herd\payhub' vendor/bin/pest ...`. File itself not fixed.
+- Mastercard docs: WebFetch returns only a title. The Chrome tools (`get_page_text`) render them; useful pages are under `/api/documentation/integrationGuidelines/hostedSession/` (`makingAPayment.html`) and `.../authentication/3DS/integrationModelJS.html`.
+- Wayfinder breaks on a route name segment starting with a digit (`3ds-return`), hence `pay.mpgs.return`. `resources/js/routes` is gitignored; regenerate with `php artisan wayfinder:generate`.
+- `@sentry/vue` was missing from `node_modules`: `npm install` fixed it. `vite build` rewrites tracked `public/build`; revert with `git checkout -- public/build && git clean -fdq public/build`.
+- Shell heredocs with quotes broke in the Bash tool; write a patch script file instead.
 
 ## Current state
 
-- Pint passes. Last run: `--filter="Mpgs|SecurityHeaders|ClientPayment|Clover"` gave 203 of 204 passing; the one failure was the old 503 placeholder test, since replaced and passing (MpgsParityTest 13/13). Not re-run across the full suite.
-- The pay page loads but shows "Payment system is unavailable" because `gateway.ts` is a stub. Nothing was run against a real gateway.
-- No tests yet for `MpgsPaymentController`, the CSP widening or the new limiters (user chose to skip tests for now).
-- `AGENTS.md` still says three providers and "webhooks only" (stale; update via `/sync` after ship).
+- Tests: last run `--filter="Mpgs|SecurityHeaders|ClientPayment|Clover"` 204 of 204 passing; `MpgsParityTest` 13/13 after the route rename. vue-tsc has no MPGS errors. Pint clean.
+- Nothing has run against a real gateway. The pay page cannot take a payment until the spike confirms `gateway.ts` and the field names.
+- No tests yet for `MpgsPaymentController`, CSP widening, limiters or the return route.
+- `AGENTS.md` still says three providers and "webhooks only" (stale; `/sync` after ship).
 
 ## Next session starts with
 
-1. Get TEST merchant credentials (merchant id, integration password, gateway host; Hosted Session + 3DS enabled; bank test cards). Do not use live credentials: `spike.php pay` and 3DS runs move money. Only `spike.php session` is safe on live. Credentials in `.env` only.
-2. Run the spike kit, write the 12 Open question answers into spec `## Follow-up`, amend via `/architect` where they change the design.
-3. Fill `gateway.ts` (Q1, Q4, Q10), correct `MpgsClient` / `MpgsChargeClassifier` field names (Q2, Q3, Q8, Q9, Q11, Q12) and the CSP hosts.
-4. Then step 9 (Pest for the controller, CSP, limiters, critical scenarios) and step 10 (`/sync`).
+1. Get TEST merchant credentials from the bank (merchant id, integration password, host; Hosted Session + 3DS enabled; bank test cards). Credentials in `.env` only, never in files or chat.
+2. Run the spike kit (`docs/specs/0005-mpgs-hosted-session-provider/spike/`) and drive the pay page in the sandbox. Resolve every `SPIKE` comment in `gateway.ts`; correct `MpgsClient` / `MpgsChargeClassifier` field names.
+3. Then step 9 (Pest for the controller, CSP, limiters, return route) and step 10 (`/sync`).
 
 ## Open questions
 
-- The 12 Open questions in spec 0005 `## Feature design`.
-- Whether the always-prepare-on-load flow is acceptable (creates an attempt per page view); depends on whether the spike allows a lazier session.
-- Whether to push `feat/mpgs-hosted-session` and open a PR. Whether to fix the hardcoded `APP_BASE_PATH` in `phpunit.xml`.
-- User decisions this session: no live credentials for the spike, and no new tests for now.
-
-## Update: docs amendment pass (UNCOMMITTED, later in the same session)
-
-Read the bank's test gateway docs in a browser (host `test-bankalfalah.gateway.mastercard.com`; the fetch tool only returns a title, the Chrome tools render them). Spec 0005 amended in place; answers to Open questions 1, 2, 3, 4 (partial) and 7 are in its `## Follow-up`. Built from it, all unproven against a sandbox:
-- `mpgs_accounts.gateway_host` (nullable, migration `..._000005`), `MpgsAccount::gatewayHost()`, admin form field and validation (https host, no path). API version default 100.
-- `MpgsClient`: `createSession` sends `authenticationLimit` 25; `updateSession` also sends `authentication.channel` PAYER_BROWSER and `redirectResponseUrl`; takes a `gatewayHost`.
-- 3DS return route `pay.mpgs.return` (`MpgsPaymentController::threeDsReturn`, view `mpgs-3ds-return`, `public/mpgs-3ds-return.js`), CSRF excluded, the only route sending `X-Frame-Options: SAMEORIGIN`. CSP host is now per account.
-- `resources/js/lib/mpgs/gateway.ts` implemented from the documented `session.js` and `ThreeDS` calls (SPIKE comments mark the unknowns); `notice.ts` carries the decline message across a page reload. Libraries configure once per page load, so a decline reloads the pay page. Card fields are readonly inputs with ids `card-number`, `expiry-month`, `expiry-year`, `security-code`, `cardholder-name`.
-- Last test run: `--filter="Mpgs|SecurityHeaders|ClientPayment|Clover"` 204 of 204 passing (run before the route rename to `pay.mpgs.return`; MpgsParityTest 13/13 after it). vue-tsc has no MPGS errors.
-
-Still unknown (needs the sandbox): billing address needed or not, what the return page must do for the library callback, whether the library renders the challenge itself, the `error` block shape, decline code list, Retrieve Order `transaction[]` shape, field lengths. `resources/js/routes` is gitignored; a route name starting with a digit breaks Wayfinder, hence `pay.mpgs.return`.
+- Billing address needed for 3DS, or are name and email enough?
+- What the return page must do for the 3DS library callback; does the library render the challenge itself or must `htmlRedirectCode` be inserted; is `fullScreenRedirect` needed?
+- `error` block shape, decline code list, Retrieve Order `transaction[]` shape, field length limits, real session lifetime, webhook secret behavior (Q5, Q6, Q8 to Q12 in the spec).
+- Whether to push the branch and open a PR; whether to fix `phpunit.xml` `APP_BASE_PATH`.
