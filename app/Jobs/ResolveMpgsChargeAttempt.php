@@ -3,9 +3,8 @@
 namespace App\Jobs;
 
 use App\Models\MpgsChargeAttempt;
-use App\Services\Mpgs\MpgsChargeClassifier;
 use App\Services\Mpgs\MpgsChargeResolver;
-use App\Services\Mpgs\MpgsClient;
+use App\Services\Mpgs\MpgsOrderLookup;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -51,33 +50,23 @@ class ResolveMpgsChargeAttempt implements ShouldQueue
             return;
         }
 
-        $mpgs = app()->make(MpgsClient::class, [
-            'merchantId' => $account->merchant_id,
-            'integrationPassword' => $account->integration_password,
-            'apiVersion' => $account->api_version,
-        ]);
+        // No such order yet (404) or no matching PAY transaction: the outcome is
+        // not known, so check again later.
+        $found = app(MpgsOrderLookup::class)->check($attempt);
 
-        $result = $mpgs->retrieveOrder($attempt->order_id);
-
-        // No such order yet (404) or an unusable body: the PAY outcome is not
-        // known, so check again later.
-        $entry = $result['body'] === [] ? null : MpgsChargeClassifier::findTransaction($result['body'], $attempt->transaction_id);
-
-        if ($entry === null) {
+        if ($found === null) {
             $this->bumpAndRetry($attempt, 'MPGS attempt '.$attempt->id.' could not be resolved yet (no matching PAY transaction found).');
 
             return;
         }
 
-        $classification = MpgsChargeClassifier::fromOrder($result['body'], $attempt->transaction_id, $payment->amount, $payment->currency);
-
-        if ($classification === 'unknown') {
+        if ($found['classification'] === 'unknown') {
             $this->bumpAndRetry($attempt, 'MPGS attempt '.$attempt->id.' is still unresolved.');
 
             return;
         }
 
-        app(MpgsChargeResolver::class)->resolve($attempt, $classification, $entry);
+        app(MpgsChargeResolver::class)->resolve($attempt, $found['classification'], $found['entry']);
     }
 
     /**

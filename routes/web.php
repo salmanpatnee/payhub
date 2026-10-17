@@ -13,6 +13,7 @@ use App\Http\Controllers\BankAccountActivityLogController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MpgsWebhookController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RevolutWebhookController;
 use App\Http\Controllers\SquareWebhookController;
@@ -303,6 +304,12 @@ Route::post('/webhook/revolut/{revolutAccount}', [RevolutWebhookController::clas
 // {squareAccount} resolves by integer id (implicit model binding)
 Route::post('/webhook/square/{squareAccount}', [SquareWebhookController::class, 'handle'])
     ->name('webhook.square')
+    ->middleware('throttle:120,1');
+
+// {mpgsAccount} resolves by integer id (implicit model binding). Protected by the per account
+// X-Notification-Secret header, not a signature (spec 0005, AC-9).
+Route::post('/webhook/mpgs/{mpgsAccount}', [MpgsWebhookController::class, 'handle'])
+    ->name('webhook.mpgs')
     ->middleware('throttle:120,1');
 
 // {vivaAccount} resolves by integer id (implicit model binding).

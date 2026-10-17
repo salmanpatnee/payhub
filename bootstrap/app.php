@@ -30,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'webhook/revolut/*',
             'webhook/square/*',
             'webhook/viva/*',
+            'webhook/mpgs/*',
             'pay/*/square',
             'pay/*/clover/charge',
         ]);

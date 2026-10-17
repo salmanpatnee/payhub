@@ -76,9 +76,8 @@ class MpgsAccountController extends Controller
                 'has_webhook_secret' => ! empty($mpgsAccount->webhook_secret),
                 // integration_password / webhook_secret: NEVER included — not even masked
             ],
-            // Shown for copying into the gateway's notification settings. Plain url() until
-            // the webhook route lands (build plan step 6), then switch to route('webhook.mpgs').
-            'webhookUrl' => url("/webhook/mpgs/{$mpgsAccount->id}"),
+            // Shown for reference: PayHub sends it on every PAY as order.notificationUrl.
+            'webhookUrl' => route('webhook.mpgs', $mpgsAccount),
         ]);
     }
 
