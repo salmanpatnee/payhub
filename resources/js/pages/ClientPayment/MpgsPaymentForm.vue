@@ -12,6 +12,7 @@ import {
     type MpgsFieldTargets,
     type MpgsSession,
 } from '@/lib/mpgs/gateway'
+import { reloadWithNotice, takeNotice } from '@/lib/mpgs/notice'
 
 const props = defineProps<{
     payment: {
@@ -47,15 +48,16 @@ const fieldInvalid = ref<Record<keyof MpgsFieldTargets, boolean>>({
 })
 
 const targets: MpgsFieldTargets = {
-    cardNumber: '#mpgs-card-number',
-    expiryMonth: '#mpgs-expiry-month',
-    expiryYear: '#mpgs-expiry-year',
-    securityCode: '#mpgs-security-code',
-    cardholderName: '#mpgs-cardholder-name',
+    cardNumber: '#card-number',
+    expiryMonth: '#expiry-month',
+    expiryYear: '#expiry-year',
+    securityCode: '#security-code',
+    cardholderName: '#cardholder-name',
 }
 
-// The latest server issued session. Replaced on every prepare(), so a declined
-// card retries on a fresh session and a fresh order id.
+// The server issued session for this page load. The gateway libraries configure
+// once per page load, so a retry after a decline reloads the page (new session,
+// new order id) rather than re-mounting.
 let session: MpgsSession | null = null
 
 function formatAmount(cents: number, currency: string): string {
@@ -84,9 +86,9 @@ function xsrfHeaders(): Record<string, string> {
 }
 
 /**
- * Ask the server for a new session (it writes amount and currency from the
- * Payment record onto it) and attach the hosted fields to it. Returns false and
- * sets errorMessage when the processor could not be reached.
+ * Ask the server for a session (it writes amount, currency and the 3DS fields
+ * from the Payment record onto it) and attach the hosted fields to it. Returns
+ * false and sets errorMessage when the processor could not be reached.
  */
 async function prepare(): Promise<boolean> {
     const response = await fetch(`/pay/${props.payment.uuid}/mpgs/session`, {
@@ -113,6 +115,8 @@ async function prepare(): Promise<boolean> {
 }
 
 onMounted(async () => {
+    const notice = takeNotice(props.payment.uuid)
+
     try {
         await loadLibraries({
             gatewayHost: props.mpgsAccount.gateway_host,
@@ -121,21 +125,15 @@ onMounted(async () => {
         })
 
         ready.value = await prepare()
+
+        if (ready.value && notice) {
+            errorMessage.value = notice
+        }
     } catch (e) {
         console.error('[MPGS] init failed:', e)
         errorMessage.value = 'Payment system is unavailable. Please refresh and try again.'
     }
 })
-
-/** Replace the used session after a decline or a failed 3DS so the client can retry. */
-async function reprepare(): Promise<void> {
-    try {
-        await prepare()
-    } catch (e) {
-        console.error('[MPGS] re-prepare failed:', e)
-        errorMessage.value = 'Payment system is unavailable. Please refresh and try again.'
-    }
-}
 
 async function submit(): Promise<void> {
     if (!ready.value || !session) {
@@ -158,12 +156,10 @@ async function submit(): Promise<void> {
     try {
         await captureCard()
 
-        const threeDs = await authenticatePayer(session, '#mpgs-3ds-challenge')
+        const threeDs = await authenticatePayer(session)
 
         if (!threeDs.authenticated) {
-            errorMessage.value = 'Your bank could not verify this payment. Please try a different card.'
-            await reprepare()
-            processing.value = false
+            reloadWithNotice(props.payment.uuid, 'Your bank could not verify this payment. Please try a different card.')
 
             return
         }
@@ -181,9 +177,7 @@ async function submit(): Promise<void> {
         const data = await response.json().catch(() => ({}))
 
         if (response.status === 422) {
-            errorMessage.value = data.error ?? 'This payment session is no longer valid. Please try again.'
-            await reprepare()
-            processing.value = false
+            reloadWithNotice(props.payment.uuid, data.error ?? 'This payment session is no longer valid. Please try again.')
 
             return
         }
@@ -202,9 +196,7 @@ async function submit(): Promise<void> {
         }
 
         if (data.outcome === 'declined') {
-            errorMessage.value = data.message ?? 'Your card was declined. Please try a different card.'
-            await reprepare()
-            processing.value = false
+            reloadWithNotice(props.payment.uuid, data.message ?? 'Your card was declined. Please try a different card.')
 
             return
         }
@@ -238,38 +230,39 @@ async function submit(): Promise<void> {
             <AlertDescription>{{ errorMessage }}</AlertDescription>
         </Alert>
 
-        <!-- The mpgs-* containers must always exist in the DOM so the gateway can find them. -->
+        <!-- The card inputs must always exist in the DOM so the gateway can find them. They are
+             readonly with no name attribute: the gateway replaces them with its own frames. -->
         <form v-show="ready" @submit.prevent="submit" class="space-y-4">
             <div
                 class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
                 :class="fieldInvalid.cardholderName ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
             >
-                <div id="mpgs-cardholder-name" class="mpgs-field"></div>
+                <input id="cardholder-name" type="text" class="mpgs-field" title="cardholder name" aria-label="enter name on card" tabindex="1" readonly>
             </div>
             <div
                 class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
                 :class="fieldInvalid.cardNumber ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
             >
-                <div id="mpgs-card-number" class="mpgs-field"></div>
+                <input id="card-number" type="text" class="mpgs-field" title="card number" aria-label="enter your card number" tabindex="2" readonly>
             </div>
             <div class="grid grid-cols-3 gap-3">
                 <div
                     class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
                     :class="fieldInvalid.expiryMonth ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
                 >
-                    <div id="mpgs-expiry-month" class="mpgs-field"></div>
+                    <input id="expiry-month" type="text" class="mpgs-field" title="expiry month" aria-label="two digit expiry month" tabindex="3" readonly>
                 </div>
                 <div
                     class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
                     :class="fieldInvalid.expiryYear ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
                 >
-                    <div id="mpgs-expiry-year" class="mpgs-field"></div>
+                    <input id="expiry-year" type="text" class="mpgs-field" title="expiry year" aria-label="two digit expiry year" tabindex="4" readonly>
                 </div>
                 <div
                     class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
                     :class="fieldInvalid.securityCode ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
                 >
-                    <div id="mpgs-security-code" class="mpgs-field"></div>
+                    <input id="security-code" type="text" class="mpgs-field" title="security code" aria-label="three digit security code" tabindex="5" readonly>
                 </div>
             </div>
 
@@ -309,6 +302,10 @@ async function submit(): Promise<void> {
 .mpgs-field {
     flex: 1;
     min-height: 18px;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    outline: none;
 }
 
 /* Focus ring on the wrapper when its hosted field frame has focus. */

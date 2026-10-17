@@ -302,6 +302,10 @@ Route::post('/pay/{payment}/mpgs/pay', [MpgsPaymentController::class, 'pay'])
     ->middleware('throttle:mpgs-pay');
 Route::get('/pay/{payment}/mpgs/status', [MpgsPaymentController::class, 'status'])
     ->name('pay.mpgs.status');
+// The bank's ACS posts the payer back here after a 3DS challenge (CSRF excluded, it is a
+// cross site POST). Renders inside the challenge frame on the pay page.
+Route::match(['get', 'post'], '/pay/{payment}/mpgs/3ds-return', [MpgsPaymentController::class, 'threeDsReturn'])
+    ->name('pay.mpgs.return');
 
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)

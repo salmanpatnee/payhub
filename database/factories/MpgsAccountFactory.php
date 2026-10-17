@@ -13,7 +13,7 @@ class MpgsAccountFactory extends Factory
             'merchant_id' => $this->faker->regexify('[A-Z0-9]{12}'),
             'integration_password' => 'placeholder_integration_password_for_dev_only',
             'webhook_secret' => null,
-            'api_version' => 66,
+            'api_version' => 100,
             'is_active' => true,
         ];
     }

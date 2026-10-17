@@ -26,6 +26,7 @@ class MpgsAccountController extends Controller
                     'prefix' => $account->prefix,
                     'merchant_id' => $account->merchant_id,
                     'api_version' => $account->api_version,
+                    'gateway_host' => $account->gateway_host,
                     'has_webhook_secret' => ! empty($account->webhook_secret),
                     'is_active' => $account->is_active,
                 ]),
@@ -36,6 +37,7 @@ class MpgsAccountController extends Controller
     {
         return Inertia::render('admin/mpgs-accounts/Create', [
             'defaultApiVersion' => (int) config('services.mpgs.api_version'),
+            'defaultGatewayHost' => (string) config('services.mpgs.host'),
         ]);
     }
 
@@ -45,6 +47,7 @@ class MpgsAccountController extends Controller
             $request->validated('merchant_id'),
             $request->validated('integration_password'),
             (int) $request->validated('api_version'),
+            $request->validated('gateway_host'),
         );
 
         if ($error) {
@@ -71,6 +74,7 @@ class MpgsAccountController extends Controller
                 'prefix' => $mpgsAccount->prefix,
                 'merchant_id' => $mpgsAccount->merchant_id,
                 'api_version' => $mpgsAccount->api_version,
+                'gateway_host' => $mpgsAccount->gateway_host,
                 'is_active' => $mpgsAccount->is_active,
                 'has_integration_password' => ! empty($mpgsAccount->integration_password),
                 'has_webhook_secret' => ! empty($mpgsAccount->webhook_secret),
@@ -91,6 +95,7 @@ class MpgsAccountController extends Controller
             $request->validated('merchant_id'),
             $integrationPassword,
             (int) $request->validated('api_version'),
+            $request->validated('gateway_host'),
         );
 
         if ($error) {
@@ -147,12 +152,14 @@ class MpgsAccountController extends Controller
             'merchant_id' => ['required', 'string'],
             'integration_password' => ['required', 'string'],
             'api_version' => ['required', 'integer', 'min:1', 'max:999'],
+            'gateway_host' => ['nullable', 'string', 'max:255', 'regex:/^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/'],
         ]);
 
         $error = $this->validateMpgsCredentials(
             $request->input('merchant_id'),
             $request->input('integration_password'),
             (int) $request->input('api_version'),
+            $request->input('gateway_host'),
         );
 
         if ($error) {
@@ -168,6 +175,7 @@ class MpgsAccountController extends Controller
             $mpgsAccount->merchant_id,
             $mpgsAccount->integration_password,
             $mpgsAccount->api_version,
+            $mpgsAccount->gateway_host,
         );
 
         if ($error) {
@@ -184,6 +192,7 @@ class MpgsAccountController extends Controller
         string $merchantId,
         string $integrationPassword,
         int $apiVersion,
+        ?string $gatewayHost = null,
     ): ?string {
         if (app()->environment('testing')) {
             return null;
@@ -194,6 +203,7 @@ class MpgsAccountController extends Controller
                 'merchantId' => $merchantId,
                 'integrationPassword' => $integrationPassword,
                 'apiVersion' => $apiVersion,
+                'gatewayHost' => $gatewayHost ?: null,
             ]);
             $mpgs->verifyCredentials();
 

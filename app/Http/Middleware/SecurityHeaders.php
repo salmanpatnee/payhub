@@ -15,7 +15,9 @@ class SecurityHeaders
         $response = $next($request);
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('X-Frame-Options', 'DENY');
+        // The MPGS 3DS return page loads inside the bank challenge frame on PayHub's own
+        // pay page, so it is the one route allowed to be framed, and only by PayHub itself.
+        $response->headers->set('X-Frame-Options', $request->routeIs('pay.mpgs.return') ? 'SAMEORIGIN' : 'DENY');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         $viteHost = $request->getHost();
@@ -56,7 +58,7 @@ class SecurityHeaders
         $isMpgsPayPage = $route?->getName() === 'pay.show'
             && $routePayment instanceof Payment
             && $routePayment->provider === PaymentProvider::Mpgs;
-        $mpgsHost = $isMpgsPayPage ? ' '.rtrim((string) config('services.mpgs.host'), '/') : '';
+        $mpgsHost = $isMpgsPayPage ? ' '.$routePayment->loadMissing('mpgsAccount')->mpgsAccount?->gatewayHost() : '';
         $mpgsFrames = $isMpgsPayPage ? ' https:' : '';
 
         $response->headers->set('Content-Security-Policy',

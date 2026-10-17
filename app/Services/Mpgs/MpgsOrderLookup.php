@@ -32,6 +32,7 @@ class MpgsOrderLookup
             'merchantId' => $account->merchant_id,
             'integrationPassword' => $account->integration_password,
             'apiVersion' => $account->api_version,
+            'gatewayHost' => $account->gatewayHost(),
         ]);
 
         $result = $mpgs->retrieveOrder($attempt->order_id);

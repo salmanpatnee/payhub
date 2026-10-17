@@ -21,6 +21,7 @@ type MpgsAccountProp = {
     prefix: string | null;
     merchant_id: string;
     api_version: number;
+    gateway_host: string | null;
     is_active: boolean;
     has_integration_password: boolean;      // boolean — never the raw password
     has_webhook_secret: boolean;            // boolean — never the raw secret
@@ -43,6 +44,7 @@ const form = useForm({
     prefix:          props.mpgsAccount.prefix ?? '',
     merchant_id:     props.mpgsAccount.merchant_id,
     api_version:          props.mpgsAccount.api_version,
+    gateway_host:         props.mpgsAccount.gateway_host ?? '',
     integration_password: '', // blank = preserve existing
     webhook_secret:       '', // blank = preserve existing
 });
@@ -62,6 +64,7 @@ function testConnection() {
             merchant_id: form.merchant_id,
             integration_password: form.integration_password,
             api_version: form.api_version,
+            gateway_host: form.gateway_host,
         }
         : {};
     router.post(url, data, {
@@ -171,6 +174,21 @@ function submit() {
                             required
                         />
                         <InputError :message="form.errors.api_version" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="gateway_host">Gateway host (optional)</Label>
+                        <Input
+                            id="gateway_host"
+                            v-model="form.gateway_host"
+                            type="url"
+                            :placeholder="'Default'"
+                            autocomplete="off"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            The bank's test and live gateways are different hosts. Leave empty to use the default.
+                        </p>
+                        <InputError :message="form.errors.gateway_host" />
                     </div>
 
                     <div class="grid gap-2">

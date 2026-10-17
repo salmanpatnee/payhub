@@ -12,6 +12,7 @@ use App\Services\Mpgs\MpgsChargeResolver;
 use App\Services\Mpgs\MpgsClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -68,7 +69,7 @@ class MpgsPaymentController extends Controller
                     return $this->prepareFailed($payment, 'create', $created);
                 }
 
-                $updated = $client->updateSession($sessionId, $orderId, $payment->amount, $payment->currency);
+                $updated = $client->updateSession($sessionId, $orderId, $payment->amount, $payment->currency, route('pay.mpgs.return', $payment));
 
                 if (! $this->isSuccessful($updated['status'])) {
                     return $this->prepareFailed($payment, 'update', $updated);
@@ -201,6 +202,29 @@ class MpgsPaymentController extends Controller
         return response()->json(['status' => $payment->status]);
     }
 
+    /**
+     * Where the bank's ACS sends the payer back after a 3DS challenge
+     * (authentication.redirectResponseUrl). It renders inside the challenge
+     * frame on the pay page, so SecurityHeaders sends SAMEORIGIN for this route.
+     * It takes no payment data and changes no status: it only tells the pay page
+     * the challenge ended, and the server decides the outcome on PAY.
+     *
+     * PROVISIONAL (AC-13): the POST field names are the documented callback
+     * names; the sandbox spike confirms what the gateway actually sends.
+     */
+    public function threeDsReturn(Request $request, Payment $payment): Response
+    {
+        abort_unless($payment->provider === PaymentProvider::Mpgs, 404);
+
+        return response()->view('mpgs-3ds-return', [
+            'uuid' => $payment->uuid,
+            'orderId' => Str::limit((string) $request->input('orderId', ''), 100, ''),
+            'transactionId' => Str::limit((string) $request->input('transactionId', ''), 100, ''),
+            'recommendation' => Str::limit((string) $request->input('gatewayRecommendation', ''), 100, ''),
+            'result' => Str::limit((string) $request->input('result', ''), 100, ''),
+        ]);
+    }
+
     private function payableAccount(Payment $payment): ?MpgsAccount
     {
         $payment->loadMissing('mpgsAccount');
@@ -221,6 +245,7 @@ class MpgsPaymentController extends Controller
             'merchantId' => $account->merchant_id,
             'integrationPassword' => $account->integration_password,
             'apiVersion' => $account->api_version,
+            'gatewayHost' => $account->gatewayHost(),
         ]);
     }
 

@@ -12,10 +12,10 @@ use Illuminate\Support\Facades\Http;
  *
  * Built per MpgsAccount with that account's decrypted credentials, never a
  * global client. Resolve via
- * app()->make(MpgsClient::class, ['merchantId' => ..., 'integrationPassword' => ..., 'apiVersion' => ...])
+ * app()->make(MpgsClient::class, ['merchantId' => ..., 'integrationPassword' => ..., 'apiVersion' => ..., 'gatewayHost' => ...])
  * so tests can fake the HTTP layer (Http::fake).
  *
- * The gateway host is one value from config (services.mpgs.host). Auth is HTTP
+ * The gateway host is the account's own (gatewayHost), falling back to config (services.mpgs.host). Auth is HTTP
  * Basic as `merchant.{MID}`.
  *
  * PROVISIONAL (spec 0005, AC-13): the request and response field names here
@@ -34,6 +34,7 @@ class MpgsClient
         private readonly string $merchantId,
         private readonly string $integrationPassword,
         private readonly int $apiVersion,
+        private readonly ?string $gatewayHost = null,
     ) {}
 
     /**
@@ -44,7 +45,12 @@ class MpgsClient
      */
     public function createSession(): array
     {
-        return $this->result($this->request()->post('/session'));
+        // authenticationLimit caps how many transaction requests the payer's
+        // browser may submit on this session. The gateway default is 5 and 3DS
+        // retries count against it; the documentation asks for 25 (its maximum).
+        return $this->result($this->request()->post('/session', [
+            'session' => ['authenticationLimit' => 25],
+        ]));
     }
 
     /**
@@ -54,13 +60,19 @@ class MpgsClient
      *
      * @return array{status: int, body: array<string, mixed>}
      */
-    public function updateSession(string $sessionId, string $orderId, int $amount, string $currency): array
+    public function updateSession(string $sessionId, string $orderId, int $amount, string $currency, string $redirectResponseUrl): array
     {
         return $this->result($this->request()->put("/session/{$sessionId}", [
             'order' => [
                 'id' => $orderId,
                 'amount' => MpgsAmount::toGateway($amount),
                 'currency' => strtoupper($currency),
+            ],
+            // 3DS: the payer is on a browser, and the bank's ACS sends them back
+            // to this PayHub URL after a challenge.
+            'authentication' => [
+                'channel' => 'PAYER_BROWSER',
+                'redirectResponseUrl' => $redirectResponseUrl,
             ],
         ]));
     }
@@ -136,7 +148,7 @@ class MpgsClient
 
     private function request(): PendingRequest
     {
-        $host = rtrim((string) config('services.mpgs.host'), '/');
+        $host = rtrim($this->gatewayHost ?: (string) config('services.mpgs.host'), '/');
 
         return Http::baseUrl("{$host}/api/rest/version/{$this->apiVersion}/merchant/{$this->merchantId}")
             ->withBasicAuth("merchant.{$this->merchantId}", $this->integrationPassword)

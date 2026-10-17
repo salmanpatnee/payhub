@@ -11,7 +11,7 @@ class MpgsAccount extends Model
     use HasFactory;
 
     protected $fillable = [
-        'account_name', 'prefix', 'merchant_id', 'api_version', 'is_active',
+        'account_name', 'prefix', 'merchant_id', 'api_version', 'gateway_host', 'is_active',
         // integration_password and webhook_secret are NOT mass-assignable — assign explicitly only
     ];
 
@@ -23,6 +23,16 @@ class MpgsAccount extends Model
             'api_version' => 'integer',
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * The gateway host this account talks to: its own gateway_host when set
+     * (the bank's test and live hosts differ), else the configured default.
+     * No trailing slash.
+     */
+    public function gatewayHost(): string
+    {
+        return rtrim($this->gateway_host ?: (string) config('services.mpgs.host'), '/');
     }
 
     public function payments(): HasMany

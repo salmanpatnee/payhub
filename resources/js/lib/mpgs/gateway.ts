@@ -1,29 +1,19 @@
 /**
- * The ONLY file that talks to the Mastercard Gateway browser libraries
- * (session.js hosted fields and the 3DS JavaScript library).
+ * The ONLY file that talks to the Mastercard Gateway browser libraries:
+ * session.js (hosted card fields) and three-ds.min.js (the 3DS JavaScript API).
  *
- * STUB (spec 0005, AC-13). Every function below is the seam the sandbox spike
- * fills in. MpgsPaymentForm.vue and PayMpgs.vue depend on these signatures
- * only, so a correction from the spike lands here and in nowhere else. Until
- * then each function rejects with MpgsNotWiredError and the form shows its
- * "payment system unavailable" state.
- *
- * Open questions this file answers once the spike runs (spec `## Feature design`):
- *   1  session.js URL pattern, API version range, 3DS library URL and version
- *   4  3DS sequence (initiate, authenticate), callbacks, inline challenge
- *      rendering, whether name + email alone are enough for the bank
- *   10 exact script/frame hosts for the CSP (SecurityHeaders.php)
+ * Written from the bank's test gateway documentation (Hosted Session "Making a
+ * Payment" and "3DS with Hosted Session"), NOT yet proven against a sandbox
+ * (spec 0005, AC-13). Every spot the sandbox spike must confirm is marked
+ * SPIKE. Keep all gateway specifics in this file so a correction lands here.
  *
  * Card data never passes through this app: the hosted fields keep it inside
  * gateway frames, and the form only ever handles the session id.
+ *
+ * Both libraries must be configured ONCE per page load. A retry after a decline
+ * therefore reloads the page (see notice.ts) instead of re-mounting on a new
+ * session.
  */
-
-export class MpgsNotWiredError extends Error {
-    constructor(step: string) {
-        super(`MPGS gateway step "${step}" is not wired yet (waiting on the sandbox spike).`)
-        this.name = 'MpgsNotWiredError'
-    }
-}
 
 /** What the server returned from POST /pay/{uuid}/mpgs/session. */
 export type MpgsSession = {
@@ -33,7 +23,7 @@ export type MpgsSession = {
     attempt_id: number
 }
 
-/** The DOM nodes the hosted fields mount into. */
+/** CSS selectors of the readonly inputs the hosted fields replace. */
 export type MpgsFieldTargets = {
     cardNumber: string
     expiryMonth: string
@@ -54,36 +44,203 @@ export type MpgsGatewayConfig = {
 }
 
 export type MpgsThreeDsResult = {
-    /** true when the bank approved the authentication (frictionless or challenge). */
+    /** true when the gateway recommends proceeding to PAY (frictionless or challenge passed). */
     authenticated: boolean
 }
 
-/** Load session.js and the 3DS library from the configured gateway host. */
-export async function loadLibraries(_config: MpgsGatewayConfig): Promise<void> {
-    throw new MpgsNotWiredError('loadLibraries')
-}
+/** DOM id (no #) of the container the 3DS library injects its frame into. */
+export const THREE_DS_CONTAINER_ID = 'mpgs-3ds-challenge'
 
-/** Attach the hosted fields to a server issued session. Re-callable for a retry session. */
-export async function mountFields(
-    _session: MpgsSession,
-    _targets: MpgsFieldTargets,
-    _callbacks: MpgsFieldCallbacks,
-): Promise<void> {
-    throw new MpgsNotWiredError('mountFields')
-}
+const SCRIPT_TIMEOUT_MS = 15_000
+const THREE_DS_TIMEOUT_MS = 5 * 60 * 1000
 
-/** Push the typed card details from the hosted fields into the session. */
-export async function captureCard(): Promise<void> {
-    throw new MpgsNotWiredError('captureCard')
+let config: MpgsGatewayConfig | null = null
+let pendingSessionUpdate: { resolve: () => void, reject: (e: Error) => void } | null = null
+let threeDsAbort: ((e: Error) => void) | null = null
+
+function loadScript(src: string, attrs: Record<string, string> = {}): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = src
+        Object.entries(attrs).forEach(([key, value]) => script.setAttribute(key, value))
+
+        const timer = window.setTimeout(() => reject(new Error(`Timed out loading ${src}`)), SCRIPT_TIMEOUT_MS)
+        script.onload = () => { window.clearTimeout(timer); resolve() }
+        script.onerror = () => { window.clearTimeout(timer); reject(new Error(`Could not load ${src}`)) }
+        document.head.appendChild(script)
+    })
 }
 
 /**
- * Run 3DS (initiate authentication, then authenticate payer) with the ids the
- * server issued, rendering any bank challenge inside `challengeContainer`.
+ * Load session.js and the 3DS library from the account's gateway host.
+ *
+ * The session.js version in the URL must equal the API version used to create
+ * the session (the server uses the account's api_version for both).
+ *
+ * SPIKE (Q1): the 3DS script path `/static/threeDS/1.3.0/three-ds.min.js` is
+ * inferred from a relative path in the documentation sample.
  */
-export async function authenticatePayer(
-    _session: MpgsSession,
-    _challengeContainer: string,
-): Promise<MpgsThreeDsResult> {
-    throw new MpgsNotWiredError('authenticatePayer')
+export async function loadLibraries(gatewayConfig: MpgsGatewayConfig): Promise<void> {
+    config = gatewayConfig
+    const host = gatewayConfig.gatewayHost.replace(/\/+$/, '')
+    const w = window as any
+
+    // The 3DS script reads its error and cancel handlers from these attributes.
+    w.mpgsThreeDsError = (e: any) => { threeDsAbort?.(new Error(e?.msg ?? 'The bank verification failed.')) }
+    w.mpgsThreeDsCancel = () => { threeDsAbort?.(new Error('The bank verification was cancelled.')) }
+
+    await loadScript(`${host}/form/version/${gatewayConfig.apiVersion}/merchant/${encodeURIComponent(gatewayConfig.merchantId)}/session.js`)
+    await loadScript(`${host}/static/threeDS/1.3.0/three-ds.min.js`, {
+        'data-error': 'mpgsThreeDsError',
+        'data-cancel': 'mpgsThreeDsCancel',
+    })
+
+    if (!w.PaymentSession || !w.ThreeDS) {
+        throw new Error('The payment libraries did not load.')
+    }
+}
+
+function fieldKeyForSelector(targets: MpgsFieldTargets, selector: string): keyof MpgsFieldTargets | null {
+    const entry = (Object.entries(targets) as [keyof MpgsFieldTargets, string][]).find(([, value]) => value === selector)
+
+    return entry ? entry[0] : null
+}
+
+/**
+ * Attach the hosted fields to the server issued session and configure the 3DS
+ * library on it. Call exactly once per page load.
+ *
+ * `frameEmbeddingMitigation` is x-frame-options: PayHub already sends
+ * `X-Frame-Options: DENY` on every page except the 3DS return page.
+ */
+export async function mountFields(
+    session: MpgsSession,
+    targets: MpgsFieldTargets,
+    callbacks: MpgsFieldCallbacks,
+): Promise<void> {
+    const w = window as any
+
+    if (!config) {
+        throw new Error('Gateway libraries are not loaded.')
+    }
+
+    await new Promise<void>((resolve, reject) => {
+        w.PaymentSession.configure({
+            session: session.session_id,
+            fields: {
+                card: {
+                    number: targets.cardNumber,
+                    securityCode: targets.securityCode,
+                    expiryMonth: targets.expiryMonth,
+                    expiryYear: targets.expiryYear,
+                    nameOnCard: targets.cardholderName,
+                },
+            },
+            frameEmbeddingMitigation: ['x-frame-options'],
+            callbacks: {
+                initialized: (response: any) => {
+                    if (response?.status === 'ok') {
+                        resolve()
+                    } else {
+                        reject(new Error(`Hosted fields failed to initialize: ${response?.status ?? 'unknown'}`))
+                    }
+                },
+                formSessionUpdate: (response: any) => {
+                    const pending = pendingSessionUpdate
+                    pendingSessionUpdate = null
+
+                    if (!pending) {
+                        return
+                    }
+
+                    if (response?.status === 'ok') {
+                        pending.resolve()
+
+                        return
+                    }
+
+                    pending.reject(new Error(
+                        response?.status === 'fields_in_error'
+                            ? 'Please check your card details and try again.'
+                            : 'Your card details could not be read. Please try again.',
+                    ))
+                },
+            },
+            interaction: {
+                displayControl: { formatCard: 'EMBOSSED', invalidFieldCharacters: 'REJECT' },
+            },
+        })
+    })
+
+    w.PaymentSession.onValidityChange(Object.values(targets).map((selector) => selector), (selector: string, result: any) => {
+        const field = fieldKeyForSelector(targets, selector)
+
+        if (field) {
+            // Incomplete is not an error while the payer is still typing.
+            callbacks.onFieldInvalid(field, !result?.isValid && !result?.isIncomplete)
+        }
+    })
+
+    w.ThreeDS.configure({
+        merchantId: config.merchantId,
+        sessionId: session.session_id,
+        containerId: THREE_DS_CONTAINER_ID,
+        callback: () => undefined,
+        configuration: { wsVersion: config.apiVersion },
+    })
+}
+
+/** Push the typed card details from the hosted fields into the session. */
+export function captureCard(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        pendingSessionUpdate = { resolve, reject }
+        ;(window as any).PaymentSession.updateSessionFromForm('card')
+    })
+}
+
+/**
+ * Run 3DS: initiate authentication, then authenticate the payer, using the ids
+ * the server issued. Any bank challenge renders inside THREE_DS_CONTAINER_ID.
+ *
+ * Authenticated means the gateway recommended PROCEED. The browser result is
+ * only a hint: PAY on the server is what decides the payment.
+ *
+ * SPIKE (Q4): (a) whether name and email are enough or the bank wants a billing
+ * address (pass it in `optionalParams.billing`); (b) whether the library renders
+ * the challenge itself or `data.htmlRedirectCode` must be inserted into the
+ * container; (c) the callback timing after a challenge; (d) whether
+ * `fullScreenRedirect` is needed for some banks.
+ */
+export function authenticatePayer(session: MpgsSession): Promise<MpgsThreeDsResult> {
+    const ThreeDS = (window as any).ThreeDS
+
+    return new Promise<MpgsThreeDsResult>((resolve, reject) => {
+        const timer = window.setTimeout(
+            () => reject(new Error('The bank verification took too long.')),
+            THREE_DS_TIMEOUT_MS,
+        )
+        const finish = (fn: () => void) => { window.clearTimeout(timer); threeDsAbort = null; fn() }
+        threeDsAbort = (e) => finish(() => reject(e))
+
+        ThreeDS.initiateAuthentication(session.order_id, session.auth_transaction_id, (initiated: any) => {
+            if (initiated?.error || initiated?.gatewayRecommendation !== 'PROCEED') {
+                finish(() => resolve({ authenticated: false }))
+
+                return
+            }
+
+            ThreeDS.authenticatePayer(session.order_id, session.auth_transaction_id, (authenticated: any) => {
+                finish(() => resolve({
+                    authenticated: !authenticated?.error && authenticated?.gatewayRecommendation === 'PROCEED',
+                }))
+            }, {
+                device: {
+                    browserDetails: {
+                        screenHeight: window.screen.height,
+                        screenWidth: window.screen.width,
+                    },
+                },
+            })
+        }, { sourceOfFunds: { type: 'CARD' } })
+    })
 }

@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
 import { storeConsent } from '@/actions/App/Http/Controllers/ClientPaymentController'
+import { reloadWithNotice } from '@/lib/mpgs/notice'
 import MpgsPaymentForm from './MpgsPaymentForm.vue'
 
 type Policy = { key: string; title: string; version: string; html: string }
@@ -121,8 +122,8 @@ async function pollStatus(): Promise<void> {
 
         if (data.status === 'failed') {
             stopPolling()
-            processingMessage.value = 'Your card was declined. You can try again with a different card.'
-            uiState.value = 'form'
+            // The gateway libraries configure once per page load: reload for a fresh session.
+            reloadWithNotice(props.payment.uuid, 'Your card was declined. You can try again with a different card.')
             return
         }
 

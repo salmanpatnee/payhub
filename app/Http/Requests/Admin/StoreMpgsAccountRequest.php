@@ -20,6 +20,7 @@ class StoreMpgsAccountRequest extends FormRequest
             'integration_password' => ['required', 'string'],
             'webhook_secret' => ['nullable', 'string'],
             'api_version' => ['required', 'integer', 'min:1', 'max:999'],
+            'gateway_host' => ['nullable', 'string', 'max:255', 'regex:/^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/'],
         ];
     }
 }

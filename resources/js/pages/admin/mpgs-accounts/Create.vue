@@ -24,13 +24,14 @@ defineOptions({
     },
 });
 
-const props = defineProps<{ defaultApiVersion: number }>();
+const props = defineProps<{ defaultApiVersion: number; defaultGatewayHost: string }>();
 
 const form = useForm({
     account_name:         '',
     prefix:               '',
     merchant_id:          '',
     api_version:          props.defaultApiVersion,
+    gateway_host:         '',
     integration_password: '',
     webhook_secret:       '',
 });
@@ -46,6 +47,7 @@ function testConnection() {
             merchant_id: form.merchant_id,
             integration_password: form.integration_password,
             api_version: form.api_version,
+            gateway_host: form.gateway_host,
         },
         {
             preserveState: true,
@@ -159,6 +161,21 @@ function submit() {
                             required
                         />
                         <InputError :message="form.errors.api_version" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="gateway_host">Gateway host (optional)</Label>
+                        <Input
+                            id="gateway_host"
+                            v-model="form.gateway_host"
+                            type="url"
+                            :placeholder="props.defaultGatewayHost"
+                            autocomplete="off"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            The bank's test and live gateways are different hosts. Leave empty to use the default.
+                        </p>
+                        <InputError :message="form.errors.gateway_host" />
                     </div>
 
                     <div class="grid gap-2">

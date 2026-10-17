@@ -19,6 +19,7 @@ type MpgsAccountRow = {
     prefix: string | null;
     merchant_id: string;
     api_version: number;
+    gateway_host: string | null;
     has_webhook_secret: boolean;
     is_active: boolean;
 };
@@ -144,6 +145,7 @@ return;
                         </td>
                         <td class="px-5 py-3.5 font-mono text-xs text-muted-foreground">
                             v{{ account.api_version }}
+                            <span v-if="account.gateway_host" class="ml-2 font-sans">{{ account.gateway_host.replace('https://', '') }}</span>
                             <span v-if="!account.has_webhook_secret" class="ml-2 font-sans text-amber-600 dark:text-amber-400">no webhook secret</span>
                         </td>
                         <td class="px-5 py-3.5">

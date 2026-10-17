@@ -74,7 +74,7 @@ class ClientPaymentController extends Controller
             'payment' => $this->paymentProps($payment),
             'brand' => $this->brandProps($payment->brand),
             'mpgsAccount' => [
-                'gateway_host' => rtrim((string) config('services.mpgs.host'), '/'),
+                'gateway_host' => $payment->mpgsAccount->gatewayHost(),
                 'merchant_id' => $payment->mpgsAccount->merchant_id,
                 'api_version' => $payment->mpgsAccount->api_version,
             ],
