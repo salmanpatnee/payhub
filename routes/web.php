@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CloverAccountController;
+use App\Http\Controllers\Admin\MpgsAccountController;
 use App\Http\Controllers\Admin\RelationshipManagerController;
 use App\Http\Controllers\Admin\RevolutAccountController;
 use App\Http\Controllers\Admin\SquareAccountController;
@@ -228,6 +229,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'clover-accounts/{clover_account}/test-connection',
             [CloverAccountController::class, 'testStoredConnection']
         )->name('clover-accounts.test-stored-connection');
+
+        Route::resource('mpgs-accounts', MpgsAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'mpgs-accounts/{mpgs_account}/deactivate',
+            [MpgsAccountController::class, 'deactivate']
+        )->name('mpgs-accounts.deactivate');
+
+        Route::patch(
+            'mpgs-accounts/{mpgs_account}/activate',
+            [MpgsAccountController::class, 'activate']
+        )->name('mpgs-accounts.activate');
+
+        Route::post(
+            'mpgs-accounts/test-connection',
+            [MpgsAccountController::class, 'testKeyConnection']
+        )->name('mpgs-accounts.test-connection');
+
+        Route::post(
+            'mpgs-accounts/{mpgs_account}/test-connection',
+            [MpgsAccountController::class, 'testStoredConnection']
+        )->name('mpgs-accounts.test-stored-connection');
     });
 
 // Public payment routes — no auth middleware (CLIENT-01)

@@ -38,6 +38,7 @@ const mainNavItems = computed((): NavItem[] => [
             children: [
                 { title: 'Stripe Accounts',  href: '/admin/stripe-accounts',  icon: Wallet },
                 { title: 'Clover Accounts',  href: '/admin/clover-accounts',  icon: CloverIcon },
+                { title: 'MPGS Accounts',    href: '/admin/mpgs-accounts',    icon: Landmark },
                 { title: 'Revolut Accounts', href: '/admin/revolut-accounts', icon: Landmark },
                 { title: 'Square Accounts',  href: '/admin/square-accounts',  icon: Wallet },
                 { title: 'Viva Accounts',    href: '/admin/viva-accounts',    icon: Landmark },

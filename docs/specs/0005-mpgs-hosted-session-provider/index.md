@@ -1,7 +1,7 @@
 # 0005. Add MPGS (Mastercard Gateway) Hosted Session as a payment provider
 
 **Date**: 2026-10-17
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

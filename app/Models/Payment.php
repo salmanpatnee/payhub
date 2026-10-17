@@ -16,14 +16,14 @@ class Payment extends Model
 
     protected $fillable = [
         'uuid', 'reference_code', 'provider', 'brand_id',
-        'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id',
+        'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id', 'mpgs_account_id',
         'user_id', 'relationship_manager_id',
         'amount', 'currency', 'status',
         'client_email', 'client_name',
         'service', 'package', 'note',
         'stripe_payment_intent_id', 'revolut_order_id', 'square_payment_id',
         'viva_transaction_id', 'viva_order_code', 'expires_at', 'paid_at',
-        'clover_payment_id',
+        'clover_payment_id', 'mpgs_order_id',
     ];
 
     protected static function boot(): void
@@ -95,6 +95,16 @@ class Payment extends Model
         return $this->belongsTo(CloverAccount::class);
     }
 
+    public function mpgsAccount(): BelongsTo
+    {
+        return $this->belongsTo(MpgsAccount::class);
+    }
+
+    public function mpgsChargeAttempts(): HasMany
+    {
+        return $this->hasMany(MpgsChargeAttempt::class);
+    }
+
     public function cloverChargeAttempts(): HasMany
     {
         return $this->hasMany(CloverChargeAttempt::class);
@@ -117,6 +127,7 @@ class Payment extends Model
             PaymentProvider::Square => $this->squareAccount?->prefix,
             PaymentProvider::Viva => $this->vivaAccount?->prefix,
             PaymentProvider::Clover => $this->cloverAccount?->prefix,
+            PaymentProvider::Mpgs => $this->mpgsAccount?->prefix,
         };
         $number = str_pad((string) ($this->reference_code ?? 0), 6, '0', STR_PAD_LEFT);
 
@@ -137,6 +148,7 @@ class Payment extends Model
             PaymentProvider::Square => $this->squareAccount?->account_name,
             PaymentProvider::Viva => $this->vivaAccount?->account_name,
             PaymentProvider::Clover => $this->cloverAccount?->account_name,
+            PaymentProvider::Mpgs => $this->mpgsAccount?->account_name,
         };
     }
 

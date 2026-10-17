@@ -11,7 +11,8 @@ use App\Enums\SupportedCurrency;
  * account is provisioned with that single currency — see CloverAccount). Square
  * is locked to whatever currency the individual account was provisioned with
  * (nullable — a Square account with no currency set accepts either). Stripe
- * and Revolut are multi-currency for every account.
+ * and Revolut are multi-currency for every account, and so is MPGS (a currency
+ * the bank has not enabled fails at pay time, spec 0005 AC-2).
  */
 class CurrencySupportResolver
 {

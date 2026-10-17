@@ -11,6 +11,7 @@ class ProviderAccountTable
             'square' => 'square_accounts',
             'viva' => 'viva_accounts',
             'clover' => 'clover_accounts',
+            'mpgs' => 'mpgs_accounts',
             default => 'stripe_accounts',
         };
     }
