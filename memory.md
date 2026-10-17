@@ -49,3 +49,14 @@ This session (committed as `71ac8652` code and `8ac2d507` docs, not pushed; buil
 - Whether the always-prepare-on-load flow is acceptable (creates an attempt per page view); depends on whether the spike allows a lazier session.
 - Whether to push `feat/mpgs-hosted-session` and open a PR. Whether to fix the hardcoded `APP_BASE_PATH` in `phpunit.xml`.
 - User decisions this session: no live credentials for the spike, and no new tests for now.
+
+## Update: docs amendment pass (UNCOMMITTED, later in the same session)
+
+Read the bank's test gateway docs in a browser (host `test-bankalfalah.gateway.mastercard.com`; the fetch tool only returns a title, the Chrome tools render them). Spec 0005 amended in place; answers to Open questions 1, 2, 3, 4 (partial) and 7 are in its `## Follow-up`. Built from it, all unproven against a sandbox:
+- `mpgs_accounts.gateway_host` (nullable, migration `..._000005`), `MpgsAccount::gatewayHost()`, admin form field and validation (https host, no path). API version default 100.
+- `MpgsClient`: `createSession` sends `authenticationLimit` 25; `updateSession` also sends `authentication.channel` PAYER_BROWSER and `redirectResponseUrl`; takes a `gatewayHost`.
+- 3DS return route `pay.mpgs.return` (`MpgsPaymentController::threeDsReturn`, view `mpgs-3ds-return`, `public/mpgs-3ds-return.js`), CSRF excluded, the only route sending `X-Frame-Options: SAMEORIGIN`. CSP host is now per account.
+- `resources/js/lib/mpgs/gateway.ts` implemented from the documented `session.js` and `ThreeDS` calls (SPIKE comments mark the unknowns); `notice.ts` carries the decline message across a page reload. Libraries configure once per page load, so a decline reloads the pay page. Card fields are readonly inputs with ids `card-number`, `expiry-month`, `expiry-year`, `security-code`, `cardholder-name`.
+- Last test run: `--filter="Mpgs|SecurityHeaders|ClientPayment|Clover"` 204 of 204 passing (run before the route rename to `pay.mpgs.return`; MpgsParityTest 13/13 after it). vue-tsc has no MPGS errors.
+
+Still unknown (needs the sandbox): billing address needed or not, what the return page must do for the library callback, whether the library renders the challenge itself, the `error` block shape, decline code list, Retrieve Order `transaction[]` shape, field lengths. `resources/js/routes` is gitignored; a route name starting with a digit breaks Wayfinder, hence `pay.mpgs.return`.
