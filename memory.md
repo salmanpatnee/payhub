@@ -1,42 +1,51 @@
-# Memory — Zelle Accounts: verify, icon, card cleanup, build
+# Memory — MPGS Hosted Session provider (spec 0005)
 
-Last updated: 2026-09-21
+Last updated: 2026-10-17 (end of session)
 
 ## What was built
 
-- `/check verify zelle accounts` run against the real app (`https://payhub.test`, DB `payhub_live`) as admin, agent and account role. Verdict PASS. 12 of 14 steps in `docs/specs/0003-zelle-accounts-module/verify.md` ticked; spec status set to `Accepted` (commit `e6e749f`).
-- `resources/js/components/icons/ZelleIcon.vue` (Simple Icons Zelle mark, same pattern as `CloverIcon.vue`). Used in `AppSidebar.vue` and `pages/zelle-accounts/ZelleDetailCard.vue` (commit `6759652`).
-- Agent card: removed the "Currency" row (badge in header stays). "Copy all" now copies name, email, mobile only. Spec `index.md` (AC-9, copy all sourcing table) and `verify.md` step text updated to match (commit `c29c719`).
-- `npm run build` run and `public/build` committed (commit `3d65ecd`). `public/build` is tracked in git.
+Branch `feat/mpgs-hosted-session`. Committed earlier: data layer, `MpgsClient`/classifier/resolver, admin accounts + Vue pages, parity sweep, resolver job + sweep, webhook endpoint + job, sandbox spike kit (`docs/specs/0005-mpgs-hosted-session-provider/spike/`).
+
+This session (committed as `71ac8652` code and `8ac2d507` docs, not pushed; build plan steps 4 and 5 as a shell):
+- `app/Http/Controllers/MpgsPaymentController.php`: `session` (prepare), `pay`, `status`. One cache lock `mpgs-attempt:{payment_id}` covers prepare and pay.
+- `ClientPaymentController::showMpgs` now renders `ClientPayment/PayMpgs` (was a 503 placeholder). Props: payment, brand, `mpgsAccount {gateway_host, merchant_id, api_version}`, policies. No session id.
+- Routes `pay.mpgs.session|pay|status` in `routes/web.php`; limiters `mpgs-session` (20/h) and `mpgs-pay` (10/h) in `AppServiceProvider`. Routes stay behind CSRF (page sends `X-XSRF-TOKEN`), only the webhook is excluded.
+- `SecurityHeaders`: MPGS-only CSP widening (gateway host in script/frame/connect, `frame-src https:`) on route `pay.show` for an MPGS payment.
+- Frontend: `resources/js/pages/ClientPayment/PayMpgs.vue` (copy of PayClover), `MpgsPaymentForm.vue`, and the stub `resources/js/lib/mpgs/gateway.ts` (4 functions all throw `MpgsNotWiredError`).
+- Docs: handoff doc void note corrected; spec `## Follow-up` has a Build status block.
+- `tests/Feature/MpgsParityTest.php`: replaced the 503 placeholder test with a render test.
 
 ## Decisions made
 
-- Zelle icon is monochrome (`currentColor`), no brand colour.
-- Currency is shown only as the badge on agent cards, never in the copied text.
-- No user without a role can exist, so the "no role sees empty state" part of AC-11 is not applicable.
+- Session is prepared on page load (hosted fields need a session first), re-prepared after every decline / failed 3DS / 422. Each prepare retires earlier `prepared` attempts.
+- All browser gateway calls go through `gateway.ts` only; PHP field names stay in `MpgsClient` / `MpgsChargeClassifier`. Spike corrections land in those three files.
+- Hard error and transport failure on prepare return 502 with a fixed message; gateway text never reaches the client.
+- Inactive or missing account on the pay page: 404 (`abort_unless`).
+- Earlier decisions in the spec still stand (sixth provider, full 3DS inline, name+email only, no currency column, one config host, PAY response primary, webhook signal only, refunds/voids out of scope).
 
 ## Problems solved
 
-- Browser session cookie lives on `payhub.test` (Herd), not `127.0.0.1:8000`. Use `payhub.test` for browser checks.
-- `public/build` had no Zelle pages, so verifying needed `npm run dev` (Vite) running, which creates `public/hot`. Remove `public/hot` afterwards.
-- `pkill` is not installed in this shell. Stop Vite and `artisan serve` with PowerShell (`Get-CimInstance Win32_Process` then `Stop-Process`).
-- Inertia returns 409 after the asset version changes (build to Vite dev). A fresh page load fixes it.
-- Claude cannot type passwords in the browser. The user signs in as each role.
+- `phpunit.xml` hardcodes `APP_BASE_PATH` for another machine (`C:\Users\salmanabdul.ghani\...`), so every test errors. Run with `APP_BASE_PATH='C:\Users\Salman\Herd\payhub' vendor/bin/pest ...`. Not fixed in the file.
+- Mastercard doc pages are JS rendered; WebFetch returns only a title. Use the sandbox or a browser.
+- Handoff void is wrong: docs show `PUT` + `apiOperation: VOID` + `targetTransactionId`.
 
 ## Current state
 
-- Branch `feat/zelle-accounts`, all Zelle work committed. Only `memory.md` is uncommitted.
-- 27 of 27 Pest tests passed in `tests/Feature/ZelleAccountManagementTest.php` (run before the card change; the card change is frontend only).
-- `zelle_accounts` table is empty in `payhub_live` (test rows were removed). `activity_logs` is 0.
-- `vue-tsc` has 3 old errors (`admin/viva-accounts/Edit.vue` twice, `ssr.ts`), none in Zelle files.
-- Dev servers are stopped.
+- Pint passes. Last run: `--filter="Mpgs|SecurityHeaders|ClientPayment|Clover"` gave 203 of 204 passing; the one failure was the old 503 placeholder test, since replaced and passing (MpgsParityTest 13/13). Not re-run across the full suite.
+- The pay page loads but shows "Payment system is unavailable" because `gateway.ts` is a stub. Nothing was run against a real gateway.
+- No tests yet for `MpgsPaymentController`, the CSP widening or the new limiters (user chose to skip tests for now).
+- `AGENTS.md` still says three providers and "webhooks only" (stale; update via `/sync` after ship).
 
 ## Next session starts with
 
-- Decide whether to open a PR or merge `feat/zelle-accounts` into `master` (CLAUDE.md: merge only after tests pass). Re-run the Zelle Pest file first.
-- Production runs `master` and needs a manual pull, opcache reset and migrate on Hostinger. Push does not deploy.
+1. Get TEST merchant credentials (merchant id, integration password, gateway host; Hosted Session + 3DS enabled; bank test cards). Do not use live credentials: `spike.php pay` and 3DS runs move money. Only `spike.php session` is safe on live. Credentials in `.env` only.
+2. Run the spike kit, write the 12 Open question answers into spec `## Follow-up`, amend via `/architect` where they change the design.
+3. Fill `gateway.ts` (Q1, Q4, Q10), correct `MpgsClient` / `MpgsChargeClassifier` field names (Q2, Q3, Q8, Q9, Q11, Q12) and the CSP hosts.
+4. Then step 9 (Pest for the controller, CSP, limiters, critical scenarios) and step 10 (`/sync`).
 
 ## Open questions
 
-- Two `verify.md` steps stay unticked: agent reactivation was done through the database, not watched in the browser; individual copy icons were not clicked and "Copied" was only seen through a script.
-- Agent card header icon and dark mode / collapsed sidebar for the new Zelle icon were not checked visually.
+- The 12 Open questions in spec 0005 `## Feature design`.
+- Whether the always-prepare-on-load flow is acceptable (creates an attempt per page view); depends on whether the spike allows a lazier session.
+- Whether to push `feat/mpgs-hosted-session` and open a PR. Whether to fix the hardcoded `APP_BASE_PATH` in `phpunit.xml`.
+- User decisions this session: no live credentials for the spike, and no new tests for now.
