@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\PaymentProvider;
 use App\Models\Brand;
 use App\Models\CloverAccount;
+use App\Models\MpgsAccount;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
@@ -83,6 +84,7 @@ class DashboardMetrics
             ->when($accountProvider === 'square', fn ($q) => $q->where('square_account_id', $accountId))
             ->when($accountProvider === 'viva', fn ($q) => $q->where('viva_account_id', $accountId))
             ->when($accountProvider === 'clover', fn ($q) => $q->where('clover_account_id', $accountId))
+            ->when($accountProvider === 'mpgs', fn ($q) => $q->where('mpgs_account_id', $accountId))
             ->when($this->filters['currency'] ?? null, fn ($q, $v) => $q->where('currency', $v));
     }
 
@@ -112,7 +114,7 @@ class DashboardMetrics
 
         [$provider, $id] = explode(':', $value, 2);
 
-        return in_array($provider, ['stripe', 'revolut', 'square', 'viva', 'clover'], true) && ctype_digit($id)
+        return in_array($provider, ['stripe', 'revolut', 'square', 'viva', 'clover', 'mpgs'], true) && ctype_digit($id)
             ? [$provider, (int) $id]
             : [null, null];
     }
@@ -368,9 +370,10 @@ class DashboardMetrics
         $squareNames = SquareAccount::query()->pluck('account_name', 'id');
         $vivaNames = VivaAccount::query()->pluck('account_name', 'id');
         $cloverNames = CloverAccount::query()->pluck('account_name', 'id');
+        $mpgsNames = MpgsAccount::query()->pluck('account_name', 'id');
 
         return collect(array_keys($accepted + $pending))
-            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames, $vivaNames, $cloverNames) {
+            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames, $vivaNames, $cloverNames, $mpgsNames) {
                 [$provider, $id] = explode(':', $key);
                 $id = (int) $id;
                 $name = match ($provider) {
@@ -378,6 +381,7 @@ class DashboardMetrics
                     'square' => $squareNames[$id] ?? "Account #{$id}",
                     'viva' => $vivaNames[$id] ?? "Account #{$id}",
                     'clover' => $cloverNames[$id] ?? "Account #{$id}",
+                    'mpgs' => $mpgsNames[$id] ?? "Account #{$id}",
                     default => $stripeNames[$id] ?? "Account #{$id}",
                 };
 
@@ -404,8 +408,8 @@ class DashboardMetrics
     {
         $totals = [];
 
-        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, viva_account_id, clover_account_id, currency, sum(amount) as s')
-            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id', 'currency')
+        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, viva_account_id, clover_account_id, mpgs_account_id, currency, sum(amount) as s')
+            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id', 'mpgs_account_id', 'currency')
             ->get()
             ->each(function ($r) use (&$totals) {
                 $provider = $r->provider instanceof PaymentProvider ? $r->provider->value : (string) $r->provider;
@@ -414,6 +418,7 @@ class DashboardMetrics
                     'square' => $r->square_account_id,
                     'viva' => $r->viva_account_id,
                     'clover' => $r->clover_account_id,
+                    'mpgs' => $r->mpgs_account_id,
                     default => $r->stripe_account_id,
                 };
 
@@ -607,6 +612,13 @@ class DashboardMetrics
                 'provider' => 'clover',
             ]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->values()->all();
+        $mpgs = MpgsAccount::query()->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (MpgsAccount $a) => [
+                'value' => "mpgs:{$a->id}",
+                'name' => $a->account_name,
+                'provider' => 'mpgs',
+            ]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->values()->all();
     }
 }

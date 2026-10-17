@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\Brand;
 use App\Models\CloverAccount;
+use App\Models\MpgsAccount;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
@@ -127,6 +128,7 @@ class UserController extends Controller
             'square' => SquareAccount::pluck('account_name', 'id')->all(),
             'viva' => VivaAccount::pluck('account_name', 'id')->all(),
             'clover' => CloverAccount::pluck('account_name', 'id')->all(),
+            'mpgs' => MpgsAccount::pluck('account_name', 'id')->all(),
         ];
     }
 
@@ -153,7 +155,10 @@ class UserController extends Controller
         $clover = CloverAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
             ->map(fn (CloverAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'clover', 'currency' => null]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->values();
+        $mpgs = MpgsAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (MpgsAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'mpgs', 'currency' => null]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->values();
     }
 
     /**

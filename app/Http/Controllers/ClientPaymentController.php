@@ -54,8 +54,19 @@ class ClientPaymentController extends Controller
             PaymentProvider::Square => $this->showSquare($payment),
             PaymentProvider::Viva => $this->showViva($payment),
             PaymentProvider::Clover => $this->showClover($payment),
+            PaymentProvider::Mpgs => $this->showMpgs($payment),
             default => $this->showStripe($payment),
         };
+    }
+
+    /**
+     * Placeholder until the MPGS pay thread lands (spec 0005, build plan step 4,
+     * blocked on the sandbox spike). Without this arm an MPGS payment would fall
+     * through to showStripe() and 500 on the missing Stripe account.
+     */
+    private function showMpgs(Payment $payment): Response
+    {
+        abort(503, 'MPGS payments are not available yet.');
     }
 
     private function showStripe(Payment $payment): Response
@@ -626,7 +637,7 @@ class ClientPaymentController extends Controller
         // The status === 'cancelled' guard below still applies regardless, and
         // the authoritative status write remains webhook-only either way.
 
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount']);
 
         // CR-02 fix: block cancelled payments from showing success via crafted URLs.
         // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,

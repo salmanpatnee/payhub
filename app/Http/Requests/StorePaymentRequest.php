@@ -37,7 +37,7 @@ class StorePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -116,6 +116,7 @@ class StorePaymentRequest extends FormRequest
         $data['square_account_id'] = $provider === 'square' ? $accountId : null;
         $data['viva_account_id'] = $provider === 'viva' ? $accountId : null;
         $data['clover_account_id'] = $provider === 'clover' ? $accountId : null;
+        $data['mpgs_account_id'] = $provider === 'mpgs' ? $accountId : null;
 
         return $data;
     }
