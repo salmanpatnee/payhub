@@ -226,36 +226,71 @@ async function submit(): Promise<void> {
              frame from its input when it mounts and only finishes initializing for rendered frames.
              The Pay button stays disabled until the fields are ready instead. -->
         <form @submit.prevent="submit" class="space-y-4">
-            <div
-                class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
-                :class="fieldInvalid.cardholderName ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
-            >
-                <input id="cardholder-name" type="text" class="mpgs-field" placeholder="Name on card" title="cardholder name" aria-label="enter name on card" tabindex="1" readonly>
-            </div>
-            <div
-                class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
-                :class="fieldInvalid.cardNumber ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
-            >
-                <input id="card-number" type="text" class="mpgs-field" placeholder="Card number" title="card number" aria-label="enter your card number" tabindex="2" readonly>
-            </div>
-            <div class="grid grid-cols-3 gap-3">
+            <!-- The skeleton sits ON TOP of the real fields (never instead of them, see above) until the
+                 gateway has attached its frames. It copies the real boxes (same border, radius, height
+                 and grid), and the real fields underneath are only made transparent, never hidden or
+                 resized, so the swap to live fields is invisible and nothing peeks out. -->
+            <div class="relative">
                 <div
-                    class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
-                    :class="fieldInvalid.expiryMonth ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+                    v-if="!ready && !errorMessage"
+                    class="absolute inset-0 z-10 space-y-4"
+                    role="status"
+                    aria-label="Loading secure card fields"
                 >
-                    <input id="expiry-month" type="text" class="mpgs-field" placeholder="MM" title="expiry month" aria-label="two digit expiry month" tabindex="3" readonly>
+                    <div class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3">
+                        <div class="mpgs-skeleton-bar h-2.5 rounded-full" style="width: 38%"></div>
+                    </div>
+                    <div class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3">
+                        <div class="mpgs-skeleton-bar h-2.5 rounded-full" style="width: 52%"></div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3">
+                            <div class="mpgs-skeleton-bar h-2.5 rounded-full" style="width: 50%"></div>
+                        </div>
+                        <div class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3">
+                            <div class="mpgs-skeleton-bar h-2.5 rounded-full" style="width: 50%"></div>
+                        </div>
+                        <div class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3">
+                            <div class="mpgs-skeleton-bar h-2.5 rounded-full" style="width: 50%"></div>
+                        </div>
+                    </div>
                 </div>
                 <div
-                    class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
-                    :class="fieldInvalid.expiryYear ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+                    class="space-y-4 transition-opacity duration-150"
+                    :class="!ready && !errorMessage ? 'pointer-events-none opacity-0' : 'opacity-100'"
                 >
-                    <input id="expiry-year" type="text" class="mpgs-field" placeholder="YY" title="expiry year" aria-label="two digit expiry year" tabindex="4" readonly>
-                </div>
-                <div
-                    class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
-                    :class="fieldInvalid.securityCode ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
-                >
-                    <input id="security-code" type="text" class="mpgs-field" placeholder="CVV" title="security code" aria-label="three digit security code" tabindex="5" readonly>
+                    <div
+                        class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
+                        :class="fieldInvalid.cardholderName ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+                    >
+                        <input id="cardholder-name" type="text" class="mpgs-field" placeholder="Name on card" title="cardholder name" aria-label="enter name on card" tabindex="1" readonly>
+                    </div>
+                    <div
+                        class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
+                        :class="fieldInvalid.cardNumber ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+                    >
+                        <input id="card-number" type="text" class="mpgs-field" placeholder="Card number" title="card number" aria-label="enter your card number" tabindex="2" readonly>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div
+                            class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
+                            :class="fieldInvalid.expiryMonth ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+                        >
+                            <input id="expiry-month" type="text" class="mpgs-field" placeholder="MM" title="expiry month" aria-label="two digit expiry month" tabindex="3" readonly>
+                        </div>
+                        <div
+                            class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
+                            :class="fieldInvalid.expiryYear ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+                        >
+                            <input id="expiry-year" type="text" class="mpgs-field" placeholder="YY" title="expiry year" aria-label="two digit expiry year" tabindex="4" readonly>
+                        </div>
+                        <div
+                            class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
+                            :class="fieldInvalid.securityCode ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
+                        >
+                            <input id="security-code" type="text" class="mpgs-field" placeholder="CVV" title="security code" aria-label="three digit security code" tabindex="5" readonly>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -303,6 +338,18 @@ async function submit(): Promise<void> {
 
 .mpgs-field-wrap :deep(iframe) {
     display: block;
+}
+
+/* Loading skeleton bar: the same neutral slate shimmer the Square and Revolut pay pages use. */
+.mpgs-skeleton-bar {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: mpgs-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes mpgs-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }
 
 /* Focus ring on the wrapper when its hosted field frame has focus. */
