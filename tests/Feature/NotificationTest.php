@@ -119,3 +119,9 @@ it('PaymentSucceeded mailable contains required payment details', function () {
     $mailable->assertSeeInHtml('100.00');
     $mailable->assertSeeInHtml('Web Design');
 });
+
+it('PaymentSucceeded formats a PKR amount with Rs and the currency code', function () {
+    $payment = Payment::factory()->make(['currency' => 'pkr', 'amount' => 250000, 'client_name' => 'Ali Khan']);
+
+    expect((new PaymentSucceeded($payment))->envelope()->subject)->toContain('Rs 2,500.00 PKR');
+});

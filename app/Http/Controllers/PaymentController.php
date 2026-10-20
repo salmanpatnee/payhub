@@ -9,6 +9,7 @@ use App\Http\Requests\StorePaymentRequest;
 use App\Http\Requests\UpdatePaymentRequest;
 use App\Models\Brand;
 use App\Models\CloverAccount;
+use App\Models\MpgsAccount;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
@@ -85,7 +86,7 @@ class PaymentController extends Controller
     {
         $canViewAll = $user->hasRole('admin') || $user->hasRole('account');
 
-        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'user', 'relationshipManager'])
+        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'user', 'relationshipManager'])
             ->orderByDesc('created_at');
 
         if (! $canViewAll) {
@@ -215,7 +216,8 @@ class PaymentController extends Controller
      */
     private function agentCurrencyOptions(User $user): Collection
     {
-        return collect(SupportedCurrency::cases())->map(function (SupportedCurrency $currency) use ($user) {
+        // PKR is admin-only for now, so agents never get a PKR option.
+        return collect(SupportedCurrency::standard())->map(function (SupportedCurrency $currency) use ($user) {
             $account = $user->paymentAccounts->firstWhere('currency', $currency->value);
 
             if ($account === null) {
@@ -256,7 +258,10 @@ class PaymentController extends Controller
         $clover = CloverAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
             ->map(fn (CloverAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'clover', 'currency' => 'usd']);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->values();
+        $mpgs = MpgsAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'supports_pkr'])
+            ->map(fn (MpgsAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'mpgs', 'supports_pkr' => $a->supports_pkr]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->values();
     }
 
     /**
@@ -272,7 +277,7 @@ class PaymentController extends Controller
      * whichever branch happens to be last — see CLAUDE.md's warning about the
      * two Square CSV export bugs caused by exactly this pattern.
      *
-     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int}|null
+     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int, mpgs_account_id: ?int}|null
      */
     private function agentAccountData(User $user, string $currency): ?array
     {
@@ -297,6 +302,7 @@ class PaymentController extends Controller
             'square_account_id' => $provider === 'square' ? $account->account_id : null,
             'viva_account_id' => $provider === 'viva' ? $account->account_id : null,
             'clover_account_id' => $provider === 'clover' ? $account->account_id : null,
+            'mpgs_account_id' => $provider === 'mpgs' ? $account->account_id : null,
         ];
     }
 
@@ -365,7 +371,7 @@ class PaymentController extends Controller
                 'uuid' => $payment->uuid,
                 'brand_id' => $payment->brand_id,
                 'provider' => $payment->provider->value,
-                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id,
+                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id ?? $payment->mpgs_account_id,
                 'relationship_manager_id' => $payment->relationship_manager_id,
                 'currency' => $payment->currency,
                 // Cents → decimal string for the amount input.
@@ -431,6 +437,8 @@ class PaymentController extends Controller
             // Clover's charge id, set by whichever path (the synchronous charge
             // handler or the resolver job) first completes the payment.
             'clover_account_id' => ['clover_payment_id'],
+            // MPGS's winning attempt order id, set by whichever path first completes the payment.
+            'mpgs_account_id' => ['mpgs_order_id'],
         ];
 
         $cleared = [];
@@ -466,7 +474,7 @@ class PaymentController extends Controller
     public function show(Payment $payment): Response
     {
         Gate::authorize('view', $payment);
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'relationshipManager']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'relationshipManager']);
 
         $user = auth()->user();
         $canViewStripeAccount = $user->hasRole('admin') || $user->hasRole('account');
@@ -497,6 +505,7 @@ class PaymentController extends Controller
                     PaymentProvider::Square => $payment->square_payment_id,
                     PaymentProvider::Viva => $payment->viva_transaction_id ?? $payment->viva_order_code,
                     PaymentProvider::Clover => $payment->clover_payment_id,
+                    PaymentProvider::Mpgs => $payment->mpgs_order_id,
                 },
                 'paid_at' => $payment->paid_at?->toISOString(),
                 'expires_at' => $payment->expires_at?->toISOString(),

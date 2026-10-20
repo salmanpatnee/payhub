@@ -52,6 +52,16 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('clover-charge', fn (Request $request): Limit => Limit::perHour(10)->by(
             $request->route('payment') ?? $request->ip()
         ));
+
+        // MPGS (spec 0005, AC-12): same payment-UUID key as clover-charge. Session
+        // prepare fires on every pay page load (the hosted fields need a session
+        // first), so it gets the higher ceiling. Both are starting defaults.
+        RateLimiter::for('mpgs-session', fn (Request $request): Limit => Limit::perHour(20)->by(
+            $request->route('payment') ?? $request->ip()
+        ));
+        RateLimiter::for('mpgs-pay', fn (Request $request): Limit => Limit::perHour(10)->by(
+            $request->route('payment') ?? $request->ip()
+        ));
     }
 
     /**

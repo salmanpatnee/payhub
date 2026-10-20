@@ -19,9 +19,9 @@ class DashboardController extends Controller
             'to' => ['nullable', 'date'],
             'brand_id' => ['nullable', 'integer'],
             'relationship_manager_id' => ['nullable', 'integer'],
-            'provider' => ['nullable', 'in:stripe,revolut,square,viva,clover'],
+            'provider' => ['nullable', 'in:stripe,revolut,square,viva,clover,mpgs'],
             'account' => ['nullable', 'string'],
-            'currency' => ['nullable', 'in:usd,gbp'],
+            'currency' => ['nullable', 'in:usd,gbp,pkr'],
         ]);
 
         return Inertia::render('Dashboard', DashboardMetrics::for($filters));

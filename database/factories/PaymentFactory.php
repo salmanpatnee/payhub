@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Brand;
 use App\Models\CloverAccount;
+use App\Models\MpgsAccount;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
@@ -25,6 +26,7 @@ class PaymentFactory extends Factory
             'square_account_id' => null,
             'viva_account_id' => null,
             'clover_account_id' => null,
+            'mpgs_account_id' => null,
             'user_id' => User::factory(),
             'amount' => $this->faker->numberBetween(500, 100000),
             'currency' => $this->faker->randomElement(['usd', 'gbp']),
@@ -43,6 +45,7 @@ class PaymentFactory extends Factory
             'viva_transaction_id' => null,
             'viva_order_code' => null,
             'clover_payment_id' => null,
+            'mpgs_order_id' => null,
             'expires_at' => null,
             'paid_at' => null,
         ];
@@ -99,6 +102,20 @@ class PaymentFactory extends Factory
             'stripe_account_id' => null,
             'clover_account_id' => CloverAccount::factory(),
             'currency' => 'usd',
+        ]);
+    }
+
+    /**
+     * MPGS-provider payment: nulls the Stripe account and attaches an MPGS
+     * account. MPGS accounts accept USD and GBP, so currency is left to the
+     * default.
+     */
+    public function mpgs(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'provider' => 'mpgs',
+            'stripe_account_id' => null,
+            'mpgs_account_id' => MpgsAccount::factory(),
         ]);
     }
 }

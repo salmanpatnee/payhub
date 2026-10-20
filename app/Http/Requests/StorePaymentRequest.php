@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\SupportedCurrency;
+use App\Models\MpgsAccount;
 use App\Models\Payment;
 use App\Models\SquareAccount;
 use App\Models\User;
@@ -37,7 +38,7 @@ class StorePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -59,7 +60,16 @@ class StorePaymentRequest extends FormRequest
                         ? SquareAccount::find($this->input('account_id'))?->currency
                         : null;
 
-                    if (CurrencySupportResolver::supports($provider, $accountCurrency, $value)) {
+                    $acceptsPkr = $provider === 'mpgs'
+                        && (bool) MpgsAccount::find($this->input('account_id'))?->supports_pkr;
+
+                    if (CurrencySupportResolver::supports($provider, $accountCurrency, $value, $acceptsPkr)) {
+                        return;
+                    }
+
+                    if ($value === SupportedCurrency::PKR->value) {
+                        $fail('PKR is only supported on MPGS accounts that accept PKR.');
+
                         return;
                     }
 
@@ -116,6 +126,7 @@ class StorePaymentRequest extends FormRequest
         $data['square_account_id'] = $provider === 'square' ? $accountId : null;
         $data['viva_account_id'] = $provider === 'viva' ? $accountId : null;
         $data['clover_account_id'] = $provider === 'clover' ? $accountId : null;
+        $data['mpgs_account_id'] = $provider === 'mpgs' ? $accountId : null;
 
         return $data;
     }

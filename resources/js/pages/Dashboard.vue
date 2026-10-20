@@ -22,7 +22,7 @@ defineOptions({
 });
 
 /** Stable left-to-right currency order — never inferred from backend GROUP BY row order. */
-const CURRENCY_ORDER = ['usd', 'gbp'];
+const CURRENCY_ORDER = ['usd', 'gbp', 'pkr'];
 
 function moneyLines(amounts: MoneyByCurrency): string[] {
     const entries = CURRENCY_ORDER.filter((cur) => (amounts[cur] ?? 0) > 0);
@@ -43,7 +43,8 @@ const avgLines = computed(() => moneyLines(props.kpis.avgPaymentValue));
 
 /** Inline currency mix, e.g. "84% USD · 16% GBP" — replaces the donut. */
 const currencyMix = computed(() => {
-    const entries = Object.entries(props.currencySplit).filter(([, v]) => v > 0);
+    // PKR is left out: its nominal amounts are not comparable with USD/GBP shares.
+    const entries = Object.entries(props.currencySplit).filter(([cur, v]) => v > 0 && cur !== 'pkr');
     const total = entries.reduce((sum, [, v]) => sum + v, 0);
     if (total === 0 || entries.length < 2) return null;
     return entries

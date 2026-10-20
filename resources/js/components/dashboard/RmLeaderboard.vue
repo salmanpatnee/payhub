@@ -10,7 +10,7 @@ const props = defineProps<{
 }>();
 
 /** Stable left-to-right currency order — never lets one currency implicitly win. */
-const CURRENCY_ORDER = ['usd', 'gbp'];
+const CURRENCY_ORDER = ['usd', 'gbp', 'pkr'];
 
 interface DisplayAmount {
     code: string;
@@ -53,7 +53,7 @@ const maxByCurrency = computed(() => {
     return max;
 });
 
-const barColor: Record<string, string> = { usd: 'var(--chart-1)', gbp: 'var(--chart-3)' };
+const barColor: Record<string, string> = { usd: 'var(--chart-1)', gbp: 'var(--chart-3)', pkr: 'var(--chart-4)' };
 
 function barPct(a: DisplayAmount): number {
     const max = maxByCurrency.value[a.code] || 1;

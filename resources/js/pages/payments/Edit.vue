@@ -18,7 +18,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 
 type BrandOption = { id: number; name: string };
-type AccountOption = { id: number; account_name?: string; provider: string; currency?: string };
+type AccountOption = { id: number; account_name?: string; provider: string; currency?: string; supports_pkr?: boolean };
 type RmOption = { id: number; name: string };
 type AgentCurrencyOption = { currency: string; enabled: boolean; reason: string | null };
 type PaymentData = {
@@ -68,7 +68,7 @@ const form = useForm({
     note:                      props.payment.note ?? '',
 });
 
-const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut', square: 'Square', viva: 'Viva', clover: 'Clover' };
+const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut', square: 'Square', viva: 'Viva', clover: 'Clover', mpgs: 'MPGS' };
 
 // The account selector encodes "provider:id" since ids collide across providers.
 const accountValue = ref(`${props.payment.provider}:${props.payment.account_id}`);
@@ -83,6 +83,18 @@ watch(accountValue, (val) => {
     if (account?.currency) {
         form.currency = account.currency;
     }
+
+    // PKR is only valid on an MPGS account that accepts it; drop a stale choice.
+    if (form.currency === 'pkr' && !canUsePkr.value) {
+        form.currency = '';
+    }
+});
+
+// PKR is offered only for an MPGS account the bank has enabled PKR on.
+const canUsePkr = computed(() => {
+    const account = props.accounts.find(a => `${a.provider}:${a.id}` === accountValue.value);
+
+    return account?.provider === 'mpgs' && account.supports_pkr === true;
 });
 
 // No onMounted account/currency default here (unlike Create.vue) — accountValue
@@ -195,6 +207,7 @@ function submit() {
                                 <template v-else>
                                     <SelectItem value="usd">USD ($)</SelectItem>
                                     <SelectItem value="gbp">GBP (£)</SelectItem>
+                                    <SelectItem v-if="canUsePkr" value="pkr">PKR (Rs)</SelectItem>
                                 </template>
                             </SelectContent>
                         </Select>

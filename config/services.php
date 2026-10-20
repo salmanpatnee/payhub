@@ -50,4 +50,15 @@ return [
         'environment' => env('VIVA_ENVIRONMENT', 'demo'),
     ],
 
+    'mpgs' => [
+        // One gateway host for every MPGS account (spec 0005); no trailing slash.
+        // Per-account merchant id, integration password and webhook secret live on
+        // the mpgs_accounts table (password and secret encrypted).
+        'host' => env('MPGS_GATEWAY_HOST', 'https://ap-gateway.mastercard.com'),
+        // Default API version pre-filled for new accounts; the sandbox spike picks the final one.
+        'api_version' => (int) env('MPGS_API_VERSION', 100),
+        // How long a `prepared` attempt may wait before the sweep expires it.
+        'session_lifetime_minutes' => (int) env('MPGS_SESSION_LIFETIME_MINUTES', 30),
+    ],
+
 ];

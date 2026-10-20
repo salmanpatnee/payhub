@@ -116,6 +116,7 @@ watch(
                         <SelectItem value="square">Square</SelectItem>
                         <SelectItem value="viva">Viva</SelectItem>
                         <SelectItem value="clover">Clover</SelectItem>
+                        <SelectItem value="mpgs">MPGS</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -137,6 +138,7 @@ watch(
                         <SelectItem :value="ALL">All currencies</SelectItem>
                         <SelectItem value="usd">USD</SelectItem>
                         <SelectItem value="gbp">GBP</SelectItem>
+                        <SelectItem value="pkr">PKR</SelectItem>
                     </SelectContent>
                 </Select>
             </div>

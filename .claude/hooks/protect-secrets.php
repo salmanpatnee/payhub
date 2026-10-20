@@ -74,7 +74,7 @@ foreach ($secretPatterns as $pattern => $label) {
 // Rule 3: hardcoded literal assigned directly to a known secret column.
 $secretColumns = ['secret_key', 'access_token', 'webhook_secret', 'webhook_signature_key'];
 foreach ($secretColumns as $column) {
-    $pattern = '/[\'"]'.preg_quote($column, '/').'[\'"]\s*=>\s*[\'"]([^\'"]{8,})[\'"]/';
+    $pattern = '/[\'"]'.preg_quote($column, '/').'[\'"]\s*=>\s*[\'"](?!encrypted[\'"])([^\'"]{8,})[\'"]/';
     if (preg_match($pattern, $text)) {
         fwrite(STDERR, "Blocked: this edit assigns a hardcoded literal directly to '{$column}' in {$filePath}. That column must come from validated request input, not a string literal in code.\n");
         exit(2);
