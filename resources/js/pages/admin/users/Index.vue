@@ -32,7 +32,7 @@ defineOptions({
     },
 });
 
-const currencyLabel: Record<string, string> = { usd: 'USD', gbp: 'GBP' };
+const currencyLabel: Record<string, string> = { usd: 'USD', gbp: 'GBP', pkr: 'PKR' };
 
 function paymentAccountsSummary(user: UserRow): string {
     return user.payment_accounts

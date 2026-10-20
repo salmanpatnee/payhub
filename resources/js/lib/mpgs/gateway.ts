@@ -172,8 +172,19 @@ export async function mountFields(
         })
     })
 
-    w.PaymentSession.onValidityChange(Object.values(targets).map((selector) => selector), (selector: string, result: any) => {
-        const field = fieldKeyForSelector(targets, selector)
+    // The gateway names fields as `card.number` etc. (the same keys used in
+    // configure() above), not by the CSS selector of the placeholder input.
+    const fieldNames: Record<string, keyof MpgsFieldTargets> = {
+        'card.number': 'cardNumber',
+        'card.expiryMonth': 'expiryMonth',
+        'card.expiryYear': 'expiryYear',
+        'card.securityCode': 'securityCode',
+        'card.nameOnCard': 'cardholderName',
+    }
+
+    w.PaymentSession.onValidityChange(Object.keys(fieldNames), (name: string, result: any) => {
+        // Tolerate a gateway build that hands back the selector instead of the name.
+        const field = fieldNames[name] ?? fieldKeyForSelector(targets, name)
 
         if (field) {
             // Incomplete is not an error while the payer is still typing.

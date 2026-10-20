@@ -32,7 +32,7 @@ class UpdateUserRequest extends FormRequest
             // in progress), but must be visually flagged elsewhere.
             'payment_accounts' => ['array'],
             'payment_accounts.*.currency' => [
-                'required', 'string', 'distinct', 'in:'.implode(',', SupportedCurrency::standardValues()),
+                'required', 'string', 'distinct', 'in:'.implode(',', SupportedCurrency::values()),
             ],
             'payment_accounts.*.provider' => ['required', 'string', 'in:stripe,revolut,square,viva,clover,mpgs'],
             'payment_accounts.*.account_id' => ['required', 'integer'],
@@ -76,20 +76,34 @@ class UpdateUserRequest extends FormRequest
 
             $account = DB::table(ProviderAccountTable::for($provider))
                 ->where('id', $accountId)
-                ->where('is_active', true)
                 ->first();
 
-            if ($account === null) {
+            // A slot the user already has may keep pointing at an account that was deactivated
+            // since (the form re-sends it unchanged, and the dropdown no longer lists it). Only
+            // a newly chosen account has to be active.
+            $isAlreadyAssigned = $this->userAlreadyHasSlot($currency, $provider, (int) $accountId);
+
+            if ($account === null || (! $account->is_active && ! $isAlreadyAssigned)) {
                 $validator->errors()->add("payment_accounts.{$index}.account_id", 'The selected account is invalid or inactive.');
 
                 continue;
             }
 
             $accountCurrency = $provider === 'square' ? $account->currency : null;
+            $acceptsPkr = $provider === 'mpgs' && (bool) $account->supports_pkr;
 
-            if (! CurrencySupportResolver::supports($provider, $accountCurrency, $currency)) {
+            if (! CurrencySupportResolver::supports($provider, $accountCurrency, $currency, $acceptsPkr)) {
                 $validator->errors()->add("payment_accounts.{$index}.currency", 'This account does not support the selected currency.');
             }
         }
+    }
+
+    private function userAlreadyHasSlot(string $currency, string $provider, int $accountId): bool
+    {
+        return $this->route('user')->paymentAccounts()
+            ->where('currency', $currency)
+            ->where('provider', $provider)
+            ->where('account_id', $accountId)
+            ->exists();
     }
 }

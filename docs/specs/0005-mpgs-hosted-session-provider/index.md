@@ -1,7 +1,7 @@
 # 0005. Add MPGS (Mastercard Gateway) Hosted Session as a payment provider
 
 **Date**: 2026-10-17
-**Status**: In Progress
+**Status**: Built and working on staging; awaiting go-live details and the remaining sandbox checks
 
 ## Summary
 
@@ -17,7 +17,7 @@ This spec adds MPGS (Mastercard Payment Gateway Services) as a new PayHub paymen
 
 **Acceptance criteria** (the contract, each criterion is IDed and independently checkable):
 - **AC-1**: An admin can create, edit, activate, deactivate and test the connection of an MPGS account (account name, prefix, merchant ID, integration password, optional webhook secret, API version, optional gateway host), restricted to `role:admin`. The integration password and webhook secret are encrypted at rest, not mass assignable, and never returned to the browser (only `has_*` flags). Test connection makes one authenticated call with the stored credentials and reports success or failure without touching any payment.
-- **AC-2**: An agent or admin can create a payment link against any active MPGS account in USD or GBP. MPGS accounts accept both currencies with no per account currency lock (like Stripe and Revolut), so `CurrencySupportResolver` treats `mpgs` as supported for every currency. A currency the bank has not enabled shows up only at pay time as a gateway rejection (see AC-7, hard error).
+- **AC-2**: An agent or admin can create a payment link against any active MPGS account in USD or GBP. MPGS accounts accept both currencies with no per account currency lock (like Stripe and Revolut), so `CurrencySupportResolver` treats `mpgs` as supported for USD and GBP. **Amended 2026-10-20:** PKR is also allowed, only on an MPGS account with `supports_pkr` on (the bank enables PKR per merchant), for admins directly, and for an agent only when an admin has given that agent a PKR payment-account slot (a `supports_pkr` MPGS account; no slot means no PKR for that agent). No other provider accepts PKR. A currency the bank has not enabled shows up only at pay time as a gateway rejection (see AC-7, hard error).
 - **AC-3**: MPGS appears everywhere the other providers already do: payment create and edit forms, agent account assignment (`user_payment_accounts`), the `ProviderAccountTable` and `CurrencySupportResolver` maps, CSV export, the dashboard account filters and "Accounts Today", the provider badge, and the client facing Success, Failed and Unavailable pages. No surface is left behind (grep for the other providers' two way and three way `match`, ternary and `in_array` lists).
 - **AC-4**: When a client opens an MPGS payment link, PayHub renders the card form on the pay page using the gateway's Hosted Session fields, loaded from the account's gateway host (falling back to the configured default) with the account's merchant ID and API version. The card fields are `readonly` inputs with no `name` attribute, which the gateway replaces with its own frames. No raw card data is ever sent to PayHub. The page declares the clickjacking mitigation it really enforces (`x-frame-options`, which PayHub already sets to `DENY`).
 - **AC-5**: A prepare endpoint creates a gateway session on the server with the account's credentials (asking for `session.authenticationLimit` of 25, since 3DS retries count against it), writes the payment's amount and currency onto that session from the `Payment` record together with the 3DS fields (`authentication.channel` of `PAYER_BROWSER` and `authentication.redirectResponseUrl`, the PayHub return route), creates an `mpgs_charge_attempts` row (status `prepared`) holding a unique gateway order id (`{payment_id}-{sequence}`) and the 3DS and PAY transaction ids, and returns only what the browser needs (session id, order id, authentication transaction id). It rejects with 422 unless the payment's provider is MPGS, its status is `pending` or `failed`, its account exists and is active, and no PAY is currently in flight for it. The session id is encrypted at rest on the attempt, never logged, never placed in a URL, and cleared when the attempt reaches a final state.
@@ -54,6 +54,7 @@ Reasoning and options: see `rationale.md`.
   - `api_version` unsigned small integer (default from config, 100)
   - `gateway_host` string nullable (the account's gateway host, e.g. the bank's test host; null means use `config('services.mpgs.host')`)
   - `is_active` boolean default true, timestamps
+  - `supports_pkr` boolean default false (added 2026-10-20, migration `2026_10_20_000001`): whether this merchant accepts PKR payments.
   - No `currency` column and no `environment` column. Test versus live is a different merchant ID and password, and usually a different host, so the host is set per account with the config value as the fallback.
 - `payments` (existing, additive migration)
   - Adds `mpgs_account_id` FK nullable (cascade on delete, like the others) and `mpgs_order_id` string nullable, indexed (the winning attempt's gateway order id, shown as the provider reference in CSV and dashboard)
@@ -230,17 +231,34 @@ Amended in this pass: `authenticationLimit` of 25 on create session, `authentica
 
 **Build status (2026-10-17).** Steps 1 to 3, 6, 7 and 8 are built. Steps 4 and 5 are built as a shell, pending the spike:
 - Server: `MpgsPaymentController` (`session`, `pay`, `status`), `ClientPaymentController::showMpgs`, routes `pay.mpgs.session|pay|status`, limiters `mpgs-session` (20 per payment per hour) and `mpgs-pay` (10), the MPGS only CSP widening in `SecurityHeaders`. These routes stay behind CSRF (the page sends `X-XSRF-TOKEN`); only the webhook is excluded.
-- Client: `ClientPayment/PayMpgs.vue` (consent, processing poll, timed out state), `MpgsPaymentForm.vue` (prepares a session on load because hosted fields need one first, 3DS, pay, decline retry on a fresh session), and `resources/js/lib/mpgs/gateway.ts`, the single stub file for `session.js` and the 3DS library.
-- `gateway.ts` throws `MpgsNotWiredError` in all four functions (`loadLibraries`, `mountFields`, `captureCard`, `authenticatePayer`), so the pay page shows "Payment system is unavailable" until the spike fills it. The PHP field names stay provisional in `MpgsClient` and `MpgsChargeClassifier`.
+- Client: `ClientPayment/PayMpgs.vue` (consent, processing poll, timed out state), `MpgsPaymentForm.vue` (prepares a session on load because hosted fields need one first, 3DS, pay, decline retry on a fresh session), and `resources/js/lib/mpgs/gateway.ts`, the single file for `session.js` and the 3DS library (wired since the 2026-10-20 staging runs, see below).
+- (Superseded 2026-10-20) `gateway.ts` was a stub that threw `MpgsNotWiredError`. It is now fully wired and proven on staging; the PHP field names for the approved path are confirmed by real PAY calls.
 - A session is prepared on every pay page load (hosted fields need it first), so a reload creates and retires an attempt. The 20 per hour session limit and the sweep bound the cost. Revisit if the spike shows a lazier flow is possible.
-- Not done: step 9 (Pest for the new controller, CSP and limiters) and step 10. `phpunit.xml` hardcodes `APP_BASE_PATH` for another machine; run tests with `APP_BASE_PATH` set to the local path.
+- (Superseded 2026-10-20) Step 9 and step 10 are done, see the next build status. `phpunit.xml` still hardcodes `APP_BASE_PATH` for the original machine.
 
-- [ ] Run the sandbox spike (Build plan step 0) and write the answer to each of the 12 Open questions here before building steps 4 to 7.
+**Build status (2026-10-20).** Steps 1 to 10 are built. Step 9 is done: `tests/Feature/MpgsPaymentControllerTest.php` (35 tests) covers prepare, pay, decline then retry, HTTP 4xx decline, hard error, amount mismatch, timeout, unusable attempts, lock conflict, rate limits, status poll, the 3DS return route, the MPGS only CSP and secret leakage. Step 10 is done: `AGENTS.md` now lists all six providers and names the MPGS server to server exception. `gateway.ts` now registers `onValidityChange` with field names (`card.number` etc.) and still accepts selectors; not yet seen on staging. `phpunit.xml` now pins `PAYMENT_EMAIL_NOTIFICATIONS_ENABLED=true`, which fixes the red `NotificationTest` (the local `.env` had it off). Still open: the staging answers listed above (Open questions 5, 6, 8 to 12), live go-live details from the bank, and the two decisions (refunds out of scope, PKR admin only at launch).
+
+
+**Staging results and fixes (2026-10-20).** The full flow works on a public staging URL: hosted fields, 3DS challenge, return page, PAY, USD at least. Answers and changes found while proving it:
+- Q4 (partly answered): the 3DS challenge renders inline. `renderChallenge()` inserts the gateway's `htmlRedirectCode` into `#mpgs-3ds-challenge` and submits its form, then PAY waits for the `mpgs-3ds-return` postMessage from the return page. When there is no `htmlRedirectCode` (frictionless) PAY goes at once. The challenge container must sit OUTSIDE the payment `<form>` (a nested form is dropped when HTML is inserted). Whether name and email alone are enough for every bank is still unconfirmed.
+- Q6 (answered): create-and-discard a session works as the credential check, but the body must be a JSON object (`new \stdClass`). An empty PHP array encodes as `[]` and the gateway returns 400.
+- Hosted fields were untypeable because the gateway copies the input's measured width into its frame and a flex wrapper squeezed the input to 0px. The wrapper is now a plain block, the form always renders (no `v-show`), the Pay button waits until the fields are ready, and inputs carry placeholders (the gateway copies them).
+- A hard error on PAY now shows "Your payment could not be processed...", not "could not reach".
+- `gateway_host` accepts a trailing slash (stripped before validation).
+- Local development cannot finish 3DS: the bank's public challenge page is blocked from posting back to a local address. Test 3DS on a public URL.
+- Test card (public gateway): 5123450000000008, 01/39, CVV 100; the bank's challenge emulator offers "(Y) Successful" and other results.
+- Tests: `tests/Feature/MpgsPaymentControllerTest.php` (35 tests) added; full suite green. `NotificationTest` was red only because the local `.env` turned payment emails off; `phpunit.xml` now pins them on.
+
+**Still unanswered** (needs staging runs or the bank): Q5 webhook delivery and the two-notification behaviour with the secret header, Q8 retrieve-order transaction shape, Q9 error shape for a currency the merchant has not enabled, Q10 `fullScreenRedirect` for any bank, Q11 field length limits, Q12 full decline code list and real session lifetime, and whether PKR is enabled on the test and live merchants. Go-live also needs the live gateway host, merchant ID and the notification URL and secret setup.
+
+**Pending decisions:** refunds and voids stay out of scope for the first release (proposed); PKR for agents is opt-in per agent through the PKR slot (decided 2026-10-20).
+
+- [ ] Finish the sandbox spike (Build plan step 0): the staging flow works, but the open questions listed above are still unanswered. Record each remaining answer here.
 - [ ] Decide after the spike whether the 3DS challenge stays inline or needs `fullScreenRedirect` for some banks (needs a return route and page state restore if so).
 - [ ] If the spike shows name and email are not enough for 3DS, amend AC-2, the form and the value sourcing table to collect the minimum billing fields.
 - [ ] Revisit a `currencies` column on `mpgs_accounts` if wrong currency rejections happen in practice.
 - [x] Correct `docs/MPGS_STANDALONE_INTEGRATION_HANDOFF.md`: void is `PUT` with `apiOperation: VOID`, not `DELETE`, and the line references point to the plugin repo. Done 2026-10-17.
-- [ ] Update `AGENTS.md` through `/sync` once this ships: add MPGS to the provider list and name the scoped server to server exception (Clover and MPGS) in the critical rules.
+- [x] Update `AGENTS.md` through `/sync` once this ships: add MPGS to the provider list and name the scoped server to server exception (Clover and MPGS) in the critical rules.
 - [ ] Rate limits (10 pays and 20 sessions per payment per hour), the 30 minute prepared lifetime and the 10 minute sweep are starting defaults, not reviewed figures.
 - [ ] An `abandoned` attempt is only logged today; consider an admin view of stuck MPGS payments if it happens often.
 - [ ] Refunds and voids stay out of scope; revisit only if PayHub adds a refund feature for any provider.

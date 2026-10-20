@@ -30,7 +30,7 @@ class StoreUserRequest extends FormRequest
             // in progress), but must be visually flagged elsewhere.
             'payment_accounts' => ['array'],
             'payment_accounts.*.currency' => [
-                'required', 'string', 'distinct', 'in:'.implode(',', SupportedCurrency::standardValues()),
+                'required', 'string', 'distinct', 'in:'.implode(',', SupportedCurrency::values()),
             ],
             'payment_accounts.*.provider' => ['required', 'string', 'in:stripe,revolut,square,viva,clover,mpgs'],
             'payment_accounts.*.account_id' => ['required', 'integer'],
@@ -84,8 +84,9 @@ class StoreUserRequest extends FormRequest
             }
 
             $accountCurrency = $provider === 'square' ? $account->currency : null;
+            $acceptsPkr = $provider === 'mpgs' && (bool) $account->supports_pkr;
 
-            if (! CurrencySupportResolver::supports($provider, $accountCurrency, $currency)) {
+            if (! CurrencySupportResolver::supports($provider, $accountCurrency, $currency, $acceptsPkr)) {
                 $validator->errors()->add("payment_accounts.{$index}.currency", 'This account does not support the selected currency.');
             }
         }

@@ -31,7 +31,7 @@ type MpgsAccountProp = {
 defineOptions({
     layout: {
         breadcrumbs: [
-            { title: 'MPGS Accounts', href: '/admin/mpgs-accounts' },
+            { title: 'Bank Gateway Accounts', href: '/admin/mpgs-accounts' },
             { title: 'Edit account', href: '#' },
         ],
     },
@@ -104,7 +104,7 @@ function submit() {
 
         <Card>
             <CardHeader>
-                <CardTitle>Edit MPGS account</CardTitle>
+                <CardTitle>Edit bank gateway account</CardTitle>
                 <CardDescription>
                     Update the account name, IDs, or credentials. Current secrets are not shown —
                     paste a new value to replace them.

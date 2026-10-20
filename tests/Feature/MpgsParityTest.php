@@ -95,7 +95,7 @@ it('rejects a PKR payment on a non-MPGS provider', function () {
     expect(Payment::count())->toBe(0);
 });
 
-it('does not let an agent create a PKR payment', function () {
+it('does not let an agent without a PKR slot create a PKR payment', function () {
     $brand = Brand::factory()->create();
     $rm = RelationshipManager::factory()->create();
     $account = MpgsAccount::factory()->supportsPkr()->create(['is_active' => true]);
@@ -313,4 +313,176 @@ it('renders the MPGS pay page without the session id or any secret', function ()
                 ->missing('integration_password')
                 ->missing('webhook_secret'))
             ->missing('session_id'));
+});
+
+// ── Agent PKR slot: an admin "allows" PKR for an agent by assigning a PKR-enabled MPGS account ──
+
+function mpgsPkrAgent(MpgsAccount $account, bool $withPkrSlot = true): array
+{
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+    $agent = User::factory()->create()->assignRole('agent');
+    $agent->brands()->attach($brand);
+    $agent->relationshipManagers()->attach($rm);
+
+    if ($withPkrSlot) {
+        $agent->paymentAccounts()->create(['currency' => 'pkr', 'provider' => 'mpgs', 'account_id' => $account->id]);
+    }
+
+    return [$agent, $brand, $rm];
+}
+
+it('lets an agent with a PKR slot create a PKR payment routed to that MPGS account', function () {
+    $account = MpgsAccount::factory()->supportsPkr()->create(['is_active' => true]);
+    [$agent, $brand, $rm] = mpgsPkrAgent($account);
+
+    $this->actingAs($agent)
+        ->post('/payments', [
+            'brand_id' => $brand->id,
+            'relationship_manager_id' => $rm->id,
+            'currency' => 'pkr',
+            'amount' => '2500.00',
+            'client_name' => 'Bob',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $payment = Payment::firstOrFail();
+    expect($payment->currency)->toBe('pkr')
+        ->and($payment->provider->value)->toBe('mpgs')
+        ->and($payment->mpgs_account_id)->toBe($account->id)
+        ->and($payment->amount)->toBe(250000);
+});
+
+it('rejects a PKR payment from an agent whose PKR account has been deactivated', function () {
+    $account = MpgsAccount::factory()->supportsPkr()->create(['is_active' => true]);
+    [$agent, $brand, $rm] = mpgsPkrAgent($account);
+    $account->update(['is_active' => false]);
+
+    $this->actingAs($agent)
+        ->post('/payments', [
+            'brand_id' => $brand->id,
+            'relationship_manager_id' => $rm->id,
+            'currency' => 'pkr',
+            'amount' => '10.00',
+            'client_name' => 'Bob',
+        ])
+        ->assertSessionHasErrors(['currency']);
+
+    expect(Payment::count())->toBe(0);
+});
+
+it('offers PKR on the agent create form only when the agent has a PKR slot', function () {
+    $account = MpgsAccount::factory()->supportsPkr()->create(['is_active' => true]);
+    [$withSlot] = mpgsPkrAgent($account);
+    [$withoutSlot] = mpgsPkrAgent($account, withPkrSlot: false);
+    // An agent with no account at all is redirected away from the form, so give this one USD.
+    $withoutSlot->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'mpgs', 'account_id' => $account->id]);
+
+    $currencies = function (User $agent) {
+        $page = $this->actingAs($agent)->get(route('payments.create'))->assertOk()->original->getData()['page'];
+
+        return collect($page['props']['agentCurrencies'])->pluck('currency')->all();
+    };
+
+    expect($currencies($withSlot))->toContain('pkr')
+        ->and($currencies($withoutSlot))->not->toContain('pkr');
+});
+
+it('lets an admin give an agent a PKR slot on a PKR-enabled MPGS account', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $account = MpgsAccount::factory()->supportsPkr()->create(['is_active' => true]);
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+
+    $this->actingAs($admin)
+        ->post(route('admin.users.store'), [
+            'name' => 'PKR Agent',
+            'username' => 'pkragent',
+            'password' => 'Password1!',
+            'role' => 'agent',
+            'payment_accounts' => [['currency' => 'pkr', 'provider' => 'mpgs', 'account_id' => $account->id]],
+            'brand_ids' => [$brand->id],
+            'relationship_manager_ids' => [$rm->id],
+        ])
+        ->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('user_payment_accounts', [
+        'currency' => 'pkr', 'provider' => 'mpgs', 'account_id' => $account->id,
+    ]);
+});
+
+it('refuses a PKR slot on an MPGS account without PKR, or on another provider', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $noPkr = MpgsAccount::factory()->create(['is_active' => true]);
+    $stripe = StripeAccount::factory()->create(['is_active' => true]);
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+
+    foreach ([['mpgs', $noPkr->id], ['stripe', $stripe->id]] as $i => [$provider, $id]) {
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'Bad PKR',
+                'username' => "badpkr{$i}",
+                'password' => 'Password1!',
+                'role' => 'agent',
+                'payment_accounts' => [['currency' => 'pkr', 'provider' => $provider, 'account_id' => $id]],
+                'brand_ids' => [$brand->id],
+                'relationship_manager_ids' => [$rm->id],
+            ])
+            ->assertSessionHasErrors(['payment_accounts.0.currency']);
+    }
+
+    $this->assertDatabaseMissing('user_payment_accounts', ['currency' => 'pkr']);
+});
+
+it('offers only PKR-enabled MPGS accounts in the admin PKR slot options', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $yes = MpgsAccount::factory()->supportsPkr()->create(['is_active' => true]);
+    MpgsAccount::factory()->create(['is_active' => true]);
+    StripeAccount::factory()->create(['is_active' => true]);
+
+    $props = $this->actingAs($admin)->get(route('admin.users.create'))->viewData('page')['props'];
+
+    expect($props['accountsByCurrency']['pkr'])->toHaveCount(1)
+        ->and($props['accountsByCurrency']['pkr'][0]['id'])->toBe($yes->id)
+        ->and($props['accountsByCurrency']['pkr'][0]['provider'])->toBe('mpgs');
+});
+
+it('lets an admin add a PKR slot to an agent whose existing USD account has since been deactivated', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $oldStripe = StripeAccount::factory()->create(['is_active' => false]);
+    $pkr = MpgsAccount::factory()->supportsPkr()->create(['is_active' => true]);
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+    $agent = User::factory()->create()->assignRole('agent');
+    $agent->brands()->attach($brand);
+    $agent->relationshipManagers()->attach($rm);
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'stripe', 'account_id' => $oldStripe->id]);
+
+    // The edit form re-sends the unchanged (now inactive) USD slot together with the new PKR one.
+    $payload = [
+        'name' => $agent->name,
+        'username' => $agent->username,
+        'role' => 'agent',
+        'payment_accounts' => [
+            ['currency' => 'usd', 'provider' => 'stripe', 'account_id' => (string) $oldStripe->id],
+            ['currency' => 'pkr', 'provider' => 'mpgs', 'account_id' => (string) $pkr->id],
+        ],
+        'brand_ids' => [$brand->id],
+        'relationship_manager_ids' => [$rm->id],
+    ];
+
+    $this->actingAs($admin)->patch(route('admin.users.update', $agent), $payload)->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('user_payment_accounts', ['user_id' => $agent->id, 'currency' => 'pkr', 'account_id' => $pkr->id]);
+
+    // An inactive account is still refused when it is newly assigned.
+    $other = User::factory()->create()->assignRole('agent');
+    $other->brands()->attach($brand);
+    $other->relationshipManagers()->attach($rm);
+    $payload['username'] = $other->username;
+    $payload['name'] = $other->name;
+
+    $this->actingAs($admin)->patch(route('admin.users.update', $other), $payload)
+        ->assertSessionHasErrors(['payment_accounts.0.account_id']);
 });

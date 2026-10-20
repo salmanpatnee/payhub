@@ -1,53 +1,63 @@
-# Memory — MPGS Hosted Session provider (spec 0005)
+# Memory — MPGS Hosted Session provider (spec 0005): sandbox proven, PKR added
 
-Last updated: 2026-10-17 (end of session)
+Last updated: 2026-10-20 (end of session)
 
 ## What was built
 
-Branch `feat/mpgs-hosted-session`, nothing pushed. Latest commits: `4a00814a` (spec amendment), `0b43ccf8` (gateway wiring), `7b46a3cf`, `8ac2d507`, `71ac8652` (pay page shell), plus earlier data layer, `MpgsClient`/classifier/resolver, admin accounts, parity sweep, resolver job + sweep, webhook, spike kit.
+All pushed. `staging` is at `46ccdfb` (merge of `feat/mpgs-hosted-session`, which is at `12fa461`, includes a `public/build` rebuild commit). Nothing is on `master`.
 
-Build plan status (`docs/specs/0005-mpgs-hosted-session-provider/index.md`): steps 1 to 8 built; step 0 (sandbox spike), 9 (Pest for new code) and 10 (`/sync` of `AGENTS.md`) not done.
+Commits this session:
+- `9d7b239` fix(mpgs): hosted fields typeable + 3DS challenge runs.
+- `123d9b3` feat(mpgs): PKR currency support, per MPGS account.
+- `12fa461` build: rebuilt `public/build` (it is tracked; staging serves the committed build).
 
-Built this session:
-- `MpgsPaymentController` (`session`, `pay`, `status`, `threeDsReturn`), routes `pay.mpgs.session|pay|status|return`, limiters `mpgs-session` 20/h and `mpgs-pay` 10/h, one lock per payment for prepare and pay. Pay routes stay behind CSRF (page sends `X-XSRF-TOKEN`).
-- `ClientPaymentController::showMpgs` renders `ClientPayment/PayMpgs`; `PayMpgs.vue`, `MpgsPaymentForm.vue`, `resources/js/lib/mpgs/gateway.ts` (written from the bank's docs, `SPIKE` comments mark guesses), `notice.ts`.
-- `SecurityHeaders`: MPGS-only CSP widening (account's host in script/frame/connect, `frame-src https:`); `pay.mpgs.return` is the only route with `X-Frame-Options: SAMEORIGIN`. View `mpgs-3ds-return.blade.php` + `public/mpgs-3ds-return.js` (external file because CSP forbids inline script).
-- `mpgs_accounts.gateway_host` (nullable, migration `..._000005`), `MpgsAccount::gatewayHost()`, admin form field, API version default 100, `MpgsClient` sends `authenticationLimit` 25 on create and `authentication.channel` + `redirectResponseUrl` on update.
-- Handoff doc void note corrected. Spec `## Follow-up` holds the doc answers and build status.
+Pay page and 3DS (`resources/js/lib/mpgs/gateway.ts`, `resources/js/pages/ClientPayment/MpgsPaymentForm.vue`, `MpgsClient.php`, `MpgsPaymentController.php`):
+- Field wrapper is a plain block (not flex), form always renders (no `v-show`), Pay disabled until ready, placeholders on the inputs (the gateway copies them).
+- `renderChallenge()` inserts the gateway's `htmlRedirectCode` into `#mpgs-3ds-challenge`, submits its form, and PAY waits for the `mpgs-3ds-return` postMessage from the return page. Frictionless (no `htmlRedirectCode`) pays at once.
+- `verifyCredentials()` sends `new \stdClass` (an empty array encoded as `[]` and the gateway 400'd, so accounts could not be saved). A rejected PAY (hard_error) now says "Your payment could not be processed...", not "could not reach".
+- `console.warn('[MPGS] 3DS ... did not proceed')` kept to help sandbox runs.
+
+PKR (admin-only, MPGS-only):
+- `SupportedCurrency::PKR` + `standard()`/`standardValues()` (USD/GBP only; used for agents, Zelle, admin user slots).
+- `CurrencySupportResolver::supports($provider, $accountCurrency, $currency, $accountAcceptsPkr)`: PKR only for an MPGS account with `mpgs_accounts.supports_pkr` (migration `2026_10_20_000001`). Store/UpdatePaymentRequest, MPGS account forms and list, Create/Edit payment forms (PKR option only for a flagged MPGS account), `ClientPaymentController::show` 404 for non-MPGS PKR.
+- Dashboard filter/KPIs accept PKR; PKR excluded from the USD/GBP trend chart, currency mix and `primaryRevenue` fallback. `PaymentSucceeded` mail uses "Rs". `en-PK` formatting on client pages. Tests added (resolver, creation/reject, account flag, MpgsAmount, email). `AGENTS.md` and `docs/agent.md` updated.
+- `gateway_host` accepts a trailing slash (stripped before validation).
 
 ## Decisions made
 
-- Bank is Bank Alfalah; test host `test-bankalfalah.gateway.mastercard.com` differs from live, so host is per account with config fallback.
-- Hosted fields need a session first, so a session is prepared on every pay page load (attempt per page view; bounded by the 20/h limit and the sweep).
-- `PaymentSession.configure` and `ThreeDS.configure` run once per page load, so a decline or failed 3DS reloads the pay page; the message survives via `sessionStorage`.
-- Card fields are readonly inputs (`card-number`, `expiry-month`, `expiry-year`, `security-code`, `cardholder-name`); clickjacking mitigation is `x-frame-options`.
-- PAY response primary, webhook signal only, read only resolver; refunds/voids out of scope; name + email only for 3DS until the spike says otherwise.
-- User decisions: no live credentials for the spike (`spike.php pay` and 3DS move money; only `session` is safe on live), no new tests for now.
+- PKR needs a per-account `supports_pkr` flag (the bank must enable PKR per merchant); admin-only for now, agents and Zelle stay USD/GBP.
+- PKR is kept out of USD/GBP comparisons (ranking, currency mix, trend chart).
+- Challenge container must live OUTSIDE the payment `<form>` (a nested `<form>` is dropped when HTML is inserted via innerHTML).
+- Staging (public https) is where 3DS is tested end to end; user confirmed the full flow works there.
 
 ## Problems solved
 
-- `phpunit.xml` hardcodes `APP_BASE_PATH` for another machine; run tests with `APP_BASE_PATH='C:\Users\Salman\Herd\payhub' vendor/bin/pest ...`. File itself not fixed.
-- Mastercard docs: WebFetch returns only a title. The Chrome tools (`get_page_text`) render them; useful pages are under `/api/documentation/integrationGuidelines/hostedSession/` (`makingAPayment.html`) and `.../authentication/3DS/integrationModelJS.html`.
-- Wayfinder breaks on a route name segment starting with a digit (`3ds-return`), hence `pay.mpgs.return`. `resources/js/routes` is gitignored; regenerate with `php artisan wayfinder:generate`.
-- `@sentry/vue` was missing from `node_modules`: `npm install` fixed it. `vite build` rewrites tracked `public/build`; revert with `git checkout -- public/build && git clean -fdq public/build`.
-- Shell heredocs with quotes broke in the Bash tool; write a patch script file instead.
+- Hosted fields untypeable: the gateway copies the input's measured width into its frame; a flex wrapper squeezed the input to 0px. Plain block wrapper fixes it.
+- `v-show` form gave 0-width frames; hiding at zero height stopped `initialized`. Never hide the form.
+- Locally (`payhub.test` -> 127.0.0.1) Chrome blocks the bank's public ACS page from posting back to a local address ("initiated by a public page to connect to devices or servers on your local network"). Not a bug; test the 3DS return on a public URL. The `allow=` attribute does not fix it.
+- `.env` lines with spaces around `=` need a tolerant loader for the spike (`MPGS_SPIKE_*`); the spike script reads the process env, not `.env`.
+- Browser console output is lost on reload; the Boost browser logger writes console errors to `storage/logs/browser.log`.
+- The Chrome tool blocks output containing URLs/query strings; return only sizes/booleans.
+- Test cards (public Mastercard Gateway): 5123450000000008, 01/39, CVV 100. The bank's ACS emulator offers "(Y) Successful" and other results. Cents of the amount pick the response on some test setups (unconfirmed).
 
 ## Current state
 
-- Tests: last run `--filter="Mpgs|SecurityHeaders|ClientPayment|Clover"` 204 of 204 passing; `MpgsParityTest` 13/13 after the route rename. vue-tsc has no MPGS errors. Pint clean.
-- Nothing has run against a real gateway. The pay page cannot take a payment until the spike confirms `gateway.ts` and the field names.
-- No tests yet for `MpgsPaymentController`, CSP widening, limiters or the return route.
-- `AGENTS.md` still says three providers and "webhooks only" (stale; `/sync` after ship).
+- Works on staging: fields, placeholders, 3DS challenge, return, PAY (USD at least). Local dev cannot finish 3DS (see above).
+- Spec 0005 open questions largely unanswered in `## Follow-up`; spec text still says MPGS has no currency setting.
+- Pre-existing failing test: `NotificationTest` "queues PaymentSucceeded mail to all admins only" (0 queued, fails on committed code too, unrelated).
+- `AGENTS.md` still describes provider counts/webhook rules loosely; `/sync` not run. `docs/research/` is untracked and not committed.
+- This `memory.md` itself is not committed.
 
 ## Next session starts with
 
-1. Get TEST merchant credentials from the bank (merchant id, integration password, host; Hosted Session + 3DS enabled; bank test cards). Credentials in `.env` only, never in files or chat.
-2. Run the spike kit (`docs/specs/0005-mpgs-hosted-session-provider/spike/`) and drive the pay page in the sandbox. Resolve every `SPIKE` comment in `gateway.ts`; correct `MpgsClient` / `MpgsChargeClassifier` field names.
-3. Then step 9 (Pest for the controller, CSP, limiters, return route) and step 10 (`/sync`).
+1. Get the staging results from the user: decline card, insufficient-funds card, a currency the merchant has not enabled, other emulator results, a PKR payment, webhook delivery (two notifications on 3DS, secret header), session expiry, whether 3DS needed more than name + email. Record answers in spec 0005 `## Follow-up` (via `/architect` if a field name/sequence changes).
+2. Get from the user/bank: live gateway host, live merchant id, PKR enabled on live, how to set notification URL/secret on live, any go-live approval. The user enters the live integration password in the admin form; never in chat.
+3. Do the work that needs no input: step 9 Pest tests (MpgsPaymentController, CSP widening, limiters `mpgs-session` 20/h and `mpgs-pay` 10/h, return route), fix `PaymentSession.onValidityChange` to use field names like `card.number` instead of CSS selectors (invalid borders never fire), step 10 `/sync`, investigate the failing NotificationTest.
 
 ## Open questions
 
-- Billing address needed for 3DS, or are name and email enough?
-- What the return page must do for the 3DS library callback; does the library render the challenge itself or must `htmlRedirectCode` be inserted; is `fullScreenRedirect` needed?
-- `error` block shape, decline code list, Retrieve Order `transaction[]` shape, field length limits, real session lifetime, webhook secret behavior (Q5, Q6, Q8 to Q12 in the spec).
-- Whether to push the branch and open a PR; whether to fix `phpunit.xml` `APP_BASE_PATH`.
+- Is the bank's PKR enabled on the test and live merchants?
+- Billing address needed for 3DS, or are name and email enough? Is `fullScreenRedirect` needed for any bank?
+- Refunds/voids stay out of scope for the first release? Keep PKR admin-only at launch?
+- Real session lifetime, decline code list, error shape for a disabled currency (hard error vs decline), webhook secret behaviour.
+- When to merge to `master` and deploy by hand (prod runs `master`; Hostinger needs a manual pull + opcache reset).
