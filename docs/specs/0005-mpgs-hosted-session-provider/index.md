@@ -235,12 +235,14 @@ Amended in this pass: `authenticationLimit` of 25 on create session, `authentica
 - A session is prepared on every pay page load (hosted fields need it first), so a reload creates and retires an attempt. The 20 per hour session limit and the sweep bound the cost. Revisit if the spike shows a lazier flow is possible.
 - Not done: step 9 (Pest for the new controller, CSP and limiters) and step 10. `phpunit.xml` hardcodes `APP_BASE_PATH` for another machine; run tests with `APP_BASE_PATH` set to the local path.
 
+**Build status (2026-10-20).** Steps 1 to 10 are built. Step 9 is done: `tests/Feature/MpgsPaymentControllerTest.php` (35 tests) covers prepare, pay, decline then retry, HTTP 4xx decline, hard error, amount mismatch, timeout, unusable attempts, lock conflict, rate limits, status poll, the 3DS return route, the MPGS only CSP and secret leakage. Step 10 is done: `AGENTS.md` now lists all six providers and names the MPGS server to server exception. `gateway.ts` now registers `onValidityChange` with field names (`card.number` etc.) and still accepts selectors; not yet seen on staging. `phpunit.xml` now pins `PAYMENT_EMAIL_NOTIFICATIONS_ENABLED=true`, which fixes the red `NotificationTest` (the local `.env` had it off). Still open: the staging answers listed above (Open questions 5, 6, 8 to 12), live go-live details from the bank, and the two decisions (refunds out of scope, PKR admin only at launch).
+
 - [ ] Run the sandbox spike (Build plan step 0) and write the answer to each of the 12 Open questions here before building steps 4 to 7.
 - [ ] Decide after the spike whether the 3DS challenge stays inline or needs `fullScreenRedirect` for some banks (needs a return route and page state restore if so).
 - [ ] If the spike shows name and email are not enough for 3DS, amend AC-2, the form and the value sourcing table to collect the minimum billing fields.
 - [ ] Revisit a `currencies` column on `mpgs_accounts` if wrong currency rejections happen in practice.
 - [x] Correct `docs/MPGS_STANDALONE_INTEGRATION_HANDOFF.md`: void is `PUT` with `apiOperation: VOID`, not `DELETE`, and the line references point to the plugin repo. Done 2026-10-17.
-- [ ] Update `AGENTS.md` through `/sync` once this ships: add MPGS to the provider list and name the scoped server to server exception (Clover and MPGS) in the critical rules.
+- [x] Update `AGENTS.md` through `/sync` once this ships: add MPGS to the provider list and name the scoped server to server exception (Clover and MPGS) in the critical rules.
 - [ ] Rate limits (10 pays and 20 sessions per payment per hour), the 30 minute prepared lifetime and the 10 minute sweep are starting defaults, not reviewed figures.
 - [ ] An `abandoned` attempt is only logged today; consider an admin view of stuck MPGS payments if it happens often.
 - [ ] Refunds and voids stay out of scope; revisit only if PayHub adds a refund feature for any provider.
