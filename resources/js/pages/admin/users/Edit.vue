@@ -42,7 +42,7 @@ type UserProp = {
 const props = defineProps<{
     user: UserProp;
     roles: string[];
-    accountsByCurrency: { usd: AccountOption[]; gbp: AccountOption[] };
+    accountsByCurrency: { usd: AccountOption[]; gbp: AccountOption[]; pkr: AccountOption[] };
     brands: NamedOption[];
     relationshipManagers: NamedOption[];
 }>();
@@ -71,7 +71,7 @@ const form = useForm({
     relationship_manager_ids:   [...props.user.relationship_manager_ids],
 });
 
-const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut', square: 'Square', viva: 'Viva', clover: 'Clover' };
+const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut', square: 'Square', viva: 'Viva', clover: 'Clover', mpgs: 'MPGS' };
 
 // Each account selector encodes "provider:id" since ids collide across providers.
 function toSelectOptions(accounts: AccountOption[]) {
@@ -83,26 +83,27 @@ const gbpOptions = computed(() => toSelectOptions(props.accountsByCurrency.gbp))
 
 const existingUsd = props.user.payment_accounts.find((a) => a.currency === 'usd');
 const existingGbp = props.user.payment_accounts.find((a) => a.currency === 'gbp');
+const existingPkr = props.user.payment_accounts.find((a) => a.currency === 'pkr');
 
 const usdAccountValue = ref(existingUsd ? `${existingUsd.provider}:${existingUsd.account_id}` : '');
 const gbpAccountValue = ref(existingGbp ? `${existingGbp.provider}:${existingGbp.account_id}` : '');
+const pkrAccountValue = ref(existingPkr ? `${existingPkr.provider}:${existingPkr.account_id}` : '');
+const pkrOptions = computed(() => toSelectOptions(props.accountsByCurrency.pkr));
 
 // Deterministic index into form.payment_accounts for each currency's field —
-// USD (if set) always lands first, GBP fills whichever slot remains.
+// entries are pushed in USD, GBP, PKR order, skipping any that are unset.
 const usdEntryIndex = computed(() => (usdAccountValue.value ? 0 : -1));
 const gbpEntryIndex = computed(() => (gbpAccountValue.value ? (usdAccountValue.value ? 1 : 0) : -1));
+const pkrEntryIndex = computed(() => (pkrAccountValue.value ? [usdAccountValue.value, gbpAccountValue.value].filter(Boolean).length : -1));
 
-watch([usdAccountValue, gbpAccountValue], () => {
+watch([usdAccountValue, gbpAccountValue, pkrAccountValue], () => {
     const entries: PaymentAccountEntry[] = [];
 
-    if (usdAccountValue.value) {
-        const [provider, accountId] = usdAccountValue.value.split(':');
-        entries.push({ currency: 'usd', provider, account_id: accountId });
-    }
-
-    if (gbpAccountValue.value) {
-        const [provider, accountId] = gbpAccountValue.value.split(':');
-        entries.push({ currency: 'gbp', provider, account_id: accountId });
+    for (const [currency, value] of [['usd', usdAccountValue.value], ['gbp', gbpAccountValue.value], ['pkr', pkrAccountValue.value]]) {
+        if (value) {
+            const [provider, accountId] = value.split(':');
+            entries.push({ currency, provider, account_id: accountId });
+        }
     }
 
     form.payment_accounts = entries;
@@ -233,6 +234,19 @@ function executeDelete() {
                             empty-text="No active GBP-capable accounts."
                         />
                         <InputError class="mt-2" :message="gbpEntryIndex >= 0 ? form.errors[`payment_accounts.${gbpEntryIndex}.account_id`] ?? form.errors[`payment_accounts.${gbpEntryIndex}.currency`] : undefined" />
+                    </div>
+
+                    <div v-if="form.role === 'agent'" class="grid gap-2">
+                        <Label for="pkr_account_id">PKR Payment Account <span class="text-muted-foreground text-xs">(optional)</span></Label>
+                        <SearchableSelect
+                            id="pkr_account_id"
+                            v-model="pkrAccountValue"
+                            :options="pkrOptions"
+                            placeholder="No PKR account (agent cannot take PKR)"
+                            search-placeholder="Search accounts…"
+                            empty-text="No active MPGS accounts with PKR enabled."
+                        />
+                        <InputError class="mt-2" :message="pkrEntryIndex >= 0 ? form.errors[`payment_accounts.${pkrEntryIndex}.account_id`] ?? form.errors[`payment_accounts.${pkrEntryIndex}.currency`] : undefined" />
                     </div>
 
                     <div v-if="form.role === 'agent'" class="grid gap-2">

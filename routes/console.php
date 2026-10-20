@@ -2,6 +2,7 @@
 
 use App\Jobs\ResolveCloverChargeAttempt;
 use App\Models\CloverChargeAttempt;
+use App\Services\Mpgs\MpgsStaleAttemptSweep;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -22,6 +23,12 @@ Schedule::call(function () {
         })
         ->each(fn (CloverChargeAttempt $attempt) => ResolveCloverChargeAttempt::dispatch($attempt->id));
 })->name('clover:resolve-stale-charge-attempts')->everyTenMinutes()->withoutOverlapping();
+
+// Backstop for MPGS attempts (spec 0005, AC-10): re-dispatches stale pending
+// attempts to the read only resolver and expires prepared ones past the session
+// lifetime. Never calls the gateway itself.
+Schedule::call(new MpgsStaleAttemptSweep)
+    ->name('mpgs:sweep-stale-attempts')->everyTenMinutes()->withoutOverlapping();
 
 // Ask Stripe whether each account can still take payments (spec 0004).
 Schedule::command('stripe:check-health')->everyFifteenMinutes()->withoutOverlapping();

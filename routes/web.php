@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CloverAccountController;
+use App\Http\Controllers\Admin\MpgsAccountController;
 use App\Http\Controllers\Admin\RelationshipManagerController;
 use App\Http\Controllers\Admin\RevolutAccountController;
 use App\Http\Controllers\Admin\SquareAccountController;
@@ -12,6 +13,8 @@ use App\Http\Controllers\BankAccountActivityLogController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MpgsPaymentController;
+use App\Http\Controllers\MpgsWebhookController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RevolutWebhookController;
 use App\Http\Controllers\SquareWebhookController;
@@ -228,6 +231,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'clover-accounts/{clover_account}/test-connection',
             [CloverAccountController::class, 'testStoredConnection']
         )->name('clover-accounts.test-stored-connection');
+
+        Route::resource('mpgs-accounts', MpgsAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'mpgs-accounts/{mpgs_account}/deactivate',
+            [MpgsAccountController::class, 'deactivate']
+        )->name('mpgs-accounts.deactivate');
+
+        Route::patch(
+            'mpgs-accounts/{mpgs_account}/activate',
+            [MpgsAccountController::class, 'activate']
+        )->name('mpgs-accounts.activate');
+
+        Route::post(
+            'mpgs-accounts/test-connection',
+            [MpgsAccountController::class, 'testKeyConnection']
+        )->name('mpgs-accounts.test-connection');
+
+        Route::post(
+            'mpgs-accounts/{mpgs_account}/test-connection',
+            [MpgsAccountController::class, 'testStoredConnection']
+        )->name('mpgs-accounts.test-stored-connection');
     });
 
 // Public payment routes — no auth middleware (CLIENT-01)
@@ -265,6 +291,22 @@ Route::post('/pay/{payment}/clover/charge', [ClientPaymentController::class, 'ch
 Route::get('/pay/{payment}/clover/status', [ClientPaymentController::class, 'cloverStatus'])
     ->name('pay.clover.status');
 
+// MPGS Hosted Session pay thread — public (scoped by the payment UUID), rate limited
+// per payment by the named limiters in AppServiceProvider. Unlike Clover these stay
+// behind CSRF: the page sends the XSRF token (spec 0005, AC-12).
+Route::post('/pay/{payment}/mpgs/session', [MpgsPaymentController::class, 'session'])
+    ->name('pay.mpgs.session')
+    ->middleware('throttle:mpgs-session');
+Route::post('/pay/{payment}/mpgs/pay', [MpgsPaymentController::class, 'pay'])
+    ->name('pay.mpgs.pay')
+    ->middleware('throttle:mpgs-pay');
+Route::get('/pay/{payment}/mpgs/status', [MpgsPaymentController::class, 'status'])
+    ->name('pay.mpgs.status');
+// The bank's ACS posts the payer back here after a 3DS challenge (CSRF excluded, it is a
+// cross site POST). Renders inside the challenge frame on the pay page.
+Route::match(['get', 'post'], '/pay/{payment}/mpgs/3ds-return', [MpgsPaymentController::class, 'threeDsReturn'])
+    ->name('pay.mpgs.return');
+
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)
 Route::post('/webhook/stripe/{stripeAccount}', [StripeWebhookController::class, 'handle'])
@@ -279,6 +321,12 @@ Route::post('/webhook/revolut/{revolutAccount}', [RevolutWebhookController::clas
 // {squareAccount} resolves by integer id (implicit model binding)
 Route::post('/webhook/square/{squareAccount}', [SquareWebhookController::class, 'handle'])
     ->name('webhook.square')
+    ->middleware('throttle:120,1');
+
+// {mpgsAccount} resolves by integer id (implicit model binding). Protected by the per account
+// X-Notification-Secret header, not a signature (spec 0005, AC-9).
+Route::post('/webhook/mpgs/{mpgsAccount}', [MpgsWebhookController::class, 'handle'])
+    ->name('webhook.mpgs')
     ->middleware('throttle:120,1');
 
 // {vivaAccount} resolves by integer id (implicit model binding).

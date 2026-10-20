@@ -35,7 +35,11 @@ class PaymentSucceeded extends Mailable
 
     private function formatAmount(int $cents, string $currency): string
     {
-        $symbol = strtolower($currency) === 'gbp' ? '£' : '$';
+        $symbol = match (strtolower($currency)) {
+            'gbp' => '£',
+            'pkr' => 'Rs ',
+            default => '$',
+        };
 
         return $symbol.number_format($cents / 100, 2).' '.strtoupper($currency);
     }

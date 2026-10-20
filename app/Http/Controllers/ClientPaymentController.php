@@ -49,13 +49,41 @@ class ClientPaymentController extends Controller
             ]);
         }
 
+        // PKR is only ever valid on MPGS (CurrencySupportResolver); never hand a PKR
+        // record to another provider's pay flow, even if one slipped into the table.
+        abort_if($payment->currency === 'pkr' && $payment->provider !== PaymentProvider::Mpgs, 404);
+
         return match ($payment->provider) {
             PaymentProvider::Revolut => $this->showRevolut($payment),
             PaymentProvider::Square => $this->showSquare($payment),
             PaymentProvider::Viva => $this->showViva($payment),
             PaymentProvider::Clover => $this->showClover($payment),
+            PaymentProvider::Mpgs => $this->showMpgs($payment),
             default => $this->showStripe($payment),
         };
+    }
+
+    /**
+     * MPGS Hosted Session: the card fields are embedded on this page
+     * (MpgsPaymentForm.vue). The session id is NOT in these props — the browser
+     * fetches it from MpgsPaymentController::session() after load.
+     */
+    private function showMpgs(Payment $payment): Response
+    {
+        $payment->loadMissing('mpgsAccount');
+
+        abort_unless($payment->mpgsAccount?->is_active, 404);
+
+        return Inertia::render('ClientPayment/PayMpgs', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'mpgsAccount' => [
+                'gateway_host' => $payment->mpgsAccount->gatewayHost(),
+                'merchant_id' => $payment->mpgsAccount->merchant_id,
+                'api_version' => $payment->mpgsAccount->api_version,
+            ],
+            'policies' => $this->policyProps(),
+        ]);
     }
 
     private function showStripe(Payment $payment): Response
@@ -626,7 +654,7 @@ class ClientPaymentController extends Controller
         // The status === 'cancelled' guard below still applies regardless, and
         // the authoritative status write remains webhook-only either way.
 
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount']);
 
         // CR-02 fix: block cancelled payments from showing success via crafted URLs.
         // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,

@@ -24,18 +24,19 @@ Phase 1 is next. Run `/gsd-discuss-phase 1` or `/gsd-plan-phase 1` to start. See
 - **Styling**: Tailwind CSS 4, shadcn-vue 2.6 (Reka UI primitives)
 - **Auth**: Laravel Fortify — invite-only, no public registration
 - **RBAC**: spatie/laravel-permission v7 (Admin / Agent roles)
-- **Payments**: Stripe Elements (stripe/stripe-php v20, vue-stripe-js v2) + Revolut Merchant API (@revolut/checkout Web SDK) + Square (square/square PHP SDK, Web Payments SDK) — three parallel providers
+- **Payments**: Stripe Elements (stripe/stripe-php v20, vue-stripe-js v2) + Revolut Merchant API (@revolut/checkout Web SDK) + Square (square/square PHP SDK, Web Payments SDK) — six parallel providers (Viva, Clover and MPGS are documented in `docs/agent.md` and their specs)
 - **Webhooks**: spatie/laravel-stripe-webhooks v3.11
 - **Queues**: Laravel Queues (database driver for dev, Redis for prod)
 
 ## Payment providers
 
-PayHub supports three parallel providers behind the `PaymentProvider` enum (`stripe` / `revolut` / `square`). Each `Payment` has a `provider` column and provider-specific FKs/columns. Resolve provider-specific logic by branching on `$payment->provider`.
+PayHub supports six parallel providers behind the `PaymentProvider` enum (`stripe` / `revolut` / `square` / `viva` / `clover` / `mpgs`). Each `Payment` has a `provider` column and provider-specific FKs/columns. Resolve provider-specific logic by branching on `$payment->provider`.
 
 - **Stripe**: `StripeClient`, PaymentIntents, `stripe_account_id` / `stripe_payment_intent_id`, webhook `webhook/stripe/{account}`
 - **Revolut**: `App\Services\Revolut\RevolutClient`, Merchant API orders, `revolut_account_id` / `revolut_order_id`, webhook `webhook/revolut/{account}`
 - **Square**: `Square\SquareClient` (square/square SDK), Payments API, `square_account_id` / `square_payment_id`, webhook `webhook/square/{squareAccount}`
-- When adding a feature that touches payments, implement it for ALL THREE providers — pay page, CSV export, webhook handling, admin account CRUD, dashboard/filter surfaces, and client-facing receipt pages all have parallel paths. Square landed after Stripe/Revolut and several read-side surfaces (dashboard filters, "Accounts Today" account resolution) were missed on first pass — grep for `'stripe', 'revolut'` two-way ternaries/`in_array`s before assuming a Square-touching feature is complete.
+- **MPGS (Mastercard Gateway, Hosted Session)**: `App\Services\Mpgs\MpgsClient`, `mpgs_account_id` / `mpgs_order_id`, webhook `webhook/mpgs/{mpgsAccount}`. Card fields are gateway-hosted frames and 3DS runs on the pay page (spec `docs/specs/0005-mpgs-hosted-session-provider/`). **Scoped exception to webhooks-only status** (same as Clover): MPGS payment status comes from the gateway's own response to PayHub's server-to-server PAY call, or a read-only order lookup (resolver job, webhook job, 10-minute sweep). All status writes go through `MpgsChargeResolver`. The webhook body is never trusted: it only triggers a lookup. Approved needs success + captured + exact amount/currency match, else `unknown`.
+- When adding a feature that touches payments, implement it for ALL SIX providers — pay page, CSV export, webhook handling, admin account CRUD, dashboard/filter surfaces, and client-facing receipt pages all have parallel paths. Square landed after Stripe/Revolut and several read-side surfaces (dashboard filters, "Accounts Today" account resolution) were missed on first pass — grep for `'stripe', 'revolut'` two-way ternaries/`in_array`s before assuming a Square-touching feature is complete.
 - **Square currency lock**: a `SquareAccount` is single-currency (`square_accounts.currency`). `StorePaymentRequest`/`UpdatePaymentRequest` reject creating/updating a payment against a Square account when the payment currency doesn't match the account's currency (`"This Square account only accepts {currency} payments."`). Stripe/Revolut accounts have no such restriction.
 
 ## Git workflow
@@ -66,7 +67,7 @@ Separate from the payment providers and from Bank Accounts. Same roles/assignmen
 - Square webhooks verified via `x-square-hmacsha256-signature` header against `webhook_signature_key` (Square SDK's `WebhooksHelper`); idempotency tracked in `ProcessedSquareEvent`
 - Secrets exposed to the page (Stripe `client_secret` / Revolut `orderToken`) never logged, stored in URLs, or exposed beyond the page load response. (Square's `application_id`/`location_id` are public SDK identifiers, not secrets — safe to expose, unlike `access_token`)
 - Amounts always stored as integer cents/minor units — no floats
-- Currency: Payments support USD and GBP only. Bank Accounts additionally support PKR (`App\Enums\BankAccountCurrency`, decoupled from `App\Enums\SupportedCurrency`).
+- Currency: Payments support USD and GBP, plus PKR on MPGS only: an MPGS account must have `supports_pkr` on (`CurrencySupportResolver::supports(..., $accountAcceptsPkr)`). Admins can use PKR directly; an agent can take PKR only after an admin gives them a PKR payment-account slot (`user_payment_accounts.currency = pkr`, which must be a `supports_pkr` MPGS account). No other provider accepts it. Bank Accounts additionally support PKR (`App\Enums\BankAccountCurrency`, decoupled from `App\Enums\SupportedCurrency`).
 
 ## Commands
 

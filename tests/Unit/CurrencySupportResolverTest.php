@@ -31,7 +31,30 @@ it('resolves currency support per provider and account currency', function (stri
     ['clover', null, 'usd', true],
     ['clover', null, 'gbp', false],
     ['clover', 'gbp', 'usd', true],
+
+    // MPGS: USD and GBP always; PKR only when the account is flagged.
+    ['mpgs', null, 'usd', true],
+    ['mpgs', null, 'gbp', true],
+    ['mpgs', null, 'pkr', false],
+    ['mpgs', 'pkr', 'pkr', false],
+
+    // PKR is never valid on any other provider.
+    ['stripe', null, 'pkr', false],
+    ['revolut', null, 'pkr', false],
+    ['square', null, 'pkr', false],
+    ['square', 'pkr', 'pkr', false],
+    ['viva', null, 'pkr', false],
+    ['clover', null, 'pkr', false],
 ]);
+
+it('allows PKR only on an MPGS account that accepts it', function () {
+    expect(CurrencySupportResolver::supports('mpgs', null, 'pkr', true))->toBeTrue();
+    expect(CurrencySupportResolver::supports('mpgs', null, 'pkr', false))->toBeFalse();
+
+    foreach (['stripe', 'revolut', 'square', 'viva', 'clover'] as $provider) {
+        expect(CurrencySupportResolver::supports($provider, null, 'pkr', true))->toBeFalse();
+    }
+});
 
 it('lists currencies for a provider/account combination', function () {
     expect(CurrencySupportResolver::currenciesFor('stripe', null))->toBe(['usd', 'gbp']);
@@ -41,4 +64,6 @@ it('lists currencies for a provider/account combination', function () {
     expect(CurrencySupportResolver::currenciesFor('square', null))->toBe(['usd', 'gbp']);
     expect(CurrencySupportResolver::currenciesFor('square', 'usd'))->toBe(['usd']);
     expect(CurrencySupportResolver::currenciesFor('square', 'gbp'))->toBe(['gbp']);
+    expect(CurrencySupportResolver::currenciesFor('mpgs', null))->toBe(['usd', 'gbp']);
+    expect(CurrencySupportResolver::currenciesFor('mpgs', null, true))->toBe(['usd', 'gbp', 'pkr']);
 });

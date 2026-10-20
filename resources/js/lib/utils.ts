@@ -13,7 +13,7 @@ export function toUrl(href: NonNullable<InertiaLinkProps['href']>) {
 
 /**
  * Format an integer-cents amount as a localized currency string.
- * USD, GBP, and PKR (Bank Accounts only); never mix currencies in a single figure.
+ * USD, GBP, and PKR (Bank Accounts, and MPGS payments); never mix currencies in a single figure.
  */
 export function formatMoney(cents: number, currency: string): string {
     const locale = currency === 'gbp' ? 'en-GB' : currency === 'pkr' ? 'en-PK' : 'en-US';

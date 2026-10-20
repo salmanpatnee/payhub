@@ -52,7 +52,7 @@ payment providers.
 
 - **Access**: `BankAccountPolicy` — `admin` and `account` can create, update, delete, activate/deactivate and view the activity log. `agent` can only view the index, limited to **active** accounts assigned to them (`bank_account_user` pivot); `bank_address` is hidden from agents. Nav item is visible to all three roles.
 - **Assignment**: only `agent`-role users are offered in the Create/Edit dropdowns; already-assigned users stay listed on Edit.
-- **Currency**: `App\Enums\BankAccountCurrency` — USD, GBP, PKR (Payments themselves stay USD/GBP only).
+- **Currency**: `App\Enums\BankAccountCurrency` — USD, GBP, PKR (Payments are USD/GBP, plus PKR only on MPGS accounts flagged `supports_pkr`; admins pick it freely, agents need a PKR slot assigned by an admin).
 - **Validation**: `StoreBankAccountRequest` / `UpdateBankAccountRequest` — at least one of sort code, routing number, or IBAN is required.
 - **Soft delete**: `bank_accounts.deleted_at`; deleted accounts drop out of the index and agents' assigned list, but stay visible in the activity log.
 - **Activity log**: `App\Services\ActivityLogger` writes created / updated / deleted / activated / deactivated rows to `activity_logs` (subject = `BankAccount`, with field-level before/after and assigned-user changes). Viewed at `bank-accounts/activity-log` (`BankAccountActivityLogController`), which must be registered **before** the resource route.
