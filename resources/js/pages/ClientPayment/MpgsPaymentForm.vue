@@ -62,7 +62,7 @@ let session: MpgsSession | null = null
 
 function formatAmount(cents: number, currency: string): string {
     const formatter = new Intl.NumberFormat(
-        currency === 'gbp' ? 'en-GB' : 'en-US',
+        currency === 'gbp' ? 'en-GB' : currency === 'pkr' ? 'en-PK' : 'en-US',
         { style: 'currency', currency: currency.toUpperCase() }
     )
 
@@ -214,16 +214,6 @@ async function submit(): Promise<void> {
 
 <template>
     <div class="space-y-6">
-        <!-- Loading skeleton — shown until the hosted fields mount. -->
-        <div v-if="!ready && !errorMessage" class="space-y-3">
-            <div class="skeleton-row h-11 rounded-lg"></div>
-            <div class="grid grid-cols-3 gap-3">
-                <div class="skeleton-row h-11 rounded-lg"></div>
-                <div class="skeleton-row h-11 rounded-lg"></div>
-                <div class="skeleton-row h-11 rounded-lg"></div>
-            </div>
-        </div>
-
         <!-- Fatal error before the card fields could render -->
         <Alert v-if="!ready && errorMessage" variant="destructive">
             <AlertCircle class="size-4" />
@@ -232,42 +222,42 @@ async function submit(): Promise<void> {
 
         <!-- The card inputs must always exist in the DOM so the gateway can find them. They are
              readonly with no name attribute: the gateway replaces them with its own frames. -->
-        <form v-show="ready" @submit.prevent="submit" class="space-y-4">
+        <!-- Never hide this form (no v-show / display:none / zero height): the gateway sizes each hosted
+             frame from its input when it mounts and only finishes initializing for rendered frames.
+             The Pay button stays disabled until the fields are ready instead. -->
+        <form @submit.prevent="submit" class="space-y-4">
             <div
                 class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
                 :class="fieldInvalid.cardholderName ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
             >
-                <input id="cardholder-name" type="text" class="mpgs-field" title="cardholder name" aria-label="enter name on card" tabindex="1" readonly>
+                <input id="cardholder-name" type="text" class="mpgs-field" placeholder="Name on card" title="cardholder name" aria-label="enter name on card" tabindex="1" readonly>
             </div>
             <div
                 class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
                 :class="fieldInvalid.cardNumber ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
             >
-                <input id="card-number" type="text" class="mpgs-field" title="card number" aria-label="enter your card number" tabindex="2" readonly>
+                <input id="card-number" type="text" class="mpgs-field" placeholder="Card number" title="card number" aria-label="enter your card number" tabindex="2" readonly>
             </div>
             <div class="grid grid-cols-3 gap-3">
                 <div
                     class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
                     :class="fieldInvalid.expiryMonth ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
                 >
-                    <input id="expiry-month" type="text" class="mpgs-field" title="expiry month" aria-label="two digit expiry month" tabindex="3" readonly>
+                    <input id="expiry-month" type="text" class="mpgs-field" placeholder="MM" title="expiry month" aria-label="two digit expiry month" tabindex="3" readonly>
                 </div>
                 <div
                     class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
                     :class="fieldInvalid.expiryYear ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
                 >
-                    <input id="expiry-year" type="text" class="mpgs-field" title="expiry year" aria-label="two digit expiry year" tabindex="4" readonly>
+                    <input id="expiry-year" type="text" class="mpgs-field" placeholder="YY" title="expiry year" aria-label="two digit expiry year" tabindex="4" readonly>
                 </div>
                 <div
                     class="mpgs-field-wrap rounded-xl border bg-white overflow-hidden px-3 transition-colors duration-150"
                     :class="fieldInvalid.securityCode ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'"
                 >
-                    <input id="security-code" type="text" class="mpgs-field" title="security code" aria-label="three digit security code" tabindex="5" readonly>
+                    <input id="security-code" type="text" class="mpgs-field" placeholder="CVV" title="security code" aria-label="three digit security code" tabindex="5" readonly>
                 </div>
             </div>
-
-            <!-- Bank 3DS challenge renders here, inline on the page. -->
-            <div id="mpgs-3ds-challenge" class="w-full"></div>
 
             <Alert v-if="ready && errorMessage" variant="destructive">
                 <AlertCircle class="size-4" />
@@ -278,7 +268,7 @@ async function submit(): Promise<void> {
                 type="submit"
                 size="lg"
                 class="w-full bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary)]/90 focus-visible:ring-[var(--brand-primary)]/50 font-semibold tracking-wide cursor-pointer"
-                :disabled="processing"
+                :disabled="processing || !ready"
             >
                 <Spinner v-if="processing" class="size-4 mr-2" />
                 <span>{{ processing ? 'Processing…' : `Pay ${formatAmount(payment.amount, payment.currency)}` }}</span>
@@ -289,39 +279,35 @@ async function submit(): Promise<void> {
                 Your card details are never stored · 256-bit SSL
             </p>
         </form>
+
+        <!-- Bank 3DS challenge renders here, inline on the page. It must stay OUTSIDE the payment
+             <form>: the gateway's challenge markup contains its own <form>, and browsers drop a form
+             nested inside another one when the HTML is inserted, leaving nothing to submit. -->
+        <div id="mpgs-3ds-challenge" class="w-full"></div>
     </div>
 </template>
 
 <style scoped>
-.mpgs-field-wrap {
-    display: flex;
-    align-items: center;
-    min-height: 44px;
-}
-
+/* Keep this box a plain block, not flex. The gateway measures the readonly input while its
+   frame still sits beside it, then copies that width and every computed style into the
+   field inside the frame. In a flex row the frame squeezes the input to 0px, so the real
+   field inside the frame ends up 0px wide and cannot be typed into. */
 .mpgs-field {
-    flex: 1;
-    min-height: 18px;
+    display: block;
     width: 100%;
+    height: 42px;
     border: 0;
     background: transparent;
     outline: none;
+}
+
+.mpgs-field-wrap :deep(iframe) {
+    display: block;
 }
 
 /* Focus ring on the wrapper when its hosted field frame has focus. */
 .mpgs-field-wrap:focus-within {
     border-color: var(--brand-primary);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-primary) 15%, transparent);
-}
-
-.skeleton-row {
-    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.4s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
 }
 </style>

@@ -199,17 +199,78 @@ export function captureCard(): Promise<void> {
 }
 
 /**
+ * Show the bank's challenge page. The library does NOT render it unless
+ * `fullScreenRedirect` is set; it hands us the HTML in `htmlRedirectCode` (a form
+ * that posts into a `challengeFrame` iframe, plus an inline script that submits it).
+ * Inline script is blocked by the pay page CSP and not run by innerHTML anyway, so
+ * we insert the markup and submit the form ourselves. The bank then posts back to
+ * the 3DS return page inside that frame, which messages this page.
+ */
+function renderChallenge(html: string): void {
+    const container = document.getElementById(THREE_DS_CONTAINER_ID)
+
+    if (!container) {
+        throw new Error('The bank verification area is missing from the page.')
+    }
+
+    container.innerHTML = html
+
+    // Prefer the known ids, but fall back to any form / iframe in the markup: the exact
+    // ids are not documented, so don't depend on them.
+    const frame = container.querySelector<HTMLElement>('#challengeFrame, #redirectTo3ds1Frame, iframe')
+
+    if (frame) {
+        frame.style.width = '100%'
+        frame.style.minHeight = '420px'
+        frame.style.border = '0'
+    }
+
+    const form = container.querySelector<HTMLFormElement>(
+        '#threedsChallengeRedirectForm, #threedsFrictionLessRedirectForm, #redirectTo3ds1Form, form',
+    )
+
+    if (!form) {
+        // SPIKE: structure only (tags and ids), never the markup itself: it holds the bank's tokens.
+        const structure = Array.from(container.querySelectorAll('*')).map((el) => el.tagName.toLowerCase() + (el.id ? `#${el.id}` : ''))
+        console.warn('[MPGS] 3DS challenge HTML has no form. Elements:', structure.join(' '))
+
+        throw new Error('The bank verification could not be started.')
+    }
+
+    // The form may post to a named frame that is missing from the markup; give it one.
+    if (!frame && form.target && !document.getElementsByName(form.target).length) {
+        const created = document.createElement('iframe')
+        created.name = form.target
+        created.style.width = '100%'
+        created.style.minHeight = '420px'
+        created.style.border = '0'
+        container.appendChild(created)
+    }
+
+    form.submit()
+}
+
+/**
  * Run 3DS: initiate authentication, then authenticate the payer, using the ids
  * the server issued. Any bank challenge renders inside THREE_DS_CONTAINER_ID.
  *
  * Authenticated means the gateway recommended PROCEED. The browser result is
  * only a hint: PAY on the server is what decides the payment.
  *
+ * Proven against the Bank Alfalah test gateway: for a challenge the authenticatePayer
+ * callback fires right away with `htmlRedirectCode` (3ds2 status C, authentication
+ * still pending), so we render it (renderChallenge) and wait for the return page.
+ * The challenge HTML is a <form> + iframe#challengeFrame; the container must sit
+ * outside the payment <form> or the nested form tag is dropped.
+ *
+ * LOCAL TESTING: the bank's ACS (a public page) posts back to the callback URL, and
+ * Chrome blocks a public page from reaching a local address (payhub.test ->
+ * 127.0.0.1). Test the full 3DS return through a public https URL.
+ *
  * SPIKE (Q4): (a) whether name and email are enough or the bank wants a billing
- * address (pass it in `optionalParams.billing`); (b) whether the library renders
- * the challenge itself or `data.htmlRedirectCode` must be inserted into the
- * container; (c) the callback timing after a challenge; (d) whether
- * `fullScreenRedirect` is needed for some banks.
+ * address (pass it in `optionalParams.billing`); (d) whether `fullScreenRedirect`
+ * is needed for some banks; the exact shape of the challenge HTML (form id) and of
+ * the data the bank posts back to the return page.
  */
 export function authenticatePayer(session: MpgsSession): Promise<MpgsThreeDsResult> {
     const ThreeDS = (window as any).ThreeDS
@@ -219,20 +280,69 @@ export function authenticatePayer(session: MpgsSession): Promise<MpgsThreeDsResu
             () => reject(new Error('The bank verification took too long.')),
             THREE_DS_TIMEOUT_MS,
         )
-        const finish = (fn: () => void) => { window.clearTimeout(timer); threeDsAbort = null; fn() }
+        // The 3DS return page (framed on this page) posts this when the bank challenge ends.
+        const onReturn = (event: MessageEvent) => {
+            const data = event.data
+
+            if (event.origin !== window.location.origin || data?.type !== 'mpgs-3ds-return') {
+                return
+            }
+
+            if (data.orderId && data.orderId !== session.order_id) {
+                return
+            }
+
+            // An empty recommendation is accepted: PAY on the server decides the real outcome.
+            const proceed = !data.recommendation || data.recommendation === 'PROCEED'
+
+            if (!proceed) {
+                console.warn('[MPGS] 3DS challenge ended without PROCEED:', data.recommendation, data.result)
+            }
+
+            finish(() => resolve({ authenticated: proceed }))
+        }
+        const finish = (fn: () => void) => {
+            window.clearTimeout(timer)
+            window.removeEventListener('message', onReturn)
+            threeDsAbort = null
+            fn()
+        }
         threeDsAbort = (e) => finish(() => reject(e))
 
         ThreeDS.initiateAuthentication(session.order_id, session.auth_transaction_id, (initiated: any) => {
             if (initiated?.error || initiated?.gatewayRecommendation !== 'PROCEED') {
+                // SPIKE: kept so the sandbox run shows why 3DS stopped (no card data in this response).
+                console.warn('[MPGS] 3DS initiate did not proceed:', JSON.stringify(initiated))
                 finish(() => resolve({ authenticated: false }))
 
                 return
             }
 
             ThreeDS.authenticatePayer(session.order_id, session.auth_transaction_id, (authenticated: any) => {
-                finish(() => resolve({
-                    authenticated: !authenticated?.error && authenticated?.gatewayRecommendation === 'PROCEED',
-                }))
+                if (authenticated?.error || authenticated?.gatewayRecommendation !== 'PROCEED') {
+                    console.warn('[MPGS] 3DS authenticate did not proceed:', JSON.stringify(authenticated))
+                    finish(() => resolve({ authenticated: false }))
+
+                    return
+                }
+
+                // No redirect HTML: the bank authenticated without asking the payer (frictionless).
+                if (!authenticated.htmlRedirectCode) {
+                    finish(() => resolve({ authenticated: true }))
+
+                    return
+                }
+
+                // Bank challenge: PROCEED here only means "show the challenge". Paying now would hit the
+                // gateway while authentication is still pending (a hard error), so show the challenge and
+                // wait for the return page to report that the bank is done.
+                window.addEventListener('message', onReturn)
+
+                try {
+                    renderChallenge(authenticated.htmlRedirectCode)
+                } catch (e) {
+                    finish(() => reject(e instanceof Error ? e : new Error('The bank verification failed.')))
+                }
             }, {
                 device: {
                     browserDetails: {

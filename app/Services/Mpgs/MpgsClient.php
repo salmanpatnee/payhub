@@ -132,7 +132,8 @@ class MpgsClient
      */
     public function verifyCredentials(): void
     {
-        $this->request()->post('/session')->throw();
+        // An empty PHP array encodes as `[]`, which the gateway rejects (400); it needs a JSON object.
+        $this->request()->post('/session', new \stdClass)->throw();
     }
 
     /**

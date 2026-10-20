@@ -178,7 +178,9 @@ class MpgsPaymentController extends Controller
         }
 
         if ($classification === 'hard_error') {
-            return response()->json(['error' => 'Could not reach the payment processor. Please try again.'], 502);
+            // The gateway answered but rejected the request itself (details are in the log), so
+            // "could not reach" would mislead the payer.
+            return response()->json(['error' => 'Your payment could not be processed. Please try again or use a different card.'], 502);
         }
 
         return response()->json([
