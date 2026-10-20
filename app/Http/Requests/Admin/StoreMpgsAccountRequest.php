@@ -11,6 +11,13 @@ class StoreMpgsAccountRequest extends FormRequest
         return $this->user()->hasRole('admin');
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->gateway_host)) {
+            $this->merge(['gateway_host' => rtrim($this->gateway_host, '/')]);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -21,6 +28,7 @@ class StoreMpgsAccountRequest extends FormRequest
             'webhook_secret' => ['nullable', 'string'],
             'api_version' => ['required', 'integer', 'min:1', 'max:999'],
             'gateway_host' => ['nullable', 'string', 'max:255', 'regex:/^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/'],
+            'supports_pkr' => ['sometimes', 'boolean'],
         ];
     }
 }

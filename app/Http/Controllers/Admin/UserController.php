@@ -171,7 +171,7 @@ class UserController extends Controller
     {
         $accounts = $this->activeAccountOptions();
 
-        return collect(SupportedCurrency::cases())
+        return collect(SupportedCurrency::standard())
             ->mapWithKeys(fn (SupportedCurrency $currency) => [
                 $currency->value => $accounts
                     ->filter(fn (array $a) => CurrencySupportResolver::supports($a['provider'], $a['currency'], $currency->value))

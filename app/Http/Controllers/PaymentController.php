@@ -216,7 +216,8 @@ class PaymentController extends Controller
      */
     private function agentCurrencyOptions(User $user): Collection
     {
-        return collect(SupportedCurrency::cases())->map(function (SupportedCurrency $currency) use ($user) {
+        // PKR is admin-only for now, so agents never get a PKR option.
+        return collect(SupportedCurrency::standard())->map(function (SupportedCurrency $currency) use ($user) {
             $account = $user->paymentAccounts->firstWhere('currency', $currency->value);
 
             if ($account === null) {
@@ -257,8 +258,8 @@ class PaymentController extends Controller
         $clover = CloverAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
             ->map(fn (CloverAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'clover', 'currency' => 'usd']);
 
-        $mpgs = MpgsAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
-            ->map(fn (MpgsAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'mpgs']);
+        $mpgs = MpgsAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'supports_pkr'])
+            ->map(fn (MpgsAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'mpgs', 'supports_pkr' => $a->supports_pkr]);
 
         return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->values();
     }

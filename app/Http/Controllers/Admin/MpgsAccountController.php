@@ -27,6 +27,7 @@ class MpgsAccountController extends Controller
                     'merchant_id' => $account->merchant_id,
                     'api_version' => $account->api_version,
                     'gateway_host' => $account->gateway_host,
+                    'supports_pkr' => $account->supports_pkr,
                     'has_webhook_secret' => ! empty($account->webhook_secret),
                     'is_active' => $account->is_active,
                 ]),
@@ -75,6 +76,7 @@ class MpgsAccountController extends Controller
                 'merchant_id' => $mpgsAccount->merchant_id,
                 'api_version' => $mpgsAccount->api_version,
                 'gateway_host' => $mpgsAccount->gateway_host,
+                'supports_pkr' => $mpgsAccount->supports_pkr,
                 'is_active' => $mpgsAccount->is_active,
                 'has_integration_password' => ! empty($mpgsAccount->integration_password),
                 'has_webhook_secret' => ! empty($mpgsAccount->webhook_secret),
@@ -148,6 +150,10 @@ class MpgsAccountController extends Controller
 
     public function testKeyConnection(Request $request): RedirectResponse
     {
+        if (is_string($request->input('gateway_host'))) {
+            $request->merge(['gateway_host' => rtrim($request->input('gateway_host'), '/')]);
+        }
+
         $request->validate([
             'merchant_id' => ['required', 'string'],
             'integration_password' => ['required', 'string'],

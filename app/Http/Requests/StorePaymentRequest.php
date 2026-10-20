@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\SupportedCurrency;
+use App\Models\MpgsAccount;
 use App\Models\Payment;
 use App\Models\SquareAccount;
 use App\Models\User;
@@ -59,7 +60,16 @@ class StorePaymentRequest extends FormRequest
                         ? SquareAccount::find($this->input('account_id'))?->currency
                         : null;
 
-                    if (CurrencySupportResolver::supports($provider, $accountCurrency, $value)) {
+                    $acceptsPkr = $provider === 'mpgs'
+                        && (bool) MpgsAccount::find($this->input('account_id'))?->supports_pkr;
+
+                    if (CurrencySupportResolver::supports($provider, $accountCurrency, $value, $acceptsPkr)) {
+                        return;
+                    }
+
+                    if ($value === SupportedCurrency::PKR->value) {
+                        $fail('PKR is only supported on MPGS accounts that accept PKR.');
+
                         return;
                     }
 

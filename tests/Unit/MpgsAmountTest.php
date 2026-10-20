@@ -10,6 +10,8 @@ it('converts integer minor units to a gateway decimal string', function (int $mi
     [100, '1.00'],
     [1050, '10.50'],
     [123456, '1234.56'],
+    // PKR also has 2 decimals, so large nominal PKR amounts convert the same way.
+    [25000000, '250000.00'],
 ]);
 
 it('parses a gateway amount back to minor units', function (mixed $gateway, ?int $expected) {
@@ -28,7 +30,7 @@ it('parses a gateway amount back to minor units', function (mixed $gateway, ?int
 ]);
 
 it('round trips every amount without float drift', function () {
-    foreach ([1, 7, 99, 100, 101, 1999, 100000, 999999] as $minor) {
+    foreach ([1, 7, 99, 100, 101, 1999, 100000, 999999, 99999999] as $minor) {
         expect(MpgsAmount::toMinorUnits(MpgsAmount::toGateway($minor)))->toBe($minor);
     }
 });

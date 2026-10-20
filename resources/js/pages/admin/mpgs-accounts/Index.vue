@@ -20,6 +20,7 @@ type MpgsAccountRow = {
     merchant_id: string;
     api_version: number;
     gateway_host: string | null;
+    supports_pkr: boolean;
     has_webhook_secret: boolean;
     is_active: boolean;
 };
@@ -109,7 +110,7 @@ return;
             <div>
                 <h1 class="text-2xl font-semibold tracking-tight">MPGS Accounts</h1>
                 <p class="text-sm text-muted-foreground mt-1">
-                    MPGS payments (USD and GBP) are collected on PayHub's own pay page via the Mastercard Gateway's hosted card fields.
+                    MPGS payments (USD and GBP, plus PKR on accounts that accept it) are collected on PayHub's own pay page via the Mastercard Gateway's hosted card fields.
                 </p>
             </div>
             <Button as-child>
@@ -146,6 +147,7 @@ return;
                         <td class="px-5 py-3.5 font-mono text-xs text-muted-foreground">
                             v{{ account.api_version }}
                             <span v-if="account.gateway_host" class="ml-2 font-sans">{{ account.gateway_host.replace('https://', '') }}</span>
+                            <span v-if="account.supports_pkr" class="ml-2 font-sans text-green-700 dark:text-green-400">PKR</span>
                             <span v-if="!account.has_webhook_secret" class="ml-2 font-sans text-amber-600 dark:text-amber-400">no webhook secret</span>
                         </td>
                         <td class="px-5 py-3.5">

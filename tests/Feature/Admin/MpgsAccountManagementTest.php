@@ -57,6 +57,49 @@ class MpgsAccountManagementTest extends TestCase
             );
     }
 
+    public function test_admin_can_set_and_clear_the_supports_pkr_flag(): void
+    {
+        $admin = $this->adminUser();
+
+        $this->actingAs($admin)
+            ->post(route('admin.mpgs-accounts.store'), [
+                'account_name' => 'PKR MPGS Account',
+                'merchant_id' => 'PKRMERCHANT',
+                'integration_password' => 'plain-password-value',
+                'api_version' => 100,
+                'supports_pkr' => true,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $account = MpgsAccount::where('merchant_id', 'PKRMERCHANT')->firstOrFail();
+        $this->assertTrue($account->supports_pkr);
+
+        $this->actingAs($admin)
+            ->put(route('admin.mpgs-accounts.update', $account), [
+                'account_name' => 'PKR MPGS Account',
+                'merchant_id' => 'PKRMERCHANT',
+                'api_version' => 100,
+                'supports_pkr' => false,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse($account->fresh()->supports_pkr);
+    }
+
+    public function test_supports_pkr_defaults_to_false(): void
+    {
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.mpgs-accounts.store'), [
+                'account_name' => 'No PKR Account',
+                'merchant_id' => 'NOPKR',
+                'integration_password' => 'plain-password-value',
+                'api_version' => 100,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse(MpgsAccount::where('merchant_id', 'NOPKR')->firstOrFail()->supports_pkr);
+    }
+
     public function test_admin_can_create_mpgs_account_with_encrypted_secrets(): void
     {
         $this->actingAs($this->adminUser())

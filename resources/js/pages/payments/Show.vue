@@ -78,7 +78,7 @@ async function copyLink(): Promise<void> {
 
 function formatAmount(cents: number, currency: string): string {
     return new Intl.NumberFormat(
-        currency === 'gbp' ? 'en-GB' : 'en-US',
+        currency === 'gbp' ? 'en-GB' : currency === 'pkr' ? 'en-PK' : 'en-US',
         { style: 'currency', currency: currency.toUpperCase() }
     ).format(cents / 100);
 }

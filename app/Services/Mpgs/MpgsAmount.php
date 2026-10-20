@@ -4,8 +4,8 @@ namespace App\Services\Mpgs;
 
 /**
  * Converts between PayHub's integer minor units and the gateway's decimal
- * string using integer math only (spec 0005, Value sourcing). USD and GBP both
- * have 2 decimals. The decimal string exists only in gateway requests and is
+ * string using integer math only (spec 0005, Value sourcing). USD, GBP and PKR
+ * all have 2 decimals. The decimal string exists only in gateway requests and is
  * never stored.
  */
 class MpgsAmount

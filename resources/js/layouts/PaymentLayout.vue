@@ -25,7 +25,7 @@ const props = defineProps<{
 
 function formatAmount(cents: number, currency: string): string {
     const formatter = new Intl.NumberFormat(
-        currency === 'gbp' ? 'en-GB' : 'en-US',
+        currency === 'gbp' ? 'en-GB' : currency === 'pkr' ? 'en-PK' : 'en-US',
         { style: 'currency', currency: currency.toUpperCase() }
     )
     return formatter.formatToParts(cents / 100).map((part, i, parts) => {

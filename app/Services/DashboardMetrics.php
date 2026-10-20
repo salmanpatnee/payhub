@@ -313,11 +313,16 @@ class DashboardMetrics
     }
 
     /**
+     * PKR is left out of the fallback: its nominal amounts are far larger than USD/GBP
+     * and would win the ranking without being comparable.
+     *
      * @param  array<string, int>  $revenue
      */
     private function primaryRevenue(array $revenue): int
     {
-        return $revenue['usd'] ?? (array_sum($revenue) > 0 ? max($revenue) : 0);
+        $comparable = array_diff_key($revenue, ['pkr' => true]);
+
+        return $comparable['usd'] ?? (array_sum($comparable) > 0 ? max($comparable) : 0);
     }
 
     /**

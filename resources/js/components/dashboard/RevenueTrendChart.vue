@@ -15,6 +15,8 @@ interface Row {
 const rows = computed<Row[]>(() => {
     const byDate = new Map<string, Row>();
     for (const p of props.points) {
+        // This chart only plots USD and GBP; PKR amounts are not comparable and must not fall into the USD line.
+        if (p.currency === 'pkr') continue;
         const key = p.date;
         const row = byDate.get(key) ?? { t: new Date(key).getTime(), usd: 0, gbp: 0 };
         if (p.currency === 'gbp') {

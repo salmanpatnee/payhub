@@ -66,7 +66,7 @@ Separate from the payment providers and from Bank Accounts. Same roles/assignmen
 - Square webhooks verified via `x-square-hmacsha256-signature` header against `webhook_signature_key` (Square SDK's `WebhooksHelper`); idempotency tracked in `ProcessedSquareEvent`
 - Secrets exposed to the page (Stripe `client_secret` / Revolut `orderToken`) never logged, stored in URLs, or exposed beyond the page load response. (Square's `application_id`/`location_id` are public SDK identifiers, not secrets — safe to expose, unlike `access_token`)
 - Amounts always stored as integer cents/minor units — no floats
-- Currency: Payments support USD and GBP only. Bank Accounts additionally support PKR (`App\Enums\BankAccountCurrency`, decoupled from `App\Enums\SupportedCurrency`).
+- Currency: Payments support USD and GBP, plus PKR on MPGS only: an MPGS account must have `supports_pkr` on (`CurrencySupportResolver::supports(..., $accountAcceptsPkr)`). PKR is admin-only (agents and user account slots use `SupportedCurrency::standard()`); no other provider accepts it. Bank Accounts additionally support PKR (`App\Enums\BankAccountCurrency`, decoupled from `App\Enums\SupportedCurrency`).
 
 ## Commands
 

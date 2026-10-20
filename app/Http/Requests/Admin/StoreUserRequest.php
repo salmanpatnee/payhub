@@ -30,7 +30,7 @@ class StoreUserRequest extends FormRequest
             // in progress), but must be visually flagged elsewhere.
             'payment_accounts' => ['array'],
             'payment_accounts.*.currency' => [
-                'required', 'string', 'distinct', 'in:'.implode(',', SupportedCurrency::values()),
+                'required', 'string', 'distinct', 'in:'.implode(',', SupportedCurrency::standardValues()),
             ],
             'payment_accounts.*.provider' => ['required', 'string', 'in:stripe,revolut,square,viva,clover,mpgs'],
             'payment_accounts.*.account_id' => ['required', 'integer'],

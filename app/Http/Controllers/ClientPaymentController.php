@@ -49,6 +49,10 @@ class ClientPaymentController extends Controller
             ]);
         }
 
+        // PKR is only ever valid on MPGS (CurrencySupportResolver); never hand a PKR
+        // record to another provider's pay flow, even if one slipped into the table.
+        abort_if($payment->currency === 'pkr' && $payment->provider !== PaymentProvider::Mpgs, 404);
+
         return match ($payment->provider) {
             PaymentProvider::Revolut => $this->showRevolut($payment),
             PaymentProvider::Square => $this->showSquare($payment),

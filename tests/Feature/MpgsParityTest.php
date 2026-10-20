@@ -55,6 +55,68 @@ it('lets an admin create an MPGS payment in USD or GBP (no currency lock)', func
     expect($payment->amount)->toBe(2500);
 })->with(['usd', 'gbp']);
 
+it('lets an admin create a PKR payment on an MPGS account that accepts PKR', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $account = MpgsAccount::factory()->supportsPkr()->create(['is_active' => true]);
+
+    $this->actingAs($admin)
+        ->post('/payments', mpgsPaymentPayload(Brand::factory()->create(), $account, 'pkr'))
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $payment = Payment::firstOrFail();
+    expect($payment->provider->value)->toBe('mpgs');
+    expect($payment->currency)->toBe('pkr');
+    expect($payment->amount)->toBe(2500);
+});
+
+it('rejects a PKR payment on an MPGS account that does not accept PKR', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $account = MpgsAccount::factory()->create(['is_active' => true]);
+
+    $this->actingAs($admin)
+        ->post('/payments', mpgsPaymentPayload(Brand::factory()->create(), $account, 'pkr'))
+        ->assertSessionHasErrors(['currency']);
+
+    expect(Payment::count())->toBe(0);
+});
+
+it('rejects a PKR payment on a non-MPGS provider', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $stripe = StripeAccount::factory()->create(['is_active' => true]);
+
+    $this->actingAs($admin)
+        ->post('/payments', array_merge(
+            mpgsPaymentPayload(Brand::factory()->create(), MpgsAccount::factory()->supportsPkr()->create(), 'pkr'),
+            ['provider' => 'stripe', 'account_id' => $stripe->id],
+        ))
+        ->assertSessionHasErrors(['currency']);
+
+    expect(Payment::count())->toBe(0);
+});
+
+it('does not let an agent create a PKR payment', function () {
+    $brand = Brand::factory()->create();
+    $rm = RelationshipManager::factory()->create();
+    $account = MpgsAccount::factory()->supportsPkr()->create(['is_active' => true]);
+    $agent = User::factory()->create()->assignRole('agent');
+    $agent->brands()->attach($brand);
+    $agent->relationshipManagers()->attach($rm);
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'mpgs', 'account_id' => $account->id]);
+
+    $this->actingAs($agent)
+        ->post('/payments', [
+            'brand_id' => $brand->id,
+            'relationship_manager_id' => $rm->id,
+            'currency' => 'pkr',
+            'amount' => '10.00',
+            'client_name' => 'Bob',
+        ])
+        ->assertSessionHasErrors(['currency']);
+
+    expect(Payment::count())->toBe(0);
+});
+
 it('rejects an MPGS payment against an inactive account', function () {
     $admin = User::factory()->create()->assignRole('admin');
     $account = MpgsAccount::factory()->create(['is_active' => false]);
