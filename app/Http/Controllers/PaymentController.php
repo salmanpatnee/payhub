@@ -216,8 +216,14 @@ class PaymentController extends Controller
      */
     private function agentCurrencyOptions(User $user): Collection
     {
-        // PKR is admin-only for now, so agents never get a PKR option.
-        return collect(SupportedCurrency::standard())->map(function (SupportedCurrency $currency) use ($user) {
+        // PKR is opt-in: an agent only sees it once an admin has assigned them a PKR slot
+        // (an MPGS account with supports_pkr). USD and GBP always show, enabled or not.
+        $currencies = collect(SupportedCurrency::cases())->filter(
+            fn (SupportedCurrency $currency) => $currency !== SupportedCurrency::PKR
+                || $user->paymentAccounts->contains(fn ($account) => $account->currency === SupportedCurrency::PKR)
+        );
+
+        return $currencies->map(function (SupportedCurrency $currency) use ($user) {
             $account = $user->paymentAccounts->firstWhere('currency', $currency->value);
 
             if ($account === null) {
