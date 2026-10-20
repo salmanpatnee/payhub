@@ -30,7 +30,7 @@ defineProps<{ mpgsAccounts: MpgsAccountRow[] }>();
 defineOptions({
     layout: {
         breadcrumbs: [
-            { title: 'MPGS Accounts', href: '/admin/mpgs-accounts' },
+            { title: 'Bank Gateway Accounts', href: '/admin/mpgs-accounts' },
         ],
     },
 });
@@ -103,15 +103,12 @@ return;
 </script>
 
 <template>
-    <Head title="MPGS Accounts" />
+    <Head title="Bank Gateway Accounts" />
 
     <div class="p-6 space-y-6">
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-semibold tracking-tight">MPGS Accounts</h1>
-                <p class="text-sm text-muted-foreground mt-1">
-                    MPGS payments (USD and GBP, plus PKR on accounts that accept it) are collected on PayHub's own pay page via the Mastercard Gateway's hosted card fields.
-                </p>
+                <h1 class="text-2xl font-semibold tracking-tight">Bank Gateway Accounts</h1>
             </div>
             <Button as-child>
                 <Link href="/admin/mpgs-accounts/create">
@@ -125,31 +122,22 @@ return;
             <table class="w-full text-sm">
                 <thead>
                     <tr class="bg-[#F7F5F2] border-b border-border">
+                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">#</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account Name</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Prefix</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Merchant ID</th>
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">API Version</th>
                         <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th class="text-right px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr
-                        v-for="account in mpgsAccounts"
+                        v-for="(account, index) in mpgsAccounts"
                         :key="account.id"
                         class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
                     >
+                        <td class="px-5 py-3.5 text-muted-foreground tabular-nums">{{ index + 1 }}</td>
                         <td class="px-5 py-3.5 font-medium">{{ account.account_name }}</td>
                         <td class="px-5 py-3.5 font-mono text-xs text-muted-foreground">{{ account.prefix ?? '—' }}</td>
-                        <td class="px-5 py-3.5 font-mono text-xs text-muted-foreground">
-                            {{ account.merchant_id }}
-                        </td>
-                        <td class="px-5 py-3.5 font-mono text-xs text-muted-foreground">
-                            v{{ account.api_version }}
-                            <span v-if="account.gateway_host" class="ml-2 font-sans">{{ account.gateway_host.replace('https://', '') }}</span>
-                            <span v-if="account.supports_pkr" class="ml-2 font-sans text-green-700 dark:text-green-400">PKR</span>
-                            <span v-if="!account.has_webhook_secret" class="ml-2 font-sans text-amber-600 dark:text-amber-400">no webhook secret</span>
-                        </td>
                         <td class="px-5 py-3.5">
                             <div v-if="account.is_active" class="inline-flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-500">
                                 <CheckCircle2 class="size-4" />
@@ -205,8 +193,8 @@ return;
                     </tr>
 
                     <tr v-if="mpgsAccounts.length === 0">
-                        <td colspan="6" class="px-5 py-16 text-center text-muted-foreground text-sm">
-                            No MPGS accounts yet. Add an account to enable card collection via the Mastercard Gateway.
+                        <td colspan="5" class="px-5 py-16 text-center text-muted-foreground text-sm">
+                            No bank gateway accounts yet. Add an account to enable card collection via the Mastercard Gateway.
                         </td>
                     </tr>
                 </tbody>

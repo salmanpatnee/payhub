@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 defineOptions({
     layout: {
         breadcrumbs: [
-            { title: 'MPGS Accounts', href: '/admin/mpgs-accounts' },
+            { title: 'Bank Gateway Accounts', href: '/admin/mpgs-accounts' },
             { title: 'Add account', href: '#' },
         ],
     },
@@ -72,7 +72,7 @@ function submit() {
 </script>
 
 <template>
-    <Head title="Add MPGS account" />
+    <Head title="Add bank gateway account" />
 
     <div class="p-6">
         <div class="mb-6">
@@ -86,7 +86,7 @@ function submit() {
 
         <Card>
             <CardHeader>
-                <CardTitle>Add MPGS account</CardTitle>
+                <CardTitle>Add bank gateway account</CardTitle>
                 <CardDescription>
                     Enter the merchant id, API version, and integration password for the Mastercard Gateway
                     Hosted Session API. The integration password and notification secret are stored
