@@ -221,7 +221,18 @@ No build approach is recorded in `AGENTS.md` or a scope header, so this plan def
 
 ## Follow-up
 
-- [ ] Run the sandbox spike (Build plan step 0) and record answers to Open questions 1 to 10 here.
+- [x] Partly answered by real sandbox payments on 2026-10-21 (payments 29, 30, 32, 33 all ended `completed` through the pay page; the gateway read back for txn 80061360417 shows `responseCode` 1, `transactionStatus` `capturedPendingSettlement`, `authAmount` 1000 for a 100000 cent payment, invoice number present, `cardCodeResponse` "P").
+  - Q1: yes, `getMerchantDetails` returned a public client key on the sandbox account (the pay page loaded and tokenized).
+  - Q2: yes, Accept.js loaded and tokenized under the AC-14 CSP (no CSP block stopped a charge).
+  - Q3: approved reply matches `AuthorizenetChargeReply` (charge resolved to completed, no field name fix needed).
+  - Q8: `getTransactionDetails` returned the transaction right after the charge.
+  - Q9 and Q10: not tested. `processed_authorizenet_events` is empty, so no live webhook has arrived yet.
+  - Payment 31 is still `pending` with no transaction id (last attempt 16:39, before the missing `public_client_key` column was fixed at 17:17); probably that error, not confirmed.
+- [x] Direct sandbox probe 2026-10-21 (raw card sent straight to the gateway, mapped through `AuthorizenetChargeReply`):
+  - Q4: bad card number returns response 3, error 6; expired card returns response 3, error 8 (NOT response 2). Fixed: `fromResult` now maps those to `check_details`, test added. Card code 901 returns response 2, error 65 with cvv N: `check_details` as designed. ZIP 46282 returns response 2, error 2: `declined`.
+  - Q5: yes. The second identical charge (same card, amount, invoice, 300 second window) returns response 3, error 11 and the first charge's transaction id; maps to `unclear`.
+  - The amount trick (card 4222 2222 2222 2, amount = reason code) did NOT work: the sandbox account is not in Test Mode, so every amount was approved. Forcing declines needs the CVV 901 / ZIP 46282 filters above.
+- [ ] Still to run: held transaction (Q7; needs a holding fraud filter or Test Mode), unsettled list for declines (Q6), retry after a decline with the same invoice, live webhook (Q9, Q10; needs a public tunnel).
 - [ ] Ask the acquiring bank or a PCI assessor to confirm the SAQ type (A-EP expected) and what the pay page script inventory and tamper detection must look like (PCI DSS 4.0 payment page script rules).
 - [ ] Decide whether card values should be cleared on a "check card details" outcome (this spec clears number and CVV and keeps expiry and ZIP).
 - [ ] Review the starting figures: 5 charges per payment and 20 per IP per hour, 300 second duplicate window, 120 second unclear pause, 3 second poll, 10 minute give up, 24 hour sweep window. They are defaults, not reviewed numbers.

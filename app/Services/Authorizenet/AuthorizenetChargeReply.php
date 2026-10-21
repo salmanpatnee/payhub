@@ -63,7 +63,12 @@ final class AuthorizenetChargeReply
             '1' => new self($transactionId ? self::APPROVED : self::UNCLEAR, $transactionId, $errorCode),
             '4' => new self($transactionId ? self::HELD : self::UNCLEAR, $transactionId, $errorCode),
             '2' => new self(in_array($errorCode, self::CARD_DETAIL_CODES, true) ? self::CHECK_DETAILS : self::DECLINED, $transactionId, $errorCode),
-            '3' => new self($errorCode === self::DUPLICATE_CODE ? self::UNCLEAR : self::ERROR, $transactionId, $errorCode),
+            // Sandbox spike: a bad card number (6) or expired card (8) comes back as 3, not 2.
+            '3' => new self(match (true) {
+                $errorCode === self::DUPLICATE_CODE => self::UNCLEAR,
+                in_array($errorCode, self::CARD_DETAIL_CODES, true) => self::CHECK_DETAILS,
+                default => self::ERROR,
+            }, $transactionId, $errorCode),
             default => new self(self::UNCLEAR, $transactionId, $errorCode),
         };
     }

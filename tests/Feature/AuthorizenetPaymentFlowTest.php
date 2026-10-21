@@ -256,6 +256,8 @@ it('maps replies in the pure reply class', function (array $result, string $outc
     'bad json' => [['status' => 200, 'body' => []], AuthorizenetChargeReply::UNCLEAR],
     'request rejected' => [['status' => 200, 'body' => ['messages' => ['resultCode' => 'Error', 'message' => [['code' => 'E00003']]]]], AuthorizenetChargeReply::ERROR],
     'held' => [['status' => 200, 'body' => chargeReply('4')], AuthorizenetChargeReply::HELD],
+    'bad card number (sandbox: response 3, code 6)' => [['status' => 200, 'body' => chargeReply('3', '0', '6')], AuthorizenetChargeReply::CHECK_DETAILS],
+    'expired card (sandbox: response 3, code 8)' => [['status' => 200, 'body' => chargeReply('3', '0', '8')], AuthorizenetChargeReply::CHECK_DETAILS],
     'integer response code' => [['status' => 200, 'body' => ['transactionResponse' => ['responseCode' => 1, 'transId' => '5']]], AuthorizenetChargeReply::APPROVED],
 ]);
 
