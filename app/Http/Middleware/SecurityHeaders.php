@@ -61,11 +61,23 @@ class SecurityHeaders
         $mpgsHost = $isMpgsPayPage ? ' '.$routePayment->loadMissing('mpgsAccount')->mpgsAccount?->gatewayHost() : '';
         $mpgsFrames = $isMpgsPayPage ? ' https:' : '';
 
+        // Authorize.net Accept.js (spec 0007, AC-14): only the pay page of an Authorize.net
+        // payment loads Accept.js and lets it post the card, and only to that account's
+        // environment hosts. No unsafe-inline or unsafe-eval is added.
+        $isAuthorizenetPayPage = $route?->getName() === 'pay.show'
+            && $routePayment instanceof Payment
+            && $routePayment->provider === PaymentProvider::Authorizenet;
+        $authorizenetEnv = $isAuthorizenetPayPage
+            ? $routePayment->loadMissing('authorizenetAccount')->authorizenetAccount?->environment?->value
+            : null;
+        $authorizenetScript = $authorizenetEnv ? ' '.config("services.authorizenet.hosts.{$authorizenetEnv}.script") : '';
+        $authorizenetConnect = $authorizenetEnv ? ' '.config("services.authorizenet.hosts.{$authorizenetEnv}.connect") : '';
+
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
-            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$vite}{$scriptInline}; ".
+            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$authorizenetScript}{$vite}{$scriptInline}; ".
             "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}; ".
-            "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$vite}{$viteWs}; ".
+            "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$authorizenetConnect}{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$square}{$vite}; ".
             "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$vite};"

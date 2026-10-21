@@ -179,3 +179,35 @@ per-account `new SquareClient($account->access_token, options: ['baseUrl' => ...
 Square has no local CLI forwarder like Stripe. Use a tunnel (e.g. ngrok) so the subscription's
 notification URL is publicly reachable, and set that exact URL both in the Square subscription and
 as `APP_URL` (the controller derives the verification URL from `route('webhook.square', ...)`).
+
+---
+
+## Authorize.net — Accept.js Provider
+
+Seventh provider (`payments.provider = authorizenet`). Spec: `docs/specs/0007-authorizenet-acceptjs-own-card-fields/` (0006, the hosted iframe, is superseded).
+
+### Flow
+
+1. The pay page (`PayAuthorizenet.vue` + `AuthorizenetCardForm.vue`) loads Accept.js from the per-environment `script` host in `config/services.php`.
+2. Accept.js turns the typed card into a one time code (`opaqueData`). Card values live only in component refs.
+3. The browser posts the code, ZIP and the consent-gated request to `POST /pay/{payment}/authorizenet/charge` (CSRF on, limiter `authorizenet-charge`). Amount and currency come from the `Payment` row, never the request.
+4. `AuthorizenetPaymentController::charge` takes a per payment lock, calls `createTransaction` (invoice number from `AuthorizenetInvoice::for($payment)`, 300 second `duplicateWindow`), reads the transaction back, and writes status only through `AuthorizenetChargeResolver`.
+5. Outcomes: `approved`, `held`, `declined`, `check_details`, `unclear`, `error` (mapped in `AuthorizenetChargeReply`, the only place that reads reply fields). Bad card (error 6) and expired card (error 8) come back as response 3 and map to `check_details`; a duplicate (error 11) maps to `unclear`.
+6. A held charge stays `pending` with a transaction id; the pay page gets `held: true` on reload and keeps polling `GET /pay/{payment}/authorizenet/status`. An unclear charge pauses new charges for 120 seconds and queues `ResolveAuthorizenetCharge`.
+7. Safety nets: `AuthorizenetStalePaymentSweep` runs every 10 minutes (`authorizenet:sweep-stale-payments`), and the webhook (`webhook/authorizenet/{authorizenetAccount}`, signature header `X-ANET-Signature`, idempotency in `processed_authorizenet_events`) only triggers a lookup.
+
+### Accounts
+
+- Admin CRUD at `admin/authorizenet-accounts` (plus test connection and activate/deactivate). `transaction_key` and `signature_key` use the `encrypted` cast and are not mass-assignable.
+- `public_client_key` (a public Accept.js identifier) is fetched from `getMerchantDetails` on create, update and test connection. An account without one is treated as unavailable (the pay page 404s).
+- Currency: single-currency per account (`authorizenet_accounts.currency`, like Square). `StorePaymentRequest` rejects a payment whose currency differs from the account's ("This Authorize.net account only accepts {currency} payments.").
+
+### Sandbox testing notes
+
+- Approved test card `4111 1111 1111 1111`, any future expiry, any CVV and ZIP.
+- The sandbox account is not in Test Mode, so the "amount equals error code" trick does not work. Card code `901` gives error 65 (`check_details`), ZIP `46282` gives error 2 (`declined`), a card that fails the Luhn check gives error 6, an old expiry gives error 8.
+- Webhooks need a public URL (a tunnel or the staging server). Local `*.test` addresses cannot be reached by Authorize.net.
+
+### Upgrading a database from the iframe version
+
+Run `php artisan migrate`. Migration `2026_10_21_000005_upgrade_authorizenet_to_accept_js` adds `public_client_key`, copies the old token timestamps into `authorizenet_first_attempt_at` / `authorizenet_last_attempt_at` and drops the old columns. It is safe to run on a fresh database. Never `migrate:fresh` a database with real data.

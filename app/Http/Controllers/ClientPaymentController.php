@@ -8,6 +8,7 @@ use App\Jobs\ResolveCloverChargeAttempt;
 use App\Models\Brand;
 use App\Models\CloverChargeAttempt;
 use App\Models\Payment;
+use App\Services\Authorizenet\AuthorizenetInvoiceLookup;
 use App\Services\Clover\CloverChargeClassifier;
 use App\Services\Clover\CloverChargeResolver;
 use App\Services\Clover\CloverClient;
@@ -59,6 +60,7 @@ class ClientPaymentController extends Controller
             PaymentProvider::Viva => $this->showViva($payment),
             PaymentProvider::Clover => $this->showClover($payment),
             PaymentProvider::Mpgs => $this->showMpgs($payment),
+            PaymentProvider::Authorizenet => $this->showAuthorizenet($payment),
             default => $this->showStripe($payment),
         };
     }
@@ -82,6 +84,41 @@ class ClientPaymentController extends Controller
                 'merchant_id' => $payment->mpgsAccount->merchant_id,
                 'api_version' => $payment->mpgsAccount->api_version,
             ],
+            'policies' => $this->policyProps(),
+        ]);
+    }
+
+    /**
+     * Authorize.net Accept.js: PayHub's own card form (AuthorizenetCardForm.vue). The api login
+     * id and public client key are public identifiers; the transaction key never leaves the server.
+     */
+    private function showAuthorizenet(Payment $payment): Response|RedirectResponse
+    {
+        $payment->loadMissing('authorizenetAccount');
+
+        $account = $payment->authorizenetAccount;
+
+        // No public client key means Accept.js cannot run: treat the account as unavailable.
+        abort_unless($account?->is_active && $account->public_client_key, 404);
+
+        // A returning client whose payment finished at the gateway sees the right page at once.
+        app(AuthorizenetInvoiceLookup::class)->lookup($payment);
+        $payment->refresh();
+
+        if ($payment->status === 'completed') {
+            return redirect()->route('pay.success', $payment);
+        }
+
+        return Inertia::render('ClientPayment/PayAuthorizenet', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'authorizenetAccount' => [
+                'api_login_id' => $account->api_login_id,
+                'public_client_key' => $account->public_client_key,
+                'script_url' => config("services.authorizenet.hosts.{$account->environment->value}.script").'/v1/Accept.js',
+            ],
+            // A held charge has a transaction id but is not completed: the page must not show the form again.
+            'held' => $payment->authorizenet_transaction_id !== null,
             'policies' => $this->policyProps(),
         ]);
     }
@@ -654,7 +691,7 @@ class ClientPaymentController extends Controller
         // The status === 'cancelled' guard below still applies regardless, and
         // the authoritative status write remains webhook-only either way.
 
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount']);
 
         // CR-02 fix: block cancelled payments from showing success via crafted URLs.
         // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,

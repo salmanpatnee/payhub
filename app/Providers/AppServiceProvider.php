@@ -62,6 +62,17 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('mpgs-pay', fn (Request $request): Limit => Limit::perHour(10)->by(
             $request->route('payment') ?? $request->ip()
         ));
+
+        // Authorize.net (spec 0007, AC-11): card testing guard. 5 charge requests per payment
+        // and 20 per IP per hour (starting defaults); the first limit hit answers 429 with no gateway call.
+        RateLimiter::for('authorizenet-charge', function (Request $request): array {
+            $tooMany = fn () => response()->json(['message' => 'Too many attempts. Please try again later.'], 429);
+
+            return [
+                Limit::perHour(5)->by('authorizenet-payment:'.($request->route('payment') ?? $request->ip()))->response($tooMany),
+                Limit::perHour(20)->by('authorizenet-ip:'.$request->ip())->response($tooMany),
+            ];
+        });
     }
 
     /**

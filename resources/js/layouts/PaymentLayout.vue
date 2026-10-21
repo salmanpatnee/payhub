@@ -20,7 +20,9 @@ const props = defineProps<{
         status?: 'pending' | 'completed' | 'failed'
     }
     /** Payment processor shown in the trust footer. Defaults to Stripe. */
-    provider?: 'stripe' | 'revolut' | 'square' | 'viva' | 'clover' | 'mpgs'
+    provider?: 'stripe' | 'revolut' | 'square' | 'viva' | 'clover' | 'mpgs' | 'authorizenet'
+    /** Wider content column for pages that embed a third party form (Authorize.net). */
+    wide?: boolean
 }>()
 
 function formatAmount(cents: number, currency: string): string {
@@ -28,26 +30,35 @@ function formatAmount(cents: number, currency: string): string {
         currency === 'gbp' ? 'en-GB' : currency === 'pkr' ? 'en-PK' : 'en-US',
         { style: 'currency', currency: currency.toUpperCase() }
     )
+
     return formatter.formatToParts(cents / 100).map((part, i, parts) => {
         if (part.type === 'currency' && parts[i + 1]?.type !== 'literal') {
             return part.value + ' '
         }
+
         return part.value
     }).join('')
 }
 
 const statusConfig = computed(() => {
     const s = props.payment?.status
-    if (s === 'completed') return {
+
+    if (s === 'completed') {
+return {
         label: 'Paid',
         dot: '#4ade80',
         style: 'background: rgba(74,222,128,0.15); color: #bbf7d0; border: 1px solid rgba(74,222,128,0.3);',
     }
-    if (s === 'failed') return {
+}
+
+    if (s === 'failed') {
+return {
         label: 'Failed',
         dot: '#f87171',
         style: 'background: rgba(248,113,113,0.15); color: #fecaca; border: 1px solid rgba(248,113,113,0.3);',
     }
+}
+
     return {
         label: 'Pending',
         dot: '#fbbf24',
@@ -133,7 +144,7 @@ const statusConfig = computed(() => {
                     </div>
                     <div class="trust-row">
                         <!-- Stripe S mark -->
-                        <svg v-if="provider !== 'revolut' && provider !== 'square' && provider !== 'viva' && provider !== 'clover' && provider !== 'mpgs'" class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <svg v-if="provider !== 'revolut' && provider !== 'square' && provider !== 'viva' && provider !== 'clover' && provider !== 'mpgs' && provider !== 'authorizenet'" class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                             <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z"/>
                         </svg>
                         <!-- Square mark -->
@@ -145,10 +156,10 @@ const statusConfig = computed(() => {
                             <path d="M18.0259 10.433C18.0259 5.45897 13.9888 1.42017 9.01114 1.42017C4.03464 1.42017 0.000244141 5.45382 0.000244141 10.4279C0.000244141 15.4019 4.03457 19.4459 9.0134 19.4459H18.0259L18.0259 10.433Z M20.5541 10.4331C20.5541 5.45903 24.5912 1.42023 29.5689 1.42023C34.5454 1.42023 38.5798 5.45388 38.5798 10.4279C38.5798 15.402 34.5454 19.4459 29.5666 19.4459L20.5541 19.4459L20.5541 10.4331Z M20.5541 30.9872C20.5541 35.9661 24.5901 40 29.5697 40C34.5439 40 38.5798 35.9691 38.5798 30.9901C38.5798 26.0159 34.5439 21.9743 29.5666 21.9743L20.5541 21.9743V30.9872Z M18.0257 30.9872C18.0257 35.9661 13.9897 40 9.01013 40C4.03601 40 0 35.9691 0 30.9901C0 26.0159 4.03593 21.9743 9.01319 21.9743H18.0257V30.9872ZM9.01013 37.4585C12.5872 37.4585 15.4974 34.5569 15.4974 30.9901V24.504H9.01836C5.4397 24.504 2.52802 27.4249 2.52802 30.9901C2.52802 34.5569 5.43577 37.4585 9.01013 37.4585Z" />
                         </svg>
                         <!-- MPGS is a gateway with no single brand mark: generic card glyph -->
-                        <CreditCard v-else-if="provider === 'mpgs'" class="size-3.5 shrink-0" />
+                        <CreditCard v-else-if="provider === 'mpgs' || provider === 'authorizenet'" class="size-3.5 shrink-0" />
                         <!-- Revolut and Viva share a generic landmark mark (neither has an in-page SDK) -->
                         <Landmark v-else class="size-3.5 shrink-0" />
-                        <span>Powered by {{ provider === 'revolut' ? 'Revolut' : provider === 'square' ? 'Square' : provider === 'viva' ? 'Viva' : provider === 'clover' ? 'Clover' : provider === 'mpgs' ? 'Mastercard Gateway' : 'Stripe' }}</span>
+                        <span>Powered by {{ provider === 'revolut' ? 'Revolut' : provider === 'square' ? 'Square' : provider === 'viva' ? 'Viva' : provider === 'clover' ? 'Clover' : provider === 'mpgs' ? 'Mastercard Gateway' : provider === 'authorizenet' ? 'Authorize.net' : 'Stripe' }}</span>
                     </div>
                     <p class="safe-copy">Your card details are never stored on our servers</p>
                 </footer>
@@ -157,7 +168,7 @@ const statusConfig = computed(() => {
 
         <!-- Main content -->
         <main class="form-panel flex-1 flex flex-col items-center justify-center px-6 py-14 lg:px-14">
-            <div class="w-full max-w-lg">
+            <div class="w-full" :class="wide ? 'max-w-2xl' : 'max-w-lg'">
                 <slot />
             </div>
         </main>

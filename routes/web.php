@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AuthorizenetAccountController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CloverAccountController;
 use App\Http\Controllers\Admin\MpgsAccountController;
@@ -9,6 +10,8 @@ use App\Http\Controllers\Admin\SquareAccountController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VivaAccountController;
+use App\Http\Controllers\AuthorizenetPaymentController;
+use App\Http\Controllers\AuthorizenetWebhookController;
 use App\Http\Controllers\BankAccountActivityLogController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
@@ -254,6 +257,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'mpgs-accounts/{mpgs_account}/test-connection',
             [MpgsAccountController::class, 'testStoredConnection']
         )->name('mpgs-accounts.test-stored-connection');
+
+        Route::resource('authorizenet-accounts', AuthorizenetAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'authorizenet-accounts/{authorizenet_account}/deactivate',
+            [AuthorizenetAccountController::class, 'deactivate']
+        )->name('authorizenet-accounts.deactivate');
+
+        Route::patch(
+            'authorizenet-accounts/{authorizenet_account}/activate',
+            [AuthorizenetAccountController::class, 'activate']
+        )->name('authorizenet-accounts.activate');
+
+        Route::post(
+            'authorizenet-accounts/test-connection',
+            [AuthorizenetAccountController::class, 'testKeyConnection']
+        )->name('authorizenet-accounts.test-connection');
+
+        Route::post(
+            'authorizenet-accounts/{authorizenet_account}/test-connection',
+            [AuthorizenetAccountController::class, 'testStoredConnection']
+        )->name('authorizenet-accounts.test-stored-connection');
     });
 
 // Public payment routes — no auth middleware (CLIENT-01)
@@ -307,6 +333,15 @@ Route::get('/pay/{payment}/mpgs/status', [MpgsPaymentController::class, 'status'
 Route::match(['get', 'post'], '/pay/{payment}/mpgs/3ds-return', [MpgsPaymentController::class, 'threeDsReturn'])
     ->name('pay.mpgs.return');
 
+// Authorize.net Accept.js pay thread (spec 0007) — public (scoped by the payment UUID).
+// The charge POST stays behind CSRF and the authorizenet-charge limiter; status is bounded by the
+// lookup guards in AuthorizenetInvoiceLookup, not by a named limiter.
+Route::post('/pay/{payment}/authorizenet/charge', [AuthorizenetPaymentController::class, 'charge'])
+    ->name('pay.authorizenet.charge')
+    ->middleware('throttle:authorizenet-charge');
+Route::get('/pay/{payment}/authorizenet/status', [AuthorizenetPaymentController::class, 'status'])
+    ->name('pay.authorizenet.status');
+
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)
 Route::post('/webhook/stripe/{stripeAccount}', [StripeWebhookController::class, 'handle'])
@@ -327,6 +362,11 @@ Route::post('/webhook/square/{squareAccount}', [SquareWebhookController::class, 
 // X-Notification-Secret header, not a signature (spec 0005, AC-9).
 Route::post('/webhook/mpgs/{mpgsAccount}', [MpgsWebhookController::class, 'handle'])
     ->name('webhook.mpgs')
+    ->middleware('throttle:120,1');
+
+// {authorizenetAccount} resolves by integer id. Protected by the X-ANET-Signature HMAC (spec 0006, AC-8).
+Route::post('/webhook/authorizenet/{authorizenetAccount}', [AuthorizenetWebhookController::class, 'handle'])
+    ->name('webhook.authorizenet')
     ->middleware('throttle:120,1');
 
 // {vivaAccount} resolves by integer id (implicit model binding).
