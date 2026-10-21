@@ -190,7 +190,7 @@ No build approach is recorded in `AGENTS.md` or a scope header, so this plan def
 **Strategy**: no migration needed for live data. The Authorize.net migrations and code exist only on the branch `feat/authorizenet-accept-hosted`, not on `master` or production.
 **Phases**:
 1. Edit the branch migrations in place (Build plan step 1).
-2. Anyone with a local database that already ran the old migrations runs `php artisan migrate:fresh --seed`.
+2. Any database that already ran the old migrations (local, staging) just runs `php artisan migrate`. Migration `2026_10_21_000005_upgrade_authorizenet_to_accept_js` adds `public_client_key`, copies the old token timestamps into the new attempt columns and drops the old ones; every step checks first, so fresh databases pass through untouched. No `migrate:fresh` needed.
 **Rollback**: revert the commits on the branch; nothing reached production.
 **Risks**: a shared development database that already ran the old migrations would fail on the renamed columns until it is rebuilt.
 
