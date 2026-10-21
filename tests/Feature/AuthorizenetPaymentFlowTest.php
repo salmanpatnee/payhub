@@ -493,6 +493,15 @@ it('redirects a returning client to the success page when it finished at the gat
     $this->get(route('pay.show', $payment))->assertRedirect(route('pay.success', $payment));
 });
 
+it('tells the pay page when the charge is held so a reload does not show the card form again', function () {
+    fakeAnet();
+    $held = anetPayment(['authorizenet_transaction_id' => '60000001']);
+    $fresh = anetPayment();
+
+    expect($this->get(route('pay.show', $held))->viewData('page')['props']['held'])->toBeTrue()
+        ->and($this->get(route('pay.show', $fresh))->viewData('page')['props']['held'])->toBeFalse();
+});
+
 it('adds only the Accept.js hosts to the CSP on the Authorize.net pay page', function () {
     fakeAnet();
     $payment = anetPayment();

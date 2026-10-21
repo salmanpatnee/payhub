@@ -117,6 +117,8 @@ class ClientPaymentController extends Controller
                 'public_client_key' => $account->public_client_key,
                 'script_url' => config("services.authorizenet.hosts.{$account->environment->value}.script").'/v1/Accept.js',
             ],
+            // A held charge has a transaction id but is not completed: the page must not show the form again.
+            'held' => $payment->authorizenet_transaction_id !== null,
             'policies' => $this->policyProps(),
         ]);
     }

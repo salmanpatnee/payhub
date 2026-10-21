@@ -35,13 +35,15 @@ const props = defineProps<{
         script_url: string
     }
     policies: Policy[]
+    held: boolean
 }>()
 
 // 'form': PayHub's own card fields. 'waiting': the charge was held for review or its outcome
 // is unclear, so the page polls the status endpoint. 'timed-out': 10 minutes of visible waiting.
 type UiState = 'form' | 'waiting' | 'timed-out'
-const uiState = ref<UiState>('form')
-const heldMessage = ref(false)
+// A reload while the charge is held must show the waiting message, not the card form again.
+const uiState = ref<UiState>(props.held ? 'waiting' : 'form')
+const heldMessage = ref(props.held)
 
 const consent       = ref(true)
 const consentError  = ref<string | undefined>(undefined)
@@ -180,6 +182,10 @@ function onOutcome(outcome: 'approved' | 'held' | 'unclear'): void {
     // Held or unclear: never show the form again, keep checking instead.
     heldMessage.value = outcome === 'held'
     uiState.value = 'waiting'
+    startPolling()
+}
+
+if (props.held) {
     startPolling()
 }
 
