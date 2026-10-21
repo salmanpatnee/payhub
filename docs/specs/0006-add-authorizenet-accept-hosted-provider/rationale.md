@@ -62,3 +62,12 @@ The attempts table from MPGS is deliberately left out. MPGS needs it because Pay
 The Laravel Http client over the official PHP SDK matches RevolutClient and MpgsClient, keeps calls easy to fake in Pest, and avoids an older dependency for what are three JSON calls. USD only per account follows the Square currency lock.
 
 The engineer chose each of these: webhook plus server lookup, an environment column per account, the admin pastes the webhook URL, card only with name and email prefilled, held payments stay pending, thin Http client, `getMerchantDetails` for test connection, no attempts table, polling when the callback is lost, token requested on page load and refreshed on expiry, and no References section.
+
+## Amendment 2026-10-21 (after the sandbox spike)
+
+The iframe callback was expected to be fragile, and in the sandbox it never fired: four card payments were captured, and the form never requested our communicator page. So the design no longer treats the browser message as an input. The pay page polls PayHub's own status endpoint from the moment it opens, and that endpoint finds the transaction by the payment's invoice number (`getUnsettledTransactionListRequest` returns `invoiceNumber` and `transId`) and then reads it with `getTransactionDetails`. This keeps the rule that only a lookup PayHub's server makes can mark a payment paid, and it removes the long waiting state that Option 2 (webhooks only) was rejected for. The webhook and the sweep stay as two more independent ways to find the same transaction.
+
+Options weighed for finding the transaction when the callback is lost:
+- **Status lookup by invoice number plus webhook plus sweep (chosen).** Fast for the client, works with no callback, uses only calls proven in the spike.
+- **Webhook only.** Rejected again: its signature format and delay are still unverified, and a slow webhook would leave the client waiting.
+- **Switch to the non iframe Accept Hosted (redirect with a return URL).** Not chosen: gives up the on page experience, and was not asked for. Still the fallback if production also fails to relay messages and the polling delay proves unacceptable.
