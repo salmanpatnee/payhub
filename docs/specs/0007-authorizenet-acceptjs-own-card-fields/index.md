@@ -1,7 +1,7 @@
 # 0007. Authorize.net: take cards with Accept.js and PayHub's own card fields
 
 **Date**: 2026-10-21
-**Status**: In Progress
+**Status**: In Progress (built and merged to `staging` on 2026-10-21; waiting on the staging webhook check and a held transaction test before Accepted)
 
 ## Summary
 
@@ -232,11 +232,14 @@ No build approach is recorded in `AGENTS.md` or a scope header, so this plan def
   - Q4: bad card number returns response 3, error 6; expired card returns response 3, error 8 (NOT response 2). Fixed: `fromResult` now maps those to `check_details`, test added. Card code 901 returns response 2, error 65 with cvv N: `check_details` as designed. ZIP 46282 returns response 2, error 2: `declined`.
   - Q5: yes. The second identical charge (same card, amount, invoice, 300 second window) returns response 3, error 11 and the first charge's transaction id; maps to `unclear`.
   - The amount trick (card 4222 2222 2222 2, amount = reason code) did NOT work: the sandbox account is not in Test Mode, so every amount was approved. Forcing declines needs the CVV 901 / ZIP 46282 filters above.
-- [ ] Still to run: held transaction (Q7; needs a holding fraud filter or Test Mode), unsettled list for declines (Q6), retry after a decline with the same invoice, live webhook (Q9, Q10; needs a public tunnel).
+- [x] Upgrade migration `2026_10_21_000005_upgrade_authorizenet_to_accept_js` added (idempotent, tested), so staging only needs `php artisan migrate`. Held-state reload fixed (`held` page prop). Card form restyled to match MPGS and Clover, with per field errors cleared on edit.
+- [ ] Staging webhook check (Q9, Q10): set the webhook URL to the staging address, make a payment, confirm a row in `processed_authorizenet_events`, the `X-ANET-Signature` header format and the delay.
+- [ ] Still to run: held transaction (Q7; needs a holding fraud filter or Test Mode), unsettled list for declines (Q6), retry after a decline with the same invoice.
+- [ ] Run `/check verify`, write `verify.md`, then set Status to Accepted.
 - [ ] Ask the acquiring bank or a PCI assessor to confirm the SAQ type (A-EP expected) and what the pay page script inventory and tamper detection must look like (PCI DSS 4.0 payment page script rules).
 - [ ] Decide whether card values should be cleared on a "check card details" outcome (this spec clears number and CVV and keeps expiry and ZIP).
 - [ ] Review the starting figures: 5 charges per payment and 20 per IP per hour, 300 second duplicate window, 120 second unclear pause, 3 second poll, 10 minute give up, 24 hour sweep window. They are defaults, not reviewed numbers.
 - [ ] Accepted gap: transactions that settle before the lookup sees them leave the unsettled list; add a `getSettledBatchListRequest` pass only if it happens in practice.
-- [ ] Update `AGENTS.md` and `docs/agent.md` through `/sync` when this ships (seventh provider, scoped exception, PCI note).
+- [x] `AGENTS.md` and `docs/agent.md` updated (seventh provider, scoped exception, PCI note, Accept.js flow, upgrade path). Done 2026-10-21.
 - [ ] The `provider-parity-reviewer` agent and `provider-parity-check` skill text still say four providers; refresh them to cover all seven.
 - [ ] Refunds and voids stay out of scope; revisit only if PayHub adds a refund feature for any provider.
