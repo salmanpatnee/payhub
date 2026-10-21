@@ -14,8 +14,9 @@ use Illuminate\Support\Facades\Http;
  * app()->make(AuthorizenetClient::class, ['apiLoginId' => ..., 'transactionKey' => ..., 'environment' => ...])
  * so tests can fake the HTTP layer (Http::fake).
  *
- * Field names were confirmed in the 2026-10-21 sandbox spike (spec 0006,
- * `## Follow-up`); keep every gateway field name in this class so a
+ * Field names were partly confirmed in the 2026-10-21 sandbox spike (spec 0006,
+ * `## Follow-up`); the createTransaction ones come from documentation (spec 0007
+ * Open questions). Keep every gateway field name in this class so a
  * correction lands in one place.
  *
  * Lookups deliberately do NOT ->throw() on a non-2xx so the caller can
@@ -43,42 +44,37 @@ class AuthorizenetClient
     }
 
     /**
-     * Create a one time hosted payment page token. The token is returned in the
-     * body (`token`) and must never be stored or logged by the caller.
+     * Charge a one time Accept.js code (`opaqueData`) with authCapture. The data
+     * value, and this request body, must never be stored or logged by the caller.
+     * Does not ->throw(): the caller maps the reply; a transport failure still throws.
      *
-     * @param  array<string, mixed>  $order  {invoice, amount (decimal string), email, first_name, last_name, button_text, communicator_url}
+     * @param  array<string, mixed>  $order  {invoice, description, amount (decimal string), data_descriptor, data_value, email, first_name, last_name, zip, ip, duplicate_window}
      * @return array{status: int, body: array<string, mixed>}
      */
-    public function getHostedPaymentPage(array $order): array
+    public function createTransaction(array $order): array
     {
-        $settings = [
-            'hostedPaymentReturnOptions' => ['showReceipt' => false],
-            'hostedPaymentButtonOptions' => ['text' => $order['button_text']],
-            'hostedPaymentPaymentOptions' => ['cardCodeRequired' => true, 'showCreditCard' => true, 'showBankAccount' => false],
-            'hostedPaymentBillingAddressOptions' => ['show' => false, 'required' => false],
-            'hostedPaymentShippingAddressOptions' => ['show' => false, 'required' => false],
-            'hostedPaymentCustomerOptions' => ['showEmail' => false, 'requiredEmail' => false, 'addPaymentProfile' => false],
-            'hostedPaymentOrderOptions' => ['show' => false],
-            'hostedPaymentStyleOptions' => ['bgColor' => 'ffffff'],
-            'hostedPaymentIFrameCommunicatorUrl' => ['url' => $order['communicator_url']],
+        // Element order matters to the gateway (its schema is a sequence).
+        $transaction = [
+            'transactionType' => 'authCaptureTransaction',
+            'amount' => $order['amount'],
+            'payment' => ['opaqueData' => [
+                'dataDescriptor' => $order['data_descriptor'],
+                'dataValue' => $order['data_value'],
+            ]],
+            'order' => ['invoiceNumber' => $order['invoice'], 'description' => $order['description']],
+            'customer' => ['email' => $order['email']],
+            'billTo' => ['firstName' => $order['first_name'], 'lastName' => $order['last_name'], 'zip' => $order['zip']],
+            'customerIP' => $order['ip'],
+            'transactionSettings' => ['setting' => [
+                ['settingName' => 'duplicateWindow', 'settingValue' => (string) $order['duplicate_window']],
+            ]],
         ];
 
-        return $this->send(['getHostedPaymentPageRequest' => [
+        return $this->send(['createTransactionRequest' => [
             'merchantAuthentication' => $this->authentication(),
             'refId' => $order['invoice'],
-            'transactionRequest' => [
-                'transactionType' => 'authCaptureTransaction',
-                'amount' => $order['amount'],
-                'order' => ['invoiceNumber' => $order['invoice']],
-                'customer' => ['email' => $order['email']],
-                'billTo' => ['firstName' => $order['first_name'], 'lastName' => $order['last_name']],
-            ],
-            'hostedPaymentSettings' => ['setting' => array_map(
-                fn (string $name, array $value) => ['settingName' => $name, 'settingValue' => json_encode($value)],
-                array_keys($settings),
-                array_values($settings),
-            )],
-        ]]);
+            'transactionRequest' => $transaction,
+        ]], 30);
     }
 
     /**
@@ -107,6 +103,19 @@ class AuthorizenetClient
     }
 
     /**
+     * The account's public client key from a getMerchantDetails result, or null
+     * when the merchant has not generated one. A public identifier, not a secret.
+     *
+     * @param  array{status: int, body: array<string, mixed>}  $result
+     */
+    public static function publicClientKey(array $result): ?string
+    {
+        $key = $result['body']['publicClientKey'] ?? null;
+
+        return is_string($key) && $key !== '' ? $key : null;
+    }
+
+    /**
      * True when the response is an authenticated success.
      *
      * @param  array{status: int, body: array<string, mixed>}  $result
@@ -129,9 +138,9 @@ class AuthorizenetClient
      * @param  array<string, mixed>  $payload
      * @return array{status: int, body: array<string, mixed>}
      */
-    private function send(array $payload): array
+    private function send(array $payload, int $timeout = 15): array
     {
-        $response = $this->request()->post('/xml/v1/request.api', $payload);
+        $response = $this->request($timeout)->post('/xml/v1/request.api', $payload);
 
         // The gateway prefixes its JSON with a UTF-8 BOM, which breaks json_decode.
         $body = json_decode(ltrim($response->body(), "\xEF\xBB\xBF"), true);
@@ -142,10 +151,10 @@ class AuthorizenetClient
         ];
     }
 
-    private function request(): PendingRequest
+    private function request(int $timeout): PendingRequest
     {
         $host = config("services.authorizenet.hosts.{$this->environment->value}.api");
 
-        return Http::baseUrl($host)->acceptJson()->asJson()->timeout(15);
+        return Http::baseUrl($host)->acceptJson()->asJson()->timeout($timeout);
     }
 }

@@ -73,7 +73,7 @@ class AuthorizenetChargeResolver
     private function decline(Payment $payment, string $transactionId): void
     {
         // Only a held transaction that was then declined (fraud review) ends the payment.
-        // A plain decline stays in the hosted form where the client retries.
+        // A plain decline stays on the card form where the client retries.
         if ($payment->authorizenet_transaction_id === $transactionId) {
             Payment::whereKey($payment->id)->where('status', 'pending')->update(['status' => 'failed']);
         }

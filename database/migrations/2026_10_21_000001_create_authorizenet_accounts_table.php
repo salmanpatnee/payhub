@@ -22,6 +22,7 @@ return new class extends Migration
             $table->string('api_login_id'); // plain, identifies the merchant and is not a secret
             $table->text('transaction_key'); // encrypted cast
             $table->text('signature_key')->nullable(); // encrypted cast; null = webhook route rejects everything
+            $table->string('public_client_key')->nullable(); // public identifier for Accept.js, fetched from getMerchantDetails
             $table->string('environment')->default('sandbox'); // sandbox | production (enum cast in PHP)
             $table->string('currency', 3)->default('usd');
             $table->boolean('is_active')->default(true);

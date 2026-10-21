@@ -21,6 +21,7 @@ type AuthorizenetAccountRow = {
     environment: 'sandbox' | 'production';
     currency: string;
     has_signature_key: boolean;
+    has_public_client_key: boolean;
     is_active: boolean;
 };
 
@@ -138,7 +139,12 @@ return;
                         <td class="px-5 py-3.5 text-muted-foreground tabular-nums">{{ index + 1 }}</td>
                         <td class="px-5 py-3.5 font-medium">{{ account.account_name }}</td>
                         <td class="px-5 py-3.5 font-mono text-xs text-muted-foreground">{{ account.prefix ?? '—' }}</td>
-                        <td class="px-5 py-3.5 text-xs capitalize text-muted-foreground">{{ account.environment }}</td>
+                        <td class="px-5 py-3.5 text-xs capitalize text-muted-foreground">
+                            {{ account.environment }}
+                            <span v-if="!account.has_public_client_key" class="block normal-case text-destructive">
+                                No public client key. Generate one in Merchant Interface (Account &gt; Settings &gt; Security Settings &gt; General Security Settings &gt; Manage Public Client Key).
+                            </span>
+                        </td>
                         <td class="px-5 py-3.5">
                             <div v-if="account.is_active" class="inline-flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-500">
                                 <CheckCircle2 class="size-4" />

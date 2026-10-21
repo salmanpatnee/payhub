@@ -12,7 +12,7 @@ class AuthorizenetAccount extends Model
     use HasFactory;
 
     protected $fillable = [
-        'account_name', 'prefix', 'api_login_id', 'environment', 'currency', 'is_active',
+        'account_name', 'prefix', 'api_login_id', 'public_client_key', 'environment', 'currency', 'is_active',
         // transaction_key and signature_key are NOT mass-assignable — assign explicitly only
     ];
 

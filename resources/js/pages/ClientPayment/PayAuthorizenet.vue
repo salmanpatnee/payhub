@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import PaymentLayout from '@/layouts/PaymentLayout.vue'
-import AuthorizenetPaymentForm from './AuthorizenetPaymentForm.vue'
+import AuthorizenetCardForm from './AuthorizenetCardForm.vue'
 
 type Policy = { key: string; title: string; version: string; html: string }
 
@@ -29,12 +29,17 @@ const props = defineProps<{
         primary_color: string
         secondary_color: string
     }
+    authorizenetAccount: {
+        api_login_id: string
+        public_client_key: string
+        script_url: string
+    }
     policies: Policy[]
 }>()
 
-// 'form': the hosted card form (it keeps showing "Processing..." after payment until polling
-// notices the result). 'timed-out': 10 minutes of visible waiting with no result yet.
-type UiState = 'form' | 'timed-out'
+// 'form': PayHub's own card fields. 'waiting': the charge was held for review or its outcome
+// is unclear, so the page polls the status endpoint. 'timed-out': 10 minutes of visible waiting.
+type UiState = 'form' | 'waiting' | 'timed-out'
 const uiState = ref<UiState>('form')
 const heldMessage = ref(false)
 
@@ -68,9 +73,9 @@ function blockCopyKeys(event: KeyboardEvent): void {
 }
 
 /**
- * Gate for the hosted form load(): records consent for the audit trail before
- * any card token is created. Returns false (and surfaces an inline reason) if consent
- * is missing or couldn't be recorded, so the form never tokenizes/charges without it.
+ * Gate for the card form submit: records consent for the audit trail before
+ * any card data is sent. Returns false (and surfaces an inline reason) if consent
+ * is missing or couldn't be recorded, so the form never tokenizes or charges without it.
  */
 async function beforeCharge(): Promise<boolean> {
     if (!consent.value) {
@@ -97,7 +102,6 @@ const GIVE_UP_MS = 10 * 60 * 1000
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let visibleMs = 0
 let lastTick = 0
-let transHint: string | null = null
 
 function stopPolling(): void {
     if (pollTimer !== null) {
@@ -120,8 +124,7 @@ async function pollStatus(): Promise<void> {
     lastTick = now
 
     try {
-        const query = transHint ? `?trans_id=${encodeURIComponent(transHint)}` : ''
-        const response = await fetch(`/pay/${props.payment.uuid}/authorizenet/status${query}`, {
+        const response = await fetch(`/pay/${props.payment.uuid}/authorizenet/status`, {
             headers: { Accept: 'application/json' },
         })
         const data = await response.json().catch(() => ({}))
@@ -167,9 +170,17 @@ function startPolling(): void {
     pollTimer = setInterval(pollStatus, POLL_INTERVAL_MS)
 }
 
-function onTransaction(transId: string): void {
-    transHint = transId
-    void pollStatus()
+function onOutcome(outcome: 'approved' | 'held' | 'unclear'): void {
+    if (outcome === 'approved') {
+        router.visit(`/pay/${props.payment.uuid}/success`)
+
+        return
+    }
+
+    // Held or unclear: never show the form again, keep checking instead.
+    heldMessage.value = outcome === 'held'
+    uiState.value = 'waiting'
+    startPolling()
 }
 
 onBeforeUnmount(stopPolling)
@@ -193,7 +204,7 @@ onBeforeUnmount(stopPolling)
         <Head :title="`Pay ${props.brand.name}`" />
 
         <div class="form-content space-y-6" :style="{ '--brand-primary': brand.primary_color }">
-            <template v-if="uiState === 'form'">
+            <template v-if="uiState !== 'timed-out'">
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight text-slate-900">Complete your payment</h1>
                     <p class="text-sm text-slate-500 mt-1.5 leading-relaxed">
@@ -201,18 +212,22 @@ onBeforeUnmount(stopPolling)
                     </p>
                 </div>
 
-                <Alert v-if="heldMessage">
+                <Alert v-if="uiState === 'waiting'">
                     <AlertCircle class="size-4" />
                     <AlertDescription>
-                        Your payment is being processed and needs a quick review. You will get a receipt by email once it is confirmed.
+                        <template v-if="heldMessage">
+                            Your payment is being processed and needs a quick review. You will get a receipt by email once it is confirmed.
+                        </template>
+                        <template v-else>We are confirming your payment. Please do not pay again.</template>
                     </AlertDescription>
                 </Alert>
 
-                <AuthorizenetPaymentForm
-                    :payment="{ uuid: payment.uuid }"
+                <AuthorizenetCardForm
+                    v-else
+                    :payment="{ uuid: payment.uuid, amount: payment.amount, currency: payment.currency }"
+                    :authorizenet-account="authorizenetAccount"
                     :before-charge="beforeCharge"
-                    @ready="startPolling"
-                    @transaction="onTransaction"
+                    @outcome="onOutcome"
                 />
 
                 <!-- Compliance footer — consent + policy links, intentionally low-emphasis boilerplate -->

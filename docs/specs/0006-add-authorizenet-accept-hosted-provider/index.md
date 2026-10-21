@@ -1,7 +1,7 @@
 # 0006. Add Authorize.net (Accept Hosted iframe) as a payment provider
 
 **Date**: 2026-10-21
-**Status**: In Progress
+**Status**: Superseded by [0007](../0007-authorizenet-acceptjs-own-card-fields/index.md)
 
 ## Summary
 

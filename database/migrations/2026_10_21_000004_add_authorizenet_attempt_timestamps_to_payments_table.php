@@ -7,21 +7,21 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * First and latest hosted-form token issue time (spec 0006). They bound the
+     * First and latest charge attempt time (spec 0007). They bound the
      * invoice-number lookup, the sweep window, the lookup guard and the edit lock.
      */
     public function up(): void
     {
         Schema::table('payments', function (Blueprint $table) {
-            $table->timestamp('authorizenet_token_issued_at')->nullable()->after('authorizenet_transaction_id');
-            $table->timestamp('authorizenet_token_last_issued_at')->nullable()->after('authorizenet_token_issued_at');
+            $table->timestamp('authorizenet_first_attempt_at')->nullable()->after('authorizenet_transaction_id');
+            $table->timestamp('authorizenet_last_attempt_at')->nullable()->after('authorizenet_first_attempt_at');
         });
     }
 
     public function down(): void
     {
         Schema::table('payments', function (Blueprint $table) {
-            $table->dropColumn(['authorizenet_token_issued_at', 'authorizenet_token_last_issued_at']);
+            $table->dropColumn(['authorizenet_first_attempt_at', 'authorizenet_last_attempt_at']);
         });
     }
 };

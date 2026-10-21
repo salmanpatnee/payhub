@@ -28,12 +28,13 @@ function anetUser(string $role): User
     return $user;
 }
 
-function fakeMerchantDetails(array $currencies = ['USD'], string $resultCode = 'Ok'): void
+function fakeMerchantDetails(array $currencies = ['USD'], string $resultCode = 'Ok', ?string $publicClientKey = 'pub-client-key'): void
 {
     Http::swap(new Factory); // drop earlier stubs: the first registered stub wins
     Http::fake([
         'apitest.authorize.net/*' => Http::response(
             "\xEF\xBB\xBF".json_encode([
+                'publicClientKey' => $publicClientKey,
                 'currencies' => $currencies,
                 'messages' => ['resultCode' => $resultCode, 'message' => [['code' => 'I00001', 'text' => 'Successful.']]],
             ]),
@@ -218,4 +219,45 @@ it('resolves the reference code prefix and account name for an Authorize.net pay
 
     expect($payment->formattedReferenceCode())->toBe('ACME-000042')
         ->and($payment->providerAccountName())->toBe('Acme US');
+});
+
+it('stores the public client key fetched from the gateway when creating and updating', function () {
+    fakeMerchantDetails();
+    $admin = anetUser('admin');
+
+    $this->actingAs($admin)->post(route('admin.authorizenet-accounts.store'), anetPayload())->assertSessionHasNoErrors();
+    $account = AuthorizenetAccount::firstOrFail();
+    expect($account->public_client_key)->toBe('pub-client-key');
+
+    fakeMerchantDetails(publicClientKey: 'rotated-key');
+    $this->actingAs($admin)->put(route('admin.authorizenet-accounts.update', $account), [
+        'account_name' => 'Acme US', 'prefix' => 'ACME', 'api_login_id' => 'login123', 'environment' => 'sandbox',
+    ])->assertSessionHasNoErrors();
+
+    expect($account->fresh()->public_client_key)->toBe('rotated-key');
+});
+
+it('saves an account with no public client key but tells the admin how to generate one', function () {
+    fakeMerchantDetails(publicClientKey: null);
+
+    $this->actingAs(anetUser('admin'))
+        ->post(route('admin.authorizenet-accounts.store'), anetPayload())
+        ->assertRedirect(route('admin.authorizenet-accounts.index'))
+        ->assertSessionHas('success', fn (string $message) => str_contains($message, 'Manage Public Client Key'));
+
+    expect(AuthorizenetAccount::firstOrFail()->public_client_key)->toBeNull();
+});
+
+it('refreshes the stored public client key on test connection and flags a missing one in the list', function () {
+    $admin = anetUser('admin');
+    $account = AuthorizenetAccount::factory()->create(['public_client_key' => null]);
+
+    fakeMerchantDetails(publicClientKey: 'fresh-key');
+    $this->actingAs($admin)->post(route('admin.authorizenet-accounts.test-stored-connection', $account))->assertSessionHasNoErrors();
+    expect($account->fresh()->public_client_key)->toBe('fresh-key');
+
+    $account->fresh()->update(['public_client_key' => null]);
+    $props = $this->actingAs($admin)->get(route('admin.authorizenet-accounts.index'))->viewData('page')['props'];
+    expect($props['authorizenetAccounts'][0]['has_public_client_key'])->toBeFalse()
+        ->and(json_encode($props))->not->toContain('placeholder_transaction_key');
 });

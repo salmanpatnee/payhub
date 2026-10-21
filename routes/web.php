@@ -333,17 +333,14 @@ Route::get('/pay/{payment}/mpgs/status', [MpgsPaymentController::class, 'status'
 Route::match(['get', 'post'], '/pay/{payment}/mpgs/3ds-return', [MpgsPaymentController::class, 'threeDsReturn'])
     ->name('pay.mpgs.return');
 
-// Authorize.net Accept Hosted pay thread (spec 0006) — public (scoped by the payment UUID).
-// The token POST stays behind CSRF and a per payment limiter; status is bounded by the
+// Authorize.net Accept.js pay thread (spec 0007) — public (scoped by the payment UUID).
+// The charge POST stays behind CSRF and the authorizenet-charge limiter; status is bounded by the
 // lookup guards in AuthorizenetInvoiceLookup, not by a named limiter.
-Route::post('/pay/{payment}/authorizenet/token', [AuthorizenetPaymentController::class, 'token'])
-    ->name('pay.authorizenet.token')
-    ->middleware('throttle:authorizenet-token');
+Route::post('/pay/{payment}/authorizenet/charge', [AuthorizenetPaymentController::class, 'charge'])
+    ->name('pay.authorizenet.charge')
+    ->middleware('throttle:authorizenet-charge');
 Route::get('/pay/{payment}/authorizenet/status', [AuthorizenetPaymentController::class, 'status'])
     ->name('pay.authorizenet.status');
-// Framed by the hosted form (best effort relay); SecurityHeaders allows only that framing.
-Route::get('/pay/authorizenet/communicator', [AuthorizenetPaymentController::class, 'communicator'])
-    ->name('pay.authorizenet.communicator');
 
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)

@@ -18,6 +18,11 @@ class AuthorizenetAccountController extends Controller
 {
     private const USD_WARNING = ' Note: this Authorize.net account does not list USD as a currency, so USD payments may fail.';
 
+    private const MISSING_KEY_WARNING = ' Generate a public client key in Merchant Interface (Account > Settings > Security Settings > General Security Settings > Manage Public Client Key), or clients cannot pay with this account.';
+
+    /** Public client key read by validateCredentials(); null when the merchant has none. */
+    private ?string $publicClientKey = null;
+
     /** Set to USD_WARNING by validateCredentials() when the account's currency list lacks USD. */
     private string $usdWarning = '';
 
@@ -34,6 +39,7 @@ class AuthorizenetAccountController extends Controller
                     'environment' => $account->environment->value,
                     'currency' => $account->currency,
                     'has_signature_key' => ! empty($account->signature_key),
+                    'has_public_client_key' => ! empty($account->public_client_key),
                     'is_active' => $account->is_active,
                 ]),
         ]);
@@ -58,6 +64,7 @@ class AuthorizenetAccountController extends Controller
 
         $account = new AuthorizenetAccount($request->safe()->except(['transaction_key', 'signature_key']));
         $account->currency = 'usd';
+        $account->public_client_key = $this->publicClientKey;
         $account->transaction_key = $request->validated('transaction_key');
         if ($request->filled('signature_key')) {
             $account->signature_key = $request->validated('signature_key');
@@ -65,7 +72,7 @@ class AuthorizenetAccountController extends Controller
         $account->save();
 
         return redirect()->route('admin.authorizenet-accounts.index')
-            ->with('success', 'Authorize.net account saved.'.$this->usdWarning);
+            ->with('success', 'Authorize.net account saved.'.$this->usdWarning.$this->keyWarning());
     }
 
     public function edit(AuthorizenetAccount $authorizenetAccount): Response
@@ -81,6 +88,7 @@ class AuthorizenetAccountController extends Controller
                 'is_active' => $authorizenetAccount->is_active,
                 'has_transaction_key' => ! empty($authorizenetAccount->transaction_key),
                 'has_signature_key' => ! empty($authorizenetAccount->signature_key),
+                'has_public_client_key' => ! empty($authorizenetAccount->public_client_key),
                 // transaction_key / signature_key: NEVER included — not even masked
             ],
             // Shown for reference: the admin adds this URL in the Authorize.net Merchant Interface.
@@ -113,10 +121,11 @@ class AuthorizenetAccountController extends Controller
         }
 
         $authorizenetAccount->fill($request->safe()->except(['transaction_key', 'signature_key']));
+        $authorizenetAccount->public_client_key = $this->publicClientKey;
         $authorizenetAccount->save();
 
         return redirect()->route('admin.authorizenet-accounts.index')
-            ->with('success', 'Authorize.net account updated.'.$this->usdWarning);
+            ->with('success', 'Authorize.net account updated.'.$this->usdWarning.$this->keyWarning());
     }
 
     public function deactivate(AuthorizenetAccount $authorizenetAccount): RedirectResponse
@@ -166,7 +175,7 @@ class AuthorizenetAccountController extends Controller
             return back()->withErrors(['authorizenet_api' => $error]);
         }
 
-        return back()->with('success', 'Authorize.net credentials verified.'.$this->usdWarning);
+        return back()->with('success', 'Authorize.net credentials verified.'.$this->usdWarning.$this->keyWarning());
     }
 
     public function testStoredConnection(AuthorizenetAccount $authorizenetAccount): RedirectResponse
@@ -181,12 +190,20 @@ class AuthorizenetAccountController extends Controller
             return back()->withErrors(['authorizenet_api' => $error]);
         }
 
-        return back()->with('success', 'Authorize.net credentials verified.'.$this->usdWarning);
+        // Testing a saved account also refreshes its stored public client key.
+        $authorizenetAccount->update(['public_client_key' => $this->publicClientKey]);
+
+        return back()->with('success', 'Authorize.net credentials verified.'.$this->usdWarning.$this->keyWarning());
+    }
+
+    private function keyWarning(): string
+    {
+        return $this->publicClientKey === null ? self::MISSING_KEY_WARNING : '';
     }
 
     /**
      * NEVER use a global Authorize.net client — always a per-account AuthorizenetClient.
-     * One authenticated getMerchantDetails call; never touches a payment.
+     * One authenticated getMerchantDetails call; never touches a payment. Also reads the public client key.
      */
     private function validateCredentials(string $apiLoginId, string $transactionKey, string $environment): ?string
     {
@@ -204,6 +221,8 @@ class AuthorizenetAccountController extends Controller
         if (! AuthorizenetClient::isOk($result)) {
             return 'The credentials could not be verified with Authorize.net. Check that they are correct and try again.';
         }
+
+        $this->publicClientKey = AuthorizenetClient::publicClientKey($result);
 
         $currencies = $result['body']['currencies'] ?? null;
         if (is_array($currencies) && $currencies !== [] && ! in_array('USD', $currencies, true)) {

@@ -3,84 +3,69 @@
 namespace App\Http\Controllers;
 
 use App\Enums\PaymentProvider;
+use App\Http\Requests\ChargeAuthorizenetRequest;
+use App\Jobs\ResolveAuthorizenetCharge;
 use App\Models\AuthorizenetAccount;
 use App\Models\Payment;
+use App\Services\Authorizenet\AuthorizenetChargeClassifier;
+use App\Services\Authorizenet\AuthorizenetChargeReply;
+use App\Services\Authorizenet\AuthorizenetChargeResolver;
 use App\Services\Authorizenet\AuthorizenetClient;
 use App\Services\Authorizenet\AuthorizenetInvoice;
 use App\Services\Authorizenet\AuthorizenetInvoiceLookup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Illuminate\View\View;
 use Throwable;
 
 /**
- * Authorize.net Accept Hosted pay thread (spec 0006, AC-4, AC-5, AC-6, AC-9).
+ * Authorize.net Accept.js pay thread (spec 0007, AC-6 to AC-11).
  *
- * Card data never reaches PayHub: the client types it into Authorize.net's own
- * form in an iframe. Paid status only ever comes from a server side read of the
- * transaction (AuthorizenetInvoiceLookup); nothing the browser sends is trusted.
+ * The browser turns the card into a one time code with Accept.js; this controller
+ * charges that code server side and reads the transaction back before any status
+ * changes (AuthorizenetChargeResolver). Nothing the browser sends decides the
+ * amount, account or result. The data value and the gateway request are never
+ * stored or logged.
  */
 class AuthorizenetPaymentController extends Controller
 {
-    /**
-     * Create a one time hosted form token. The token is returned once and never
-     * stored or logged.
-     */
-    public function token(Payment $payment): JsonResponse
+    public function charge(ChargeAuthorizenetRequest $request, Payment $payment): JsonResponse
     {
         $account = $this->payableAccount($payment);
 
         if ($account === null) {
-            return response()->json(['message' => 'This payment can no longer be paid.'], 422);
+            return $this->notPayable();
         }
 
-        [$first, $last] = $this->splitName((string) $payment->client_name);
+        if (Cache::has($this->pauseKey($payment))) {
+            return $this->outcomeResponse(AuthorizenetChargeReply::UNCLEAR, 409);
+        }
+
+        $lock = Cache::lock("authorizenet-charge:{$payment->id}", 60);
+
+        if (! $lock->get()) {
+            return $this->outcomeResponse(AuthorizenetChargeReply::UNCLEAR, 409);
+        }
 
         try {
-            $result = app(AuthorizenetInvoiceLookup::class)->client($account)->getHostedPaymentPage([
-                'invoice' => AuthorizenetInvoice::for($payment),
-                'amount' => AuthorizenetInvoice::centsToDecimal($payment->amount), // from the record, never the request
-                'email' => Str::limit((string) $payment->client_email, 255, ''),
-                'first_name' => $first,
-                'last_name' => $last,
-                'button_text' => 'Pay $'.number_format($payment->amount / 100, 2),
-                'communicator_url' => secure_url(route('pay.authorizenet.communicator', [], false)),
-            ]);
-        } catch (Throwable $e) {
-            Log::warning('Authorize.net token request failed', ['payment_id' => $payment->id, 'error' => $e->getMessage()]);
+            // Another request may have finished while this one waited for the lock.
+            $payment->refresh();
 
-            return $this->gatewayFailure();
+            if ($this->payableAccount($payment) === null) {
+                return $this->notPayable();
+            }
+
+            return $this->runCharge($request, $payment, $account);
+        } finally {
+            $lock->release();
         }
-
-        $token = $result['body']['token'] ?? null;
-
-        if (! AuthorizenetClient::isOk($result) || ! is_string($token) || $token === '') {
-            Log::warning('Authorize.net token request rejected', [
-                'payment_id' => $payment->id,
-                'http_status' => $result['status'],
-                'code' => $result['body']['messages']['message'][0]['code'] ?? null,
-                'text' => $result['body']['messages']['message'][0]['text'] ?? null,
-            ]);
-
-            return $this->gatewayFailure();
-        }
-
-        $payment->forceFill([
-            'authorizenet_token_issued_at' => $payment->authorizenet_token_issued_at ?? now(),
-            'authorizenet_token_last_issued_at' => now(),
-        ])->save();
-
-        return response()->json([
-            'token' => $token,
-            'form_url' => config("services.authorizenet.hosts.{$account->environment->value}.form").'/payment/payment',
-        ]);
     }
 
     /**
-     * Polled by the pay page. Runs a guarded server side lookup, then reports
-     * the payment state with fixed words (never the gateway's text).
+     * Polled by the pay page after a held or unclear outcome. Runs a guarded server
+     * side lookup, then reports the payment state with fixed words (never gateway text).
      */
     public function status(Request $request, Payment $payment): JsonResponse
     {
@@ -88,9 +73,7 @@ class AuthorizenetPaymentController extends Controller
 
         $payment->loadMissing('authorizenetAccount');
 
-        $hint = $request->query('trans_id');
-
-        app(AuthorizenetInvoiceLookup::class)->lookup($payment, is_string($hint) ? $hint : null);
+        app(AuthorizenetInvoiceLookup::class)->lookup($payment);
 
         $payment->refresh();
 
@@ -100,10 +83,132 @@ class AuthorizenetPaymentController extends Controller
         ]);
     }
 
-    /** The tiny page the hosted form frames to relay messages (best effort, spec 0006 AC-5). */
-    public function communicator(): View
+    private function runCharge(ChargeAuthorizenetRequest $request, Payment $payment, AuthorizenetAccount $account): JsonResponse
     {
-        return view('authorizenet-communicator');
+        [$first, $last] = $this->splitName((string) $payment->client_name);
+        $client = app(AuthorizenetInvoiceLookup::class)->client($account);
+
+        $payment->forceFill([
+            'authorizenet_first_attempt_at' => $payment->authorizenet_first_attempt_at ?? now(),
+            'authorizenet_last_attempt_at' => now(),
+        ])->save();
+
+        try {
+            $reply = AuthorizenetChargeReply::fromResult($client->createTransaction([
+                'invoice' => AuthorizenetInvoice::for($payment),
+                'description' => $payment->formattedReferenceCode(),
+                'amount' => AuthorizenetInvoice::centsToDecimal($payment->amount), // from the record, never the request
+                'data_descriptor' => $request->validated('data_descriptor'),
+                'data_value' => $request->validated('data_value'),
+                'email' => Str::limit((string) $payment->client_email, 255, ''),
+                'first_name' => $first,
+                'last_name' => $last,
+                'zip' => $request->validated('postal_code'),
+                'ip' => (string) $request->ip(),
+                'duplicate_window' => config('services.authorizenet.duplicate_window_seconds'),
+            ]));
+        } catch (Throwable $e) {
+            // Class only: a transport error message must never carry request data.
+            Log::warning('Authorize.net charge call failed', ['payment_id' => $payment->id, 'exception' => $e::class]);
+            $reply = AuthorizenetChargeReply::unclear();
+        }
+
+        if (in_array($reply->outcome, [AuthorizenetChargeReply::APPROVED, AuthorizenetChargeReply::HELD], true)) {
+            $reply = $this->readBack($payment, $client, $reply);
+        }
+
+        return match ($reply->outcome) {
+            AuthorizenetChargeReply::UNCLEAR => $this->unclear($payment),
+            AuthorizenetChargeReply::ERROR => $this->gatewayError($payment, $reply),
+            default => $this->outcomeResponse($reply->outcome),
+        };
+    }
+
+    /**
+     * Read the transaction the charge reply named and apply it through the resolver.
+     * Anything that is not clearly approved or held for this payment is unclear.
+     */
+    private function readBack(Payment $payment, AuthorizenetClient $client, AuthorizenetChargeReply $reply): AuthorizenetChargeReply
+    {
+        try {
+            $result = $client->getTransactionDetails((string) $reply->transactionId);
+        } catch (Throwable $e) {
+            Log::warning('Authorize.net read back failed', ['payment_id' => $payment->id, 'exception' => $e::class]);
+
+            return $reply->asUnclear();
+        }
+
+        $transaction = $result['body']['transaction'] ?? null;
+
+        if (! AuthorizenetClient::isOk($result) || ! is_array($transaction)) {
+            return $reply->asUnclear();
+        }
+
+        $bucket = AuthorizenetChargeClassifier::classify($transaction, $payment);
+
+        if (! in_array($bucket, [AuthorizenetChargeClassifier::APPROVED, AuthorizenetChargeClassifier::HELD], true)) {
+            Log::error('Authorize.net charge read back did not match the payment', [
+                'payment_id' => $payment->id,
+                'transaction_id' => $reply->transactionId,
+                'bucket' => $bucket,
+            ]);
+
+            return $reply->asUnclear();
+        }
+
+        app(AuthorizenetChargeResolver::class)->apply($payment, $bucket, (string) $reply->transactionId, $transaction);
+
+        $payment->refresh();
+
+        if ($bucket === AuthorizenetChargeClassifier::HELD) {
+            return $reply->withOutcome(AuthorizenetChargeReply::HELD);
+        }
+
+        // A cancelled payment is not completed by the resolver (it logs at error level).
+        return $payment->status === 'completed'
+            ? $reply->withOutcome(AuthorizenetChargeReply::APPROVED)
+            : $reply->asUnclear();
+    }
+
+    /**
+     * PayHub cannot tell whether the card was charged: stop new charges for a while
+     * and let the invoice lookup settle it (AC-9).
+     */
+    private function unclear(Payment $payment): JsonResponse
+    {
+        Cache::put($this->pauseKey($payment), 1, now()->addSeconds((int) config('services.authorizenet.unclear_pause_seconds')));
+
+        ResolveAuthorizenetCharge::dispatch($payment->id)->delay(now()->addSeconds(15));
+
+        return $this->outcomeResponse(AuthorizenetChargeReply::UNCLEAR);
+    }
+
+    private function gatewayError(Payment $payment, AuthorizenetChargeReply $reply): JsonResponse
+    {
+        Log::error('Authorize.net rejected the charge request', [
+            'payment_id' => $payment->id,
+            'gateway_code' => $reply->gatewayCode,
+        ]);
+
+        return $this->outcomeResponse(AuthorizenetChargeReply::ERROR, 502);
+    }
+
+    private function outcomeResponse(string $outcome, int $status = 200): JsonResponse
+    {
+        return response()->json([
+            'outcome' => $outcome,
+            'message' => AuthorizenetChargeReply::message($outcome),
+        ], $status);
+    }
+
+    private function notPayable(): JsonResponse
+    {
+        return response()->json(['message' => 'This payment can no longer be paid.'], 422);
+    }
+
+    private function pauseKey(Payment $payment): string
+    {
+        return "authorizenet:pause:{$payment->id}";
     }
 
     private function state(Payment $payment): string
@@ -127,7 +232,7 @@ class AuthorizenetPaymentController extends Controller
 
         $account = $payment->authorizenetAccount;
 
-        return $account?->is_active ? $account : null;
+        return $account?->is_active && $account->public_client_key ? $account : null;
     }
 
     /**
@@ -141,10 +246,5 @@ class AuthorizenetPaymentController extends Controller
         $last = $parts[1] ?? $parts[0];
 
         return [Str::limit($first, 50, ''), Str::limit($last, 50, '')];
-    }
-
-    private function gatewayFailure(): JsonResponse
-    {
-        return response()->json(['message' => 'We could not start the payment form. Please try again.'], 502);
     }
 }

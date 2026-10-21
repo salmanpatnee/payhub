@@ -1,20 +1,25 @@
 <?php
 
 use App\Jobs\HandleAuthorizenetWebhookJob;
+use App\Jobs\ResolveAuthorizenetCharge;
 use App\Jobs\SendPaymentNotification;
 use App\Models\AuthorizenetAccount;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Authorizenet\AuthorizenetChargeClassifier;
+use App\Services\Authorizenet\AuthorizenetChargeReply;
 use App\Services\Authorizenet\AuthorizenetInvoice;
 use App\Services\Authorizenet\AuthorizenetInvoiceLookup;
 use App\Services\Authorizenet\AuthorizenetStalePaymentSweep;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Spatie\Permission\Models\Role;
 
@@ -31,8 +36,8 @@ function anetPayment(array $attributes = []): Payment
         'amount' => 1234,
         'currency' => 'usd',
         'status' => 'pending',
-        'authorizenet_token_issued_at' => now()->subMinute(),
-        'authorizenet_token_last_issued_at' => now()->subMinute(),
+        'authorizenet_first_attempt_at' => now()->subMinute(),
+        'authorizenet_last_attempt_at' => now()->subMinute(),
     ], $attributes));
 }
 
@@ -53,9 +58,12 @@ function anetTx(Payment $payment, array $overrides = []): array
  * @param  array<int, array<string, mixed>>  $rows
  * @param  array<string, array<string, mixed>>  $details
  */
-function fakeAnet(array $rows = [], array $details = []): void
+function fakeAnet(array $rows = [], array $details = [], array|string|null $charge = null): void
 {
-    Http::fake(function (Request $request) use ($rows, $details) {
+    app()->forgetInstance(Factory::class); // a fresh fake replaces any earlier one in the same test
+    Facade::clearResolvedInstance(Factory::class);
+
+    Http::fake(function (Request $request) use ($rows, $details, $charge) {
         $body = $request->data();
 
         if (isset($body['getUnsettledTransactionListRequest'])) {
@@ -73,8 +81,12 @@ function fakeAnet(array $rows = [], array $details = []): void
                 : ['messages' => ['resultCode' => 'Error']]), $tx ? 200 : 404);
         }
 
-        if (isset($body['getHostedPaymentPageRequest'])) {
-            return Http::response("\xEF\xBB\xBF".json_encode(['token' => 'tok-abc', 'messages' => ['resultCode' => 'Ok']]), 200);
+        if (isset($body['createTransactionRequest'])) {
+            if ($charge === 'timeout') {
+                throw new ConnectionException('timed out');
+            }
+
+            return Http::response("\xEF\xBB\xBF".json_encode($charge ?? []), $charge === null ? 500 : 200);
         }
 
         return Http::response('{}', 500);
@@ -125,75 +137,260 @@ it('classifies transactions into the four buckets', function (array $overrides, 
     'voided' => [['transactionStatus' => 'voided'], AuthorizenetChargeClassifier::UNKNOWN],
 ]);
 
-it('creates a token from the payment record and stamps the issue times', function () {
-    fakeAnet();
-    $payment = anetPayment(['authorizenet_token_issued_at' => null, 'authorizenet_token_last_issued_at' => null, 'client_name' => 'Jane']);
+/** A createTransaction reply body. */
+function chargeReply(string $code, ?string $transId = '60000001', ?string $errorCode = null): array
+{
+    return [
+        'transactionResponse' => array_filter([
+            'responseCode' => $code,
+            'transId' => $transId,
+            'errors' => $errorCode ? [['errorCode' => $errorCode, 'errorText' => 'gateway text']] : null,
+        ]),
+        'messages' => ['resultCode' => $code === '1' || $code === '4' ? 'Ok' : 'Error'],
+    ];
+}
 
-    $this->postJson(route('pay.authorizenet.token', $payment))
+function chargeBody(array $overrides = []): array
+{
+    return array_merge([
+        'data_descriptor' => 'COMMON.ACCEPT.INAPP.PAYMENT',
+        'data_value' => 'opaque-code-from-acceptjs',
+        'postal_code' => '90210',
+    ], $overrides);
+}
+
+it('charges the one time code with the amount from the record and completes after the read back', function () {
+    $payment = anetPayment(['authorizenet_first_attempt_at' => null, 'authorizenet_last_attempt_at' => null, 'client_name' => 'Jane']);
+    fakeAnet([], ['60000001' => anetTx($payment)], chargeReply('1'));
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody(['amount' => 1, 'account_id' => 99]))
         ->assertOk()
-        ->assertJson(['token' => 'tok-abc'])
-        ->assertJsonPath('form_url', 'https://test.authorize.net/payment/payment');
+        ->assertJson(['outcome' => 'approved']);
 
     Http::assertSent(function (Request $request) use ($payment) {
-        $body = $request->data()['getHostedPaymentPageRequest'] ?? null;
+        $body = $request->data()['createTransactionRequest'] ?? null;
 
         return $body !== null
             && $body['transactionRequest']['amount'] === '12.34'
+            && $body['transactionRequest']['transactionType'] === 'authCaptureTransaction'
+            && $body['refId'] === AuthorizenetInvoice::for($payment)
             && $body['transactionRequest']['order']['invoiceNumber'] === AuthorizenetInvoice::for($payment)
-            && $body['transactionRequest']['billTo'] === ['firstName' => 'Jane', 'lastName' => 'Jane']
-            && str_starts_with(json_decode(collect($body['hostedPaymentSettings']['setting'])
-                ->firstWhere('settingName', 'hostedPaymentIFrameCommunicatorUrl')['settingValue'], true)['url'], 'https://');
+            && $body['transactionRequest']['payment']['opaqueData']['dataValue'] === 'opaque-code-from-acceptjs'
+            && $body['transactionRequest']['billTo'] === ['firstName' => 'Jane', 'lastName' => 'Jane', 'zip' => '90210']
+            && ! empty($body['transactionRequest']['customerIP'])
+            && $body['transactionRequest']['transactionSettings']['setting'][0] === ['settingName' => 'duplicateWindow', 'settingValue' => '300'];
     });
 
     $payment->refresh();
-    expect($payment->authorizenet_token_issued_at)->not->toBeNull()
-        ->and($payment->authorizenet_token_last_issued_at)->not->toBeNull();
+    expect($payment->status)->toBe('completed')
+        ->and($payment->authorizenet_transaction_id)->toBe('60000001')
+        ->and($payment->paid_at)->not->toBeNull()
+        ->and($payment->authorizenet_first_attempt_at)->not->toBeNull()
+        ->and($payment->authorizenet_last_attempt_at)->not->toBeNull();
+    Bus::assertDispatchedTimes(SendPaymentNotification::class, 1);
 });
 
-it('refuses a token for a payment that cannot be paid, with no gateway call', function (array $attributes) {
+it('refuses a charge for a payment that cannot be paid, with no gateway call', function (callable $make) {
     fakeAnet();
-    $payment = anetPayment($attributes);
+    $payment = $make();
 
-    $this->postJson(route('pay.authorizenet.token', $payment))->assertStatus(422);
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertStatus(422);
 
     Http::assertNothingSent();
 })->with([
-    'completed' => [['status' => 'completed']],
-    'transaction already exists' => [['authorizenet_transaction_id' => '60000001']],
+    'completed' => [fn () => anetPayment(['status' => 'completed'])],
+    'transaction already exists' => [fn () => anetPayment(['authorizenet_transaction_id' => '60000001'])],
+    'inactive account' => [function () {
+        $payment = anetPayment();
+        $payment->authorizenetAccount->update(['is_active' => false]);
+
+        return $payment;
+    }],
+    'no public client key' => [function () {
+        $payment = anetPayment();
+        $payment->authorizenetAccount->update(['public_client_key' => null]);
+
+        return $payment;
+    }],
+    'another provider' => [fn () => Payment::factory()->create(['status' => 'pending'])],
 ]);
 
-it('refuses a token for an inactive account or another provider', function () {
+it('rejects bad charge input with no gateway call', function (array $overrides) {
     fakeAnet();
-    $inactive = anetPayment();
-    $inactive->authorizenetAccount->update(['is_active' => false]);
-    $stripe = Payment::factory()->create(['status' => 'pending']);
+    $payment = anetPayment();
 
-    $this->postJson(route('pay.authorizenet.token', $inactive))->assertStatus(422);
-    $this->postJson(route('pay.authorizenet.token', $stripe))->assertStatus(422);
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody($overrides))->assertStatus(422);
 
+    Http::assertNothingSent();
+})->with([
+    'wrong descriptor' => [['data_descriptor' => 'COMMON.OTHER']],
+    'no data value' => [['data_value' => '']],
+    'huge data value' => [['data_value' => str_repeat('a', 2049)]],
+    'bad zip' => [['postal_code' => '<script>']],
+    'short zip' => [['postal_code' => '12']],
+]);
+
+it('maps each charge reply to an outcome', function (string|array $charge, string $outcome, int $status) {
+    $payment = anetPayment();
+    fakeAnet([], ['60000001' => anetTx($payment)], $charge);
+    Queue::fake();
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())
+        ->assertStatus($status)
+        ->assertJsonPath('outcome', $outcome)
+        ->assertJsonMissingPath('transactionResponse');
+})->with([
+    'approved' => [chargeReply('1'), 'approved', 200],
+    'declined' => [chargeReply('2', '0', '2'), 'declined', 200],
+    'check details' => [chargeReply('2', '0', '8'), 'check_details', 200],
+    'duplicate' => [chargeReply('3', '0', '11'), 'unclear', 200],
+    'other error' => [chargeReply('3', '0', '13'), 'error', 502],
+    'timeout' => ['timeout', 'unclear', 200],
+    'approved with no transaction id' => [['transactionResponse' => ['responseCode' => '1'], 'messages' => ['resultCode' => 'Ok']], 'unclear', 200],
+]);
+
+it('maps replies in the pure reply class', function (array $result, string $outcome) {
+    expect(AuthorizenetChargeReply::fromResult($result)->outcome)->toBe($outcome);
+})->with([
+    '5xx' => [['status' => 503, 'body' => []], AuthorizenetChargeReply::UNCLEAR],
+    'bad json' => [['status' => 200, 'body' => []], AuthorizenetChargeReply::UNCLEAR],
+    'request rejected' => [['status' => 200, 'body' => ['messages' => ['resultCode' => 'Error', 'message' => [['code' => 'E00003']]]]], AuthorizenetChargeReply::ERROR],
+    'held' => [['status' => 200, 'body' => chargeReply('4')], AuthorizenetChargeReply::HELD],
+    'integer response code' => [['status' => 200, 'body' => ['transactionResponse' => ['responseCode' => 1, 'transId' => '5']]], AuthorizenetChargeReply::APPROVED],
+]);
+
+it('stores a held transaction, keeps the payment pending and reports held', function () {
+    $payment = anetPayment();
+    fakeAnet([], ['60000001' => anetTx($payment, ['responseCode' => 4, 'transactionStatus' => 'FDSPendingReview'])], chargeReply('4'));
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())
+        ->assertOk()
+        ->assertJsonPath('outcome', 'held');
+
+    $payment->refresh();
+    expect($payment->status)->toBe('pending')->and($payment->authorizenet_transaction_id)->toBe('60000001');
+    Bus::assertNotDispatched(SendPaymentNotification::class);
+});
+
+it('treats a read back with the wrong invoice or cents as unclear, never completed', function (array $overrides) {
+    $payment = anetPayment();
+    fakeAnet([], ['60000001' => anetTx($payment, $overrides)], chargeReply('1'));
+    Queue::fake();
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())
+        ->assertOk()
+        ->assertJsonPath('outcome', 'unclear');
+
+    expect($payment->fresh()->status)->toBe('pending');
+})->with([
+    'wrong invoice' => [['order' => ['invoiceNumber' => '999999deadbeef']]],
+    'wrong cents' => [['authAmount' => 12.35]],
+]);
+
+it('treats a failed read back as unclear', function () {
+    $payment = anetPayment();
+    fakeAnet([], [], chargeReply('1')); // no details for the transaction: the read back 404s
+    Queue::fake();
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())
+        ->assertOk()
+        ->assertJsonPath('outcome', 'unclear');
+
+    expect($payment->fresh()->status)->toBe('pending');
+});
+
+it('pauses new charges after an unclear outcome and settles it from the invoice lookup', function () {
+    $payment = anetPayment();
+    fakeAnet([], [], 'timeout');
+    Queue::fake();
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertJsonPath('outcome', 'unclear');
+    Queue::assertPushed(ResolveAuthorizenetCharge::class, fn ($job) => $job->paymentId === $payment->id);
+
+    // A second charge during the pause is refused and makes no gateway call.
+    Facade::clearResolvedInstance(Factory::class);
+    Http::fake();
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertStatus(409);
+    Http::assertNothingSent();
+
+    // The job finds the approved transaction by invoice number and completes the payment once.
+    fakeAnet([listRow($payment)], ['60000001' => anetTx($payment)]);
+    Cache::flush();
+    (new ResolveAuthorizenetCharge($payment->id))->handle(app(AuthorizenetInvoiceLookup::class));
+    (new ResolveAuthorizenetCharge($payment->id))->handle(app(AuthorizenetInvoiceLookup::class));
+
+    expect($payment->fresh()->status)->toBe('completed');
+    Bus::assertDispatchedTimes(SendPaymentNotification::class, 1);
+});
+
+it('refuses a second charge while one is in flight', function () {
+    fakeAnet();
+    $payment = anetPayment();
+    $lock = Cache::lock("authorizenet-charge:{$payment->id}", 60);
+    $lock->get();
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertStatus(409);
+
+    Http::assertNothingSent();
+    $lock->release();
+});
+
+it('lets a retry after a decline approve with the same invoice', function () {
+    $payment = anetPayment();
+    fakeAnet([], [], chargeReply('2', '0', '2'));
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertJsonPath('outcome', 'declined');
+    expect($payment->fresh()->status)->toBe('pending');
+
+    fakeAnet([], ['60000001' => anetTx($payment)], chargeReply('1'));
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertJsonPath('outcome', 'approved');
+
+    expect($payment->fresh()->status)->toBe('completed');
+});
+
+it('limits charges to 5 per payment an hour, with no gateway call', function () {
+    fakeAnet([], [], chargeReply('2', '0', '2'));
+    $payment = anetPayment();
+
+    foreach (range(1, 5) as $i) {
+        $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertOk();
+    }
+
+    Http::fake();
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())
+        ->assertStatus(429)
+        ->assertJson(['message' => 'Too many attempts. Please try again later.']);
     Http::assertNothingSent();
 });
 
-it('returns 502 when the gateway rejects the token request', function () {
-    Http::fake(['*' => Http::response(json_encode(['messages' => ['resultCode' => 'Error', 'message' => [['code' => 'E00013', 'text' => 'bad']]]]), 200)]);
-    $payment = anetPayment(['authorizenet_token_issued_at' => null]);
-
-    $this->postJson(route('pay.authorizenet.token', $payment))
-        ->assertStatus(502)
-        ->assertJsonMissing(['text' => 'bad']);
-
-    expect($payment->fresh()->authorizenet_token_issued_at)->toBeNull();
-});
-
-it('limits token requests per payment to 20 an hour', function () {
-    fakeAnet();
-    $payment = anetPayment(['authorizenet_token_issued_at' => null]);
+it('limits charges to 20 per IP an hour across payments', function () {
+    fakeAnet([], [], chargeReply('2', '0', '2'));
 
     foreach (range(1, 20) as $i) {
-        $this->postJson(route('pay.authorizenet.token', $payment))->assertOk();
+        $this->postJson(route('pay.authorizenet.charge', anetPayment()), chargeBody())->assertOk();
     }
 
-    $this->postJson(route('pay.authorizenet.token', $payment))->assertStatus(429);
+    $this->postJson(route('pay.authorizenet.charge', anetPayment()), chargeBody())->assertStatus(429);
+});
+
+it('never logs the data value', function () {
+    $payment = anetPayment();
+    fakeAnet([], [], 'timeout');
+    Queue::fake();
+    Log::spy();
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertOk();
+
+    Log::shouldHaveReceived('warning')->withArgs(
+        fn ($message, $context = []) => ! str_contains(json_encode([$message, $context]), 'opaque-code-from-acceptjs')
+    );
+});
+
+it('removes the Accept Hosted routes', function () {
+    $payment = anetPayment();
+
+    $this->postJson("/pay/{$payment->uuid}/authorizenet/token")->assertStatus(404);
+    $this->get('/pay/authorizenet/communicator')->assertNotFound();
+    expect(file_exists(public_path('authorizenet-communicator.js')))->toBeFalse();
 });
 
 it('completes the payment from the status poll with no browser callback at all', function () {
@@ -263,8 +460,8 @@ it('never lets a later approval change a cancelled payment', function () {
 });
 
 it('runs no lookup without a token, with an old token, or inside the throttle window', function () {
-    $payment = anetPayment(['authorizenet_token_issued_at' => null]);
-    $old = anetPayment(['authorizenet_token_issued_at' => now()->subMinutes(61)]);
+    $payment = anetPayment(['authorizenet_first_attempt_at' => null]);
+    $old = anetPayment(['authorizenet_first_attempt_at' => now()->subMinutes(61)]);
     fakeAnet([listRow($payment)], ['60000001' => anetTx($payment)]);
 
     $this->getJson(route('pay.authorizenet.status', $payment))->assertJson(['state' => 'waiting']);
@@ -294,24 +491,44 @@ it('redirects a returning client to the success page when it finished at the gat
     $this->get(route('pay.show', $payment))->assertRedirect(route('pay.success', $payment));
 });
 
-it('widens the CSP only on the Authorize.net pay page and relaxes framing only on the communicator', function () {
+it('adds only the Accept.js hosts to the CSP on the Authorize.net pay page', function () {
     fakeAnet();
     $payment = anetPayment();
     $other = Payment::factory()->create(['status' => 'pending']);
 
     $csp = $this->get(route('pay.show', $payment))->headers->get('Content-Security-Policy');
-    expect($csp)->toContain('frame-src')->toContain('https://test.authorize.net')
-        ->and($csp)->toContain("form-action 'self' https://test.authorize.net");
+    expect($csp)->toContain('https://jstest.authorize.net')->toContain('https://apitest.authorize.net')
+        ->and($csp)->not->toContain('form-action')
+        ->not->toContain('frame-ancestors')
+        ->not->toContain('unsafe-eval')
+        ->not->toContain('https://test.authorize.net');
 
     $stripeCsp = $this->get(route('pay.show', $other))->headers->get('Content-Security-Policy');
-    expect($stripeCsp)->not->toContain('authorize.net')->not->toContain('form-action');
-
-    $communicator = $this->get(route('pay.authorizenet.communicator'));
-    expect($communicator->headers->get('X-Frame-Options'))->toBeNull()
-        ->and($communicator->headers->get('Content-Security-Policy'))->toContain('frame-ancestors');
+    expect($stripeCsp)->not->toContain('authorize.net');
 });
 
-it('rejects an edit of amount, currency or account once a token was issued', function () {
+it('passes only public identifiers to the pay page', function () {
+    $payment = anetPayment();
+    $payment->authorizenetAccount->update(['public_client_key' => 'pub-key-123']);
+    $payment->authorizenetAccount->forceFill(['signature_key' => 'sig-secret'])->save();
+
+    $page = $this->get(route('pay.show', $payment))->assertOk()->viewData('page')['props'];
+
+    expect($page['authorizenetAccount'])->toBe([
+        'api_login_id' => $payment->authorizenetAccount->api_login_id,
+        'public_client_key' => 'pub-key-123',
+        'script_url' => 'https://jstest.authorize.net/v1/Accept.js',
+    ])->and(json_encode($page))->not->toContain('sig-secret')->not->toContain('placeholder_transaction_key');
+});
+
+it('treats an account with no public client key as unavailable', function () {
+    $payment = anetPayment();
+    $payment->authorizenetAccount->update(['public_client_key' => null]);
+
+    $this->get(route('pay.show', $payment))->assertNotFound();
+});
+
+it('rejects an edit of amount, currency or account once a charge was attempted', function () {
     $payment = anetPayment();
     $admin = User::factory()->create(['email_verified_at' => now()]);
     Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
@@ -406,7 +623,7 @@ describe('sweep', function () {
     it('resolves pending payments by invoice number in one list pass and reads known ones directly', function () {
         $byInvoice = anetPayment();
         $known = anetPayment(['authorizenet_account_id' => $byInvoice->authorizenet_account_id, 'authorizenet_transaction_id' => '60000009']);
-        $tooOld = anetPayment(['authorizenet_token_last_issued_at' => now()->subDays(2), 'authorizenet_token_issued_at' => now()->subDays(2)]);
+        $tooOld = anetPayment(['authorizenet_last_attempt_at' => now()->subDays(2), 'authorizenet_first_attempt_at' => now()->subDays(2)]);
 
         fakeAnet([listRow($byInvoice, '60000001')], [
             '60000001' => anetTx($byInvoice),

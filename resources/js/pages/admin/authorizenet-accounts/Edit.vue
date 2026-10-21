@@ -25,6 +25,7 @@ type AuthorizenetAccountProp = {
     is_active: boolean;
     has_transaction_key: boolean;           // boolean — never the raw key
     has_signature_key: boolean;             // boolean — never the raw key
+    has_public_client_key: boolean;
 };
 
 defineOptions({
@@ -212,6 +213,14 @@ function submit() {
                             Leave blank to keep the current key. Paste a new value to replace it.
                         </p>
                         <InputError :message="form.errors.signature_key" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label>Public client key</Label>
+                        <p class="text-sm" :class="authorizenetAccount.has_public_client_key ? 'text-muted-foreground' : 'text-destructive'">
+                            <template v-if="authorizenetAccount.has_public_client_key">Found. It is fetched from Authorize.net each time you save or test.</template>
+                            <template v-else>Not found. Generate one in Merchant Interface (Account &gt; Settings &gt; Security Settings &gt; General Security Settings &gt; Manage Public Client Key), then save or test again. Clients cannot pay until it exists.</template>
+                        </p>
                     </div>
 
                     <div class="grid gap-2">

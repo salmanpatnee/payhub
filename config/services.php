@@ -62,14 +62,25 @@ return [
     ],
 
     'authorizenet' => [
-        // Constants per environment, not secrets (spec 0006). Per-account API login id,
-        // transaction key and signature key live on the authorizenet_accounts table.
+        // Constants per environment, not secrets (spec 0007). Per-account API login id,
+        // transaction key, signature key and public client key live on the authorizenet_accounts table.
+        // `script` serves Accept.js, `connect` is the host Accept.js posts the card to.
         'hosts' => [
-            'sandbox' => ['api' => 'https://apitest.authorize.net', 'form' => 'https://test.authorize.net'],
-            'production' => ['api' => 'https://api.authorize.net', 'form' => 'https://accept.authorize.net'],
+            'sandbox' => [
+                'api' => 'https://apitest.authorize.net',
+                'script' => 'https://jstest.authorize.net',
+                'connect' => 'https://apitest.authorize.net',
+            ],
+            'production' => [
+                'api' => 'https://api.authorize.net',
+                'script' => 'https://js.authorize.net',
+                'connect' => 'https://api2.authorize.net',
+            ],
         ],
-        // How long the pay page treats a hosted-form token as valid (documented lifetime is 15).
-        'token_lifetime_minutes' => (int) env('AUTHORIZENET_TOKEN_LIFETIME_MINUTES', 14),
+        // Gateway-side window that rejects an identical repeat charge (card, amount, invoice).
+        'duplicate_window_seconds' => (int) env('AUTHORIZENET_DUPLICATE_WINDOW_SECONDS', 300),
+        // How long new charges are refused after an unclear outcome while the lookup runs.
+        'unclear_pause_seconds' => (int) env('AUTHORIZENET_UNCLEAR_PAUSE_SECONDS', 120),
     ],
 
 ];

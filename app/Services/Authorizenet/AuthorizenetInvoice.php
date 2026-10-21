@@ -7,7 +7,7 @@ use App\Models\Payment;
 /**
  * Invoice number and amount helpers (spec 0006). The invoice number is the only
  * link between a gateway transaction and a PayHub payment, so one helper builds
- * it for the token request, the lookup and the webhook.
+ * it for the charge request, the lookup and the webhook.
  */
 class AuthorizenetInvoice
 {

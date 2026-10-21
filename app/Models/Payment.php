@@ -24,7 +24,7 @@ class Payment extends Model
         'stripe_payment_intent_id', 'revolut_order_id', 'square_payment_id',
         'viva_transaction_id', 'viva_order_code', 'expires_at', 'paid_at',
         'clover_payment_id', 'mpgs_order_id', 'authorizenet_transaction_id',
-        'authorizenet_token_issued_at', 'authorizenet_token_last_issued_at',
+        'authorizenet_first_attempt_at', 'authorizenet_last_attempt_at',
     ];
 
     protected static function boot(): void
@@ -63,8 +63,8 @@ class Payment extends Model
             'amount' => 'integer',
             'expires_at' => 'datetime',
             'paid_at' => 'datetime',
-            'authorizenet_token_issued_at' => 'datetime',
-            'authorizenet_token_last_issued_at' => 'datetime',
+            'authorizenet_first_attempt_at' => 'datetime',
+            'authorizenet_last_attempt_at' => 'datetime',
         ];
     }
 

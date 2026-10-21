@@ -109,7 +109,7 @@ class UpdatePaymentRequest extends FormRequest
 
             if (! $payment instanceof Payment
                 || $payment->provider !== PaymentProvider::Authorizenet
-                || $payment->authorizenet_token_issued_at === null) {
+                || $payment->authorizenet_first_attempt_at === null) {
                 return;
             }
 

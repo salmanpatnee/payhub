@@ -89,15 +89,17 @@ class ClientPaymentController extends Controller
     }
 
     /**
-     * Authorize.net Accept Hosted: the card form is Authorize.net's own iframe, started by
-     * AuthorizenetPaymentForm.vue. The token is NOT in these props; the browser fetches it
-     * from AuthorizenetPaymentController::token() after load.
+     * Authorize.net Accept.js: PayHub's own card form (AuthorizenetCardForm.vue). The api login
+     * id and public client key are public identifiers; the transaction key never leaves the server.
      */
     private function showAuthorizenet(Payment $payment): Response|RedirectResponse
     {
         $payment->loadMissing('authorizenetAccount');
 
-        abort_unless($payment->authorizenetAccount?->is_active, 404);
+        $account = $payment->authorizenetAccount;
+
+        // No public client key means Accept.js cannot run: treat the account as unavailable.
+        abort_unless($account?->is_active && $account->public_client_key, 404);
 
         // A returning client whose payment finished at the gateway sees the right page at once.
         app(AuthorizenetInvoiceLookup::class)->lookup($payment);
@@ -110,6 +112,11 @@ class ClientPaymentController extends Controller
         return Inertia::render('ClientPayment/PayAuthorizenet', [
             'payment' => $this->paymentProps($payment),
             'brand' => $this->brandProps($payment->brand),
+            'authorizenetAccount' => [
+                'api_login_id' => $account->api_login_id,
+                'public_client_key' => $account->public_client_key,
+                'script_url' => config("services.authorizenet.hosts.{$account->environment->value}.script").'/v1/Accept.js',
+            ],
             'policies' => $this->policyProps(),
         ]);
     }
@@ -682,7 +689,7 @@ class ClientPaymentController extends Controller
         // The status === 'cancelled' guard below still applies regardless, and
         // the authoritative status write remains webhook-only either way.
 
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount']);
 
         // CR-02 fix: block cancelled payments from showing success via crafted URLs.
         // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,

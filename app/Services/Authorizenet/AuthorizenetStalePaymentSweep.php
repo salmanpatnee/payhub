@@ -9,7 +9,7 @@ use Throwable;
 
 /**
  * Scheduled backstop (spec 0006, AC-11): re-reads pending Authorize.net payments
- * whose token was issued in the last 24 hours, one list pass per account. Read
+ * whose last charge attempt was made in the last 24 hours, one list pass per account. Read
  * only; it never creates a charge.
  */
 class AuthorizenetStalePaymentSweep
@@ -22,14 +22,14 @@ class AuthorizenetStalePaymentSweep
             ->with('authorizenetAccount')
             ->where('provider', PaymentProvider::Authorizenet->value)
             ->where('status', 'pending')
-            ->where('authorizenet_token_last_issued_at', '>=', now()->subDay())
+            ->where('authorizenet_last_attempt_at', '>=', now()->subDay())
             ->get();
 
         $old = Payment::query()
             ->where('provider', PaymentProvider::Authorizenet->value)
             ->where('status', 'pending')
             ->whereNull('authorizenet_transaction_id')
-            ->where('authorizenet_token_last_issued_at', '<', now()->subDay())
+            ->where('authorizenet_last_attempt_at', '<', now()->subDay())
             ->count();
 
         if ($old > 0) {

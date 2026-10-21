@@ -13,7 +13,7 @@ use Throwable;
 
 /**
  * Finds a payment's transaction at Authorize.net by invoice number and hands it
- * to the shared resolver (spec 0006, AC-6, AC-11). Read only: it never creates a
+ * to the shared resolver (spec 0007, AC-6, AC-11). Read only: it never creates a
  * charge. Used by the status endpoint, the pay page `show`, the sweep and the webhook job.
  */
 class AuthorizenetInvoiceLookup
@@ -22,7 +22,7 @@ class AuthorizenetInvoiceLookup
 
     private const MAX_PAGES = 5;
 
-    /** Minutes of clock slack when comparing gateway times to the token time. */
+    /** Minutes of clock slack when comparing gateway times to the first attempt time. */
     private const SLACK_MINUTES = 5;
 
     public function __construct(private readonly AuthorizenetChargeResolver $resolver) {}
@@ -40,7 +40,7 @@ class AuthorizenetInvoiceLookup
      * Guarded lookup for one payment (public status endpoint and returning client).
      * A caller who loses a guard simply returns; the caller reads the current state.
      */
-    public function lookup(Payment $payment, ?string $hintTransactionId = null): void
+    public function lookup(Payment $payment): void
     {
         if (! $this->mayLookup($payment)) {
             return;
@@ -54,12 +54,6 @@ class AuthorizenetInvoiceLookup
         try {
             $client = $this->client($account);
 
-            if ($hintTransactionId !== null && preg_match('/^\d{1,20}$/', $hintTransactionId)) {
-                $this->resolveTransaction($payment, $client, $hintTransactionId);
-
-                return;
-            }
-
             if ($payment->authorizenet_transaction_id !== null) {
                 $this->resolveTransaction($payment, $client, $payment->authorizenet_transaction_id);
 
@@ -71,7 +65,7 @@ class AuthorizenetInvoiceLookup
             }
 
             $invoice = AuthorizenetInvoice::for($payment);
-            $since = $payment->authorizenet_token_issued_at->copy()->subMinutes(self::SLACK_MINUTES);
+            $since = $payment->authorizenet_first_attempt_at->copy()->subMinutes(self::SLACK_MINUTES);
 
             foreach ($this->matchingRows($client, [$invoice], $since)[$invoice] ?? [] as $row) {
                 $this->resolveTransaction($payment, $client, (string) $row['transId']);
@@ -102,11 +96,11 @@ class AuthorizenetInvoiceLookup
         }
 
         $byInvoice = $unknown->keyBy(fn (Payment $p) => AuthorizenetInvoice::for($p));
-        $since = $unknown->min('authorizenet_token_issued_at')->copy()->subMinutes(self::SLACK_MINUTES);
+        $since = $unknown->min('authorizenet_first_attempt_at')->copy()->subMinutes(self::SLACK_MINUTES);
 
         foreach ($this->matchingRows($client, $byInvoice->keys()->all(), $since) as $invoice => $invoiceRows) {
             $payment = $byInvoice[$invoice];
-            $paymentSince = $payment->authorizenet_token_issued_at->copy()->subMinutes(self::SLACK_MINUTES);
+            $paymentSince = $payment->authorizenet_first_attempt_at->copy()->subMinutes(self::SLACK_MINUTES);
 
             foreach ($invoiceRows as $row) {
                 if (Carbon::parse($row['submitTimeUTC'])->lt($paymentSince)) {
@@ -145,7 +139,7 @@ class AuthorizenetInvoiceLookup
      */
     private function mayLookup(Payment $payment): bool
     {
-        $issuedAt = $payment->authorizenet_token_issued_at;
+        $issuedAt = $payment->authorizenet_first_attempt_at;
 
         if ($payment->status !== 'pending' || $issuedAt === null || $issuedAt->lt(now()->subMinutes(60))) {
             return false;
