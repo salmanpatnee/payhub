@@ -79,6 +79,7 @@ class StorePaymentRequest extends FormRequest
                     $fail(match ($provider) {
                         'viva' => 'Viva payments must be in GBP.',
                         'clover' => 'This Clover account only accepts USD payments.',
+                        'authorizenet' => "This Authorize.net account only accepts {$accountCurrency} payments.",
                         default => "This Square account only accepts {$accountCurrency} payments.",
                     });
                 },

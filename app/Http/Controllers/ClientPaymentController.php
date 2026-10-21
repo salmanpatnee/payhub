@@ -8,6 +8,7 @@ use App\Jobs\ResolveCloverChargeAttempt;
 use App\Models\Brand;
 use App\Models\CloverChargeAttempt;
 use App\Models\Payment;
+use App\Services\Authorizenet\AuthorizenetInvoiceLookup;
 use App\Services\Clover\CloverChargeClassifier;
 use App\Services\Clover\CloverChargeResolver;
 use App\Services\Clover\CloverClient;
@@ -59,8 +60,7 @@ class ClientPaymentController extends Controller
             PaymentProvider::Viva => $this->showViva($payment),
             PaymentProvider::Clover => $this->showClover($payment),
             PaymentProvider::Mpgs => $this->showMpgs($payment),
-            // Pay page lands in spec 0006 step 4; until then never fall through to Stripe (no stripeAccount).
-            PaymentProvider::Authorizenet => abort(404),
+            PaymentProvider::Authorizenet => $this->showAuthorizenet($payment),
             default => $this->showStripe($payment),
         };
     }
@@ -84,6 +84,32 @@ class ClientPaymentController extends Controller
                 'merchant_id' => $payment->mpgsAccount->merchant_id,
                 'api_version' => $payment->mpgsAccount->api_version,
             ],
+            'policies' => $this->policyProps(),
+        ]);
+    }
+
+    /**
+     * Authorize.net Accept Hosted: the card form is Authorize.net's own iframe, started by
+     * AuthorizenetPaymentForm.vue. The token is NOT in these props; the browser fetches it
+     * from AuthorizenetPaymentController::token() after load.
+     */
+    private function showAuthorizenet(Payment $payment): Response|RedirectResponse
+    {
+        $payment->loadMissing('authorizenetAccount');
+
+        abort_unless($payment->authorizenetAccount?->is_active, 404);
+
+        // A returning client whose payment finished at the gateway sees the right page at once.
+        app(AuthorizenetInvoiceLookup::class)->lookup($payment);
+        $payment->refresh();
+
+        if ($payment->status === 'completed') {
+            return redirect()->route('pay.success', $payment);
+        }
+
+        return Inertia::render('ClientPayment/PayAuthorizenet', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
             'policies' => $this->policyProps(),
         ]);
     }

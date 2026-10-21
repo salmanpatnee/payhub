@@ -62,6 +62,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('mpgs-pay', fn (Request $request): Limit => Limit::perHour(10)->by(
             $request->route('payment') ?? $request->ip()
         ));
+
+        // Authorize.net (spec 0006, AC-10): one token per pay page load, keyed on the payment UUID.
+        RateLimiter::for('authorizenet-token', fn (Request $request): Limit => Limit::perHour(20)->by(
+            $request->route('payment') ?? $request->ip()
+        ));
     }
 
     /**

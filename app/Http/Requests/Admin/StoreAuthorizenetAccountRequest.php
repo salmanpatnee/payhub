@@ -18,7 +18,7 @@ class StoreAuthorizenetAccountRequest extends FormRequest
         return [
             'account_name' => ['required', 'string', 'max:255'],
             'prefix' => ['nullable', 'string', 'max:10', 'regex:/^[A-Z0-9]+$/'],
-            'api_login_id' => ['required', 'string', 'max:255'],
+            'api_login_id' => ['required', 'string', 'max:255', Rule::unique('authorizenet_accounts', 'api_login_id')->where('is_active', true)],
             'transaction_key' => ['required', 'string'],
             'signature_key' => ['nullable', 'string'],
             'environment' => ['required', Rule::enum(AuthorizenetEnvironment::class)],

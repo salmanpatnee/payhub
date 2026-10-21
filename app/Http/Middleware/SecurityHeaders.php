@@ -18,6 +18,12 @@ class SecurityHeaders
         // The MPGS 3DS return page loads inside the bank challenge frame on PayHub's own
         // pay page, so it is the one route allowed to be framed, and only by PayHub itself.
         $response->headers->set('X-Frame-Options', $request->routeIs('pay.mpgs.return') ? 'SAMEORIGIN' : 'DENY');
+        // The Authorize.net communicator is framed by the hosted form (spec 0006, AC-5): drop
+        // X-Frame-Options there and allow only PayHub and the two form hosts via frame-ancestors.
+        $isAuthorizenetCommunicator = $request->routeIs('pay.authorizenet.communicator');
+        if ($isAuthorizenetCommunicator) {
+            $response->headers->remove('X-Frame-Options');
+        }
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         $viteHost = $request->getHost();
@@ -61,14 +67,28 @@ class SecurityHeaders
         $mpgsHost = $isMpgsPayPage ? ' '.$routePayment->loadMissing('mpgsAccount')->mpgsAccount?->gatewayHost() : '';
         $mpgsFrames = $isMpgsPayPage ? ' https:' : '';
 
+        // Authorize.net Accept Hosted (spec 0006, AC-5): only the pay page of an Authorize.net
+        // payment may frame the hosted form and post to it, and only to that account's form host.
+        $isAuthorizenetPayPage = $route?->getName() === 'pay.show'
+            && $routePayment instanceof Payment
+            && $routePayment->provider === PaymentProvider::Authorizenet;
+        $authorizenetHost = $isAuthorizenetPayPage
+            ? ' '.config('services.authorizenet.hosts.'.$routePayment->loadMissing('authorizenetAccount')->authorizenetAccount?->environment?->value.'.form')
+            : '';
+        $authorizenetFormAction = $isAuthorizenetPayPage ? " form-action 'self'{$authorizenetHost};" : '';
+        $authorizenetAncestors = $isAuthorizenetCommunicator
+            ? " frame-ancestors 'self' https://test.authorize.net https://accept.authorize.net;"
+            : '';
+
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
             "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$vite}{$scriptInline}; ".
-            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}; ".
+            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}{$authorizenetHost}; ".
             "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$square}{$vite}; ".
-            "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$vite};"
+            "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$vite};".
+            $authorizenetFormAction.$authorizenetAncestors
         );
 
         return $response;

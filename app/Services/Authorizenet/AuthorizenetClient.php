@@ -14,10 +14,9 @@ use Illuminate\Support\Facades\Http;
  * app()->make(AuthorizenetClient::class, ['apiLoginId' => ..., 'transactionKey' => ..., 'environment' => ...])
  * so tests can fake the HTTP layer (Http::fake).
  *
- * PROVISIONAL (spec 0006, AC-12): the request and response field names here
- * come from documentation, not a verified sandbox. The sandbox spike must
- * confirm them before later build steps rely on them; keep every field name
- * in this class so a correction lands in one place.
+ * Field names were confirmed in the 2026-10-21 sandbox spike (spec 0006,
+ * `## Follow-up`); keep every gateway field name in this class so a
+ * correction lands in one place.
  *
  * Lookups deliberately do NOT ->throw() on a non-2xx so the caller can
  * classify the result instead of every failure collapsing into "transport
@@ -40,6 +39,70 @@ class AuthorizenetClient
     {
         return $this->send(['getMerchantDetailsRequest' => [
             'merchantAuthentication' => $this->authentication(),
+        ]]);
+    }
+
+    /**
+     * Create a one time hosted payment page token. The token is returned in the
+     * body (`token`) and must never be stored or logged by the caller.
+     *
+     * @param  array<string, mixed>  $order  {invoice, amount (decimal string), email, first_name, last_name, button_text, communicator_url}
+     * @return array{status: int, body: array<string, mixed>}
+     */
+    public function getHostedPaymentPage(array $order): array
+    {
+        $settings = [
+            'hostedPaymentReturnOptions' => ['showReceipt' => false],
+            'hostedPaymentButtonOptions' => ['text' => $order['button_text']],
+            'hostedPaymentPaymentOptions' => ['cardCodeRequired' => true, 'showCreditCard' => true, 'showBankAccount' => false],
+            'hostedPaymentBillingAddressOptions' => ['show' => false, 'required' => false],
+            'hostedPaymentShippingAddressOptions' => ['show' => false, 'required' => false],
+            'hostedPaymentCustomerOptions' => ['showEmail' => false, 'requiredEmail' => false, 'addPaymentProfile' => false],
+            'hostedPaymentOrderOptions' => ['show' => false],
+            'hostedPaymentStyleOptions' => ['bgColor' => 'ffffff'],
+            'hostedPaymentIFrameCommunicatorUrl' => ['url' => $order['communicator_url']],
+        ];
+
+        return $this->send(['getHostedPaymentPageRequest' => [
+            'merchantAuthentication' => $this->authentication(),
+            'refId' => $order['invoice'],
+            'transactionRequest' => [
+                'transactionType' => 'authCaptureTransaction',
+                'amount' => $order['amount'],
+                'order' => ['invoiceNumber' => $order['invoice']],
+                'customer' => ['email' => $order['email']],
+                'billTo' => ['firstName' => $order['first_name'], 'lastName' => $order['last_name']],
+            ],
+            'hostedPaymentSettings' => ['setting' => array_map(
+                fn (string $name, array $value) => ['settingName' => $name, 'settingValue' => json_encode($value)],
+                array_keys($settings),
+                array_values($settings),
+            )],
+        ]]);
+    }
+
+    /**
+     * @return array{status: int, body: array<string, mixed>}
+     */
+    public function getTransactionDetails(string $transactionId): array
+    {
+        return $this->send(['getTransactionDetailsRequest' => [
+            'merchantAuthentication' => $this->authentication(),
+            'transId' => $transactionId,
+        ]]);
+    }
+
+    /**
+     * One page of the unsettled transaction list, newest first. $offset is 1 based.
+     *
+     * @return array{status: int, body: array<string, mixed>}
+     */
+    public function getUnsettledTransactionList(int $limit = 100, int $offset = 1): array
+    {
+        return $this->send(['getUnsettledTransactionListRequest' => [
+            'merchantAuthentication' => $this->authentication(),
+            'sorting' => ['orderBy' => 'submitTimeUTC', 'orderDescending' => true],
+            'paging' => ['limit' => $limit, 'offset' => $offset],
         ]]);
     }
 

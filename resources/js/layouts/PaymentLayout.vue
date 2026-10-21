@@ -21,6 +21,8 @@ const props = defineProps<{
     }
     /** Payment processor shown in the trust footer. Defaults to Stripe. */
     provider?: 'stripe' | 'revolut' | 'square' | 'viva' | 'clover' | 'mpgs' | 'authorizenet'
+    /** Wider content column for pages that embed a third party form (Authorize.net). */
+    wide?: boolean
 }>()
 
 function formatAmount(cents: number, currency: string): string {
@@ -28,26 +30,35 @@ function formatAmount(cents: number, currency: string): string {
         currency === 'gbp' ? 'en-GB' : currency === 'pkr' ? 'en-PK' : 'en-US',
         { style: 'currency', currency: currency.toUpperCase() }
     )
+
     return formatter.formatToParts(cents / 100).map((part, i, parts) => {
         if (part.type === 'currency' && parts[i + 1]?.type !== 'literal') {
             return part.value + ' '
         }
+
         return part.value
     }).join('')
 }
 
 const statusConfig = computed(() => {
     const s = props.payment?.status
-    if (s === 'completed') return {
+
+    if (s === 'completed') {
+return {
         label: 'Paid',
         dot: '#4ade80',
         style: 'background: rgba(74,222,128,0.15); color: #bbf7d0; border: 1px solid rgba(74,222,128,0.3);',
     }
-    if (s === 'failed') return {
+}
+
+    if (s === 'failed') {
+return {
         label: 'Failed',
         dot: '#f87171',
         style: 'background: rgba(248,113,113,0.15); color: #fecaca; border: 1px solid rgba(248,113,113,0.3);',
     }
+}
+
     return {
         label: 'Pending',
         dot: '#fbbf24',
@@ -157,7 +168,7 @@ const statusConfig = computed(() => {
 
         <!-- Main content -->
         <main class="form-panel flex-1 flex flex-col items-center justify-center px-6 py-14 lg:px-14">
-            <div class="w-full max-w-lg">
+            <div class="w-full" :class="wide ? 'max-w-2xl' : 'max-w-lg'">
                 <slot />
             </div>
         </main>

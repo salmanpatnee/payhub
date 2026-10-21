@@ -10,6 +10,8 @@ use App\Http\Controllers\Admin\SquareAccountController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VivaAccountController;
+use App\Http\Controllers\AuthorizenetPaymentController;
+use App\Http\Controllers\AuthorizenetWebhookController;
 use App\Http\Controllers\BankAccountActivityLogController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
@@ -331,6 +333,18 @@ Route::get('/pay/{payment}/mpgs/status', [MpgsPaymentController::class, 'status'
 Route::match(['get', 'post'], '/pay/{payment}/mpgs/3ds-return', [MpgsPaymentController::class, 'threeDsReturn'])
     ->name('pay.mpgs.return');
 
+// Authorize.net Accept Hosted pay thread (spec 0006) — public (scoped by the payment UUID).
+// The token POST stays behind CSRF and a per payment limiter; status is bounded by the
+// lookup guards in AuthorizenetInvoiceLookup, not by a named limiter.
+Route::post('/pay/{payment}/authorizenet/token', [AuthorizenetPaymentController::class, 'token'])
+    ->name('pay.authorizenet.token')
+    ->middleware('throttle:authorizenet-token');
+Route::get('/pay/{payment}/authorizenet/status', [AuthorizenetPaymentController::class, 'status'])
+    ->name('pay.authorizenet.status');
+// Framed by the hosted form (best effort relay); SecurityHeaders allows only that framing.
+Route::get('/pay/authorizenet/communicator', [AuthorizenetPaymentController::class, 'communicator'])
+    ->name('pay.authorizenet.communicator');
+
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)
 Route::post('/webhook/stripe/{stripeAccount}', [StripeWebhookController::class, 'handle'])
@@ -351,6 +365,11 @@ Route::post('/webhook/square/{squareAccount}', [SquareWebhookController::class, 
 // X-Notification-Secret header, not a signature (spec 0005, AC-9).
 Route::post('/webhook/mpgs/{mpgsAccount}', [MpgsWebhookController::class, 'handle'])
     ->name('webhook.mpgs')
+    ->middleware('throttle:120,1');
+
+// {authorizenetAccount} resolves by integer id. Protected by the X-ANET-Signature HMAC (spec 0006, AC-8).
+Route::post('/webhook/authorizenet/{authorizenetAccount}', [AuthorizenetWebhookController::class, 'handle'])
+    ->name('webhook.authorizenet')
     ->middleware('throttle:120,1');
 
 // {vivaAccount} resolves by integer id (implicit model binding).
