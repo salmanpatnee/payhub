@@ -54,6 +54,13 @@ const FIXED = {
     error: 'Your payment could not be processed. Please try again or use a different card.',
 } as const
 
+// Drop a field's own error as soon as the customer edits it, so a stale message never sits under new input.
+function clearError(field: keyof CardFieldErrors): void {
+    if (fieldErrors.value[field]) {
+        fieldErrors.value = { ...fieldErrors.value, [field]: undefined }
+    }
+}
+
 function wrapClass(error?: string): string {
     return error ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'
 }
@@ -199,7 +206,7 @@ async function submit(): Promise<void> {
                         aria-label="Card number"
                         maxlength="23"
                         :aria-invalid="!!fieldErrors.number"
-                        @input="number = formatCardNumber(($event.target as HTMLInputElement).value)"
+                        @input="number = formatCardNumber(($event.target as HTMLInputElement).value); clearError('number')"
                     >
                 </div>
                 <p v-if="fieldErrors.number" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.number }}</p>
@@ -219,7 +226,7 @@ async function submit(): Promise<void> {
                             aria-label="Expiry date"
                             maxlength="5"
                             :aria-invalid="!!fieldErrors.expiry"
-                            @input="expiry = formatExpiry(($event.target as HTMLInputElement).value)"
+                            @input="expiry = formatExpiry(($event.target as HTMLInputElement).value); clearError('expiry')"
                         >
                     </div>
                     <p v-if="fieldErrors.expiry" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.expiry }}</p>
@@ -237,6 +244,7 @@ async function submit(): Promise<void> {
                             aria-label="Security code"
                             maxlength="4"
                             :aria-invalid="!!fieldErrors.cvv"
+                            @input="clearError('cvv')"
                         >
                     </div>
                     <p v-if="fieldErrors.cvv" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.cvv }}</p>
@@ -253,6 +261,7 @@ async function submit(): Promise<void> {
                             aria-label="ZIP code"
                             maxlength="10"
                             :aria-invalid="!!fieldErrors.zip"
+                            @input="clearError('zip')"
                         >
                     </div>
                     <p v-if="fieldErrors.zip" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.zip }}</p>
