@@ -17,7 +17,7 @@ const props = defineProps<{
         primary_color: string
         secondary_color: string
     }
-    provider?: 'stripe' | 'revolut' | 'square' | 'viva' | 'clover' | 'mpgs'
+    provider?: 'stripe' | 'revolut' | 'square' | 'viva' | 'clover' | 'mpgs' | 'authorizenet'
 }>()
 </script>
 

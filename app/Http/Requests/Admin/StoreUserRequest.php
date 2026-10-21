@@ -32,7 +32,7 @@ class StoreUserRequest extends FormRequest
             'payment_accounts.*.currency' => [
                 'required', 'string', 'distinct', 'in:'.implode(',', SupportedCurrency::values()),
             ],
-            'payment_accounts.*.provider' => ['required', 'string', 'in:stripe,revolut,square,viva,clover,mpgs'],
+            'payment_accounts.*.provider' => ['required', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet'],
             'payment_accounts.*.account_id' => ['required', 'integer'],
             'brand_ids' => [
                 Rule::requiredIf(fn () => $this->input('role') === 'agent'),
@@ -83,7 +83,7 @@ class StoreUserRequest extends FormRequest
                 continue;
             }
 
-            $accountCurrency = $provider === 'square' ? $account->currency : null;
+            $accountCurrency = in_array($provider, ['square', 'authorizenet'], true) ? $account->currency : null;
             $acceptsPkr = $provider === 'mpgs' && (bool) $account->supports_pkr;
 
             if (! CurrencySupportResolver::supports($provider, $accountCurrency, $currency, $acceptsPkr)) {

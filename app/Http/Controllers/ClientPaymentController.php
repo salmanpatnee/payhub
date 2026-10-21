@@ -59,6 +59,8 @@ class ClientPaymentController extends Controller
             PaymentProvider::Viva => $this->showViva($payment),
             PaymentProvider::Clover => $this->showClover($payment),
             PaymentProvider::Mpgs => $this->showMpgs($payment),
+            // Pay page lands in spec 0006 step 4; until then never fall through to Stripe (no stripeAccount).
+            PaymentProvider::Authorizenet => abort(404),
             default => $this->showStripe($payment),
         };
     }

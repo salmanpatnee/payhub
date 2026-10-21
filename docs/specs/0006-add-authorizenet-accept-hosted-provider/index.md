@@ -204,6 +204,18 @@ No build approach is recorded in `AGENTS.md` or a `docs/scope/` header (this pro
 
 ## Follow-up
 
+**Spike answers (2026-10-21, sandbox, API only; the rest needs a browser and a public URL):**
+- Q1 confirmed: `getMerchantDetails` returns `currencies` as a plain array of strings (`["USD"]`) and `messages.resultCode` `Ok`. It is a good credential check. The response starts with a UTF-8 BOM.
+- Q2 partly confirmed: `getHostedPaymentPageRequest` with `transactionType` `authCaptureTransaction`, `refId`, `order.invoiceNumber`, `customer.email`, `billTo` names, and the settings `hostedPaymentReturnOptions` (`showReceipt` false), `hostedPaymentButtonOptions`, `hostedPaymentPaymentOptions`, `hostedPaymentBillingAddressOptions`, `hostedPaymentCustomerOptions`, `hostedPaymentIFrameCommunicatorUrl` is accepted (`Ok`, token returned, about 1950 characters). Whether the form really hides those fields still needs a look in a browser.
+- Communicator URL must start with `https://` (an `http://localhost` URL gets error `E00013`, "must begin with https://"). Answers part of Q7 and Q10.
+- A real sandbox card payment (Visa test card, $12.34, invoice 432439) completed and was captured: the form accepted it and the merchant email receipt arrived. The form stayed on "Processing..." and our page received no communicator message (cause still being checked, Q6).
+- Q6/Q7 result: the communicator relay does NOT work in the sandbox as tested. Four sandbox card payments (normal Chrome with extensions, then an incognito window) were all captured, and every time the form stayed on "Processing..." and our page got no message. A server-side log on the communicator URL (HTTPS, valid cert, no framing headers) recorded zero requests, so the form never even fetched it. The form's own console showed its CSP blocking an inline script (`script-src` listed our communicator URL). Cause is on the Authorize.net form side or an unknown condition; not yet explained.
+- Consequence for the design: the browser `transId` (AC-6 confirm) cannot be relied on, and it was not delivered in this test. Payment status would depend on the webhook (AC-8) or on a lookup by invoice number (for example `getUnsettledTransactionListRequest` returns `invoiceNumber` and `transId`). The spec needs an `/architect` decision before steps 4 to 7 are built.
+- Q4 confirmed from `getTransactionDetails` (sandbox, after that payment): `transaction.responseCode` is the integer `1`; `transaction.transactionStatus` is `capturedPendingSettlement` (settled later); `transaction.order.invoiceNumber` is `"432439"`; amount fields `authAmount` and `settleAmount` are JSON floats (`12.34`), so the classifier must compare them as strings or in cents, never as floats; there is NO currency field on the transaction. Also `transrefId` echoes the request `refId`.
+- Q5 partly confirmed: `order.invoiceNumber` comes back on the transaction, and `refId` comes back as `transrefId`. The webhook side is still unchecked.
+- Spike stopped early on 2026-10-21 by the user's decision (AC-12 gate waived). The webhook test (Q3, Q9) was not run; the spike files were deleted. The design change for the lost callback is still owed through `/architect` before steps 4 to 7.
+- Not yet answered: Q3, Q6 to Q10 (need a card payment in the iframe, `getTransactionDetails`, the signature key and a public webhook URL). The dev sandbox account has no signature key saved yet.
+
 - [ ] Run the sandbox spike (Build plan step 0) and record the answer to each Open question here.
 - [ ] Decide after the spike whether to add a transaction list reconciliation for payments with no transaction id.
 - [ ] Update `AGENTS.md` and `docs/agent.md` through `/sync` when this ships (seventh provider, scoped exception).
