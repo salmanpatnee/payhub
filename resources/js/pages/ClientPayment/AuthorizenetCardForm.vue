@@ -3,8 +3,6 @@ import { AlertCircle, LockIcon } from 'lucide-vue-next'
 import { onMounted, ref } from 'vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { loadAcceptJs, tokenizeCard } from '@/lib/acceptjs'
 import {
@@ -55,6 +53,10 @@ const FIXED = {
     check_details: 'Please check your card details and try again.',
     error: 'Your payment could not be processed. Please try again or use a different card.',
 } as const
+
+function wrapClass(error?: string): string {
+    return error ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200 hover:border-slate-300'
+}
 
 function formatAmount(cents: number, currency: string): string {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100)
@@ -165,12 +167,14 @@ async function submit(): Promise<void> {
 
 <template>
     <div class="space-y-6">
-        <div v-if="!ready && !message" class="space-y-3">
-            <div class="h-11 animate-pulse rounded-lg bg-slate-100"></div>
+        <div v-if="!ready && !message" class="space-y-4" role="status" aria-label="Loading card fields">
+            <div class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3">
+                <div class="an-skeleton-bar h-2.5 rounded-full" style="width: 38%"></div>
+            </div>
             <div class="grid grid-cols-3 gap-3">
-                <div class="h-11 animate-pulse rounded-lg bg-slate-100"></div>
-                <div class="h-11 animate-pulse rounded-lg bg-slate-100"></div>
-                <div class="h-11 animate-pulse rounded-lg bg-slate-100"></div>
+                <div v-for="n in 3" :key="n" class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3">
+                    <div class="an-skeleton-bar h-2.5 rounded-full" style="width: 50%"></div>
+                </div>
             </div>
         </div>
 
@@ -182,64 +186,76 @@ async function submit(): Promise<void> {
         <!-- Not a <form>: the card inputs can never submit natively or end up in a URL.
              sentry-block keeps Sentry session replay from recording the card values. -->
         <div v-show="ready" class="sentry-block space-y-4" @keydown.enter.prevent="submit">
-            <div class="grid gap-1.5">
-                <Label for="an-card-number" class="text-xs text-slate-600">Card number</Label>
-                <Input
-                    id="an-card-number"
-                    :model-value="number"
-                    type="text"
-                    inputmode="numeric"
-                    autocomplete="cc-number"
-                    placeholder="1234 1234 1234 1234"
-                    maxlength="23"
-                    :aria-invalid="!!fieldErrors.number"
-                    @update:model-value="(v) => (number = formatCardNumber(String(v)))"
-                />
-                <p v-if="fieldErrors.number" class="text-xs text-red-600">{{ fieldErrors.number }}</p>
+            <div>
+                <div class="an-field-wrap rounded-xl border bg-white px-3 transition-colors duration-150" :class="wrapClass(fieldErrors.number)">
+                    <input
+                        id="an-card-number"
+                        :value="number"
+                        class="an-field"
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="cc-number"
+                        placeholder="Card number"
+                        aria-label="Card number"
+                        maxlength="23"
+                        :aria-invalid="!!fieldErrors.number"
+                        @input="number = formatCardNumber(($event.target as HTMLInputElement).value)"
+                    >
+                </div>
+                <p v-if="fieldErrors.number" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.number }}</p>
             </div>
 
             <div class="grid grid-cols-3 gap-3">
-                <div class="grid gap-1.5">
-                    <Label for="an-card-expiry" class="text-xs text-slate-600">Expiry</Label>
-                    <Input
-                        id="an-card-expiry"
-                        :model-value="expiry"
-                        type="text"
-                        inputmode="numeric"
-                        autocomplete="cc-exp"
-                        placeholder="MM/YY"
-                        maxlength="5"
-                        :aria-invalid="!!fieldErrors.expiry"
-                        @update:model-value="(v) => (expiry = formatExpiry(String(v)))"
-                    />
-                    <p v-if="fieldErrors.expiry" class="text-xs text-red-600">{{ fieldErrors.expiry }}</p>
+                <div>
+                    <div class="an-field-wrap rounded-xl border bg-white px-3 transition-colors duration-150" :class="wrapClass(fieldErrors.expiry)">
+                        <input
+                            id="an-card-expiry"
+                            :value="expiry"
+                            class="an-field"
+                            type="text"
+                            inputmode="numeric"
+                            autocomplete="cc-exp"
+                            placeholder="MM/YY"
+                            aria-label="Expiry date"
+                            maxlength="5"
+                            :aria-invalid="!!fieldErrors.expiry"
+                            @input="expiry = formatExpiry(($event.target as HTMLInputElement).value)"
+                        >
+                    </div>
+                    <p v-if="fieldErrors.expiry" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.expiry }}</p>
                 </div>
-                <div class="grid gap-1.5">
-                    <Label for="an-card-cvv" class="text-xs text-slate-600">CVV</Label>
-                    <Input
-                        id="an-card-cvv"
-                        v-model="cvv"
-                        type="password"
-                        inputmode="numeric"
-                        autocomplete="cc-csc"
-                        placeholder="123"
-                        maxlength="4"
-                        :aria-invalid="!!fieldErrors.cvv"
-                    />
-                    <p v-if="fieldErrors.cvv" class="text-xs text-red-600">{{ fieldErrors.cvv }}</p>
+                <div>
+                    <div class="an-field-wrap rounded-xl border bg-white px-3 transition-colors duration-150" :class="wrapClass(fieldErrors.cvv)">
+                        <input
+                            id="an-card-cvv"
+                            v-model="cvv"
+                            class="an-field"
+                            type="password"
+                            inputmode="numeric"
+                            autocomplete="cc-csc"
+                            placeholder="CVV"
+                            aria-label="Security code"
+                            maxlength="4"
+                            :aria-invalid="!!fieldErrors.cvv"
+                        >
+                    </div>
+                    <p v-if="fieldErrors.cvv" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.cvv }}</p>
                 </div>
-                <div class="grid gap-1.5">
-                    <Label for="an-card-zip" class="text-xs text-slate-600">ZIP</Label>
-                    <Input
-                        id="an-card-zip"
-                        v-model="zip"
-                        type="text"
-                        autocomplete="postal-code"
-                        placeholder="ZIP"
-                        maxlength="10"
-                        :aria-invalid="!!fieldErrors.zip"
-                    />
-                    <p v-if="fieldErrors.zip" class="text-xs text-red-600">{{ fieldErrors.zip }}</p>
+                <div>
+                    <div class="an-field-wrap rounded-xl border bg-white px-3 transition-colors duration-150" :class="wrapClass(fieldErrors.zip)">
+                        <input
+                            id="an-card-zip"
+                            v-model="zip"
+                            class="an-field"
+                            type="text"
+                            autocomplete="postal-code"
+                            placeholder="ZIP"
+                            aria-label="ZIP code"
+                            maxlength="10"
+                            :aria-invalid="!!fieldErrors.zip"
+                        >
+                    </div>
+                    <p v-if="fieldErrors.zip" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.zip }}</p>
                 </div>
             </div>
 
@@ -266,3 +282,43 @@ async function submit(): Promise<void> {
         </div>
     </div>
 </template>
+
+<style scoped>
+.an-field-wrap {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+}
+
+.an-field {
+    display: block;
+    width: 100%;
+    height: 42px;
+    border: 0;
+    background: transparent;
+    outline: none;
+    font-size: 15px;
+    color: #0f172a;
+}
+
+.an-field::placeholder {
+    color: #94a3b8;
+}
+
+/* Same brand focus ring as the MPGS and Clover card fields. */
+.an-field-wrap:focus-within {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-primary) 15%, transparent);
+}
+
+.an-skeleton-bar {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: an-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes an-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+</style>
