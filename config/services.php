@@ -61,4 +61,15 @@ return [
         'session_lifetime_minutes' => (int) env('MPGS_SESSION_LIFETIME_MINUTES', 30),
     ],
 
+    'authorizenet' => [
+        // Constants per environment, not secrets (spec 0006). Per-account API login id,
+        // transaction key and signature key live on the authorizenet_accounts table.
+        'hosts' => [
+            'sandbox' => ['api' => 'https://apitest.authorize.net', 'form' => 'https://test.authorize.net'],
+            'production' => ['api' => 'https://api.authorize.net', 'form' => 'https://accept.authorize.net'],
+        ],
+        // How long the pay page treats a hosted-form token as valid (documented lifetime is 15).
+        'token_lifetime_minutes' => (int) env('AUTHORIZENET_TOKEN_LIFETIME_MINUTES', 14),
+    ],
+
 ];

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AuthorizenetAccountController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CloverAccountController;
 use App\Http\Controllers\Admin\MpgsAccountController;
@@ -254,6 +255,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'mpgs-accounts/{mpgs_account}/test-connection',
             [MpgsAccountController::class, 'testStoredConnection']
         )->name('mpgs-accounts.test-stored-connection');
+
+        Route::resource('authorizenet-accounts', AuthorizenetAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'authorizenet-accounts/{authorizenet_account}/deactivate',
+            [AuthorizenetAccountController::class, 'deactivate']
+        )->name('authorizenet-accounts.deactivate');
+
+        Route::patch(
+            'authorizenet-accounts/{authorizenet_account}/activate',
+            [AuthorizenetAccountController::class, 'activate']
+        )->name('authorizenet-accounts.activate');
+
+        Route::post(
+            'authorizenet-accounts/test-connection',
+            [AuthorizenetAccountController::class, 'testKeyConnection']
+        )->name('authorizenet-accounts.test-connection');
+
+        Route::post(
+            'authorizenet-accounts/{authorizenet_account}/test-connection',
+            [AuthorizenetAccountController::class, 'testStoredConnection']
+        )->name('authorizenet-accounts.test-stored-connection');
     });
 
 // Public payment routes — no auth middleware (CLIENT-01)

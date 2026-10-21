@@ -10,6 +10,7 @@ enum PaymentProvider: string
     case Viva = 'viva';
     case Clover = 'clover';
     case Mpgs = 'mpgs';
+    case Authorizenet = 'authorizenet';
 
     public function label(): string
     {
@@ -20,6 +21,7 @@ enum PaymentProvider: string
             self::Viva => 'Viva',
             self::Clover => 'Clover',
             self::Mpgs => 'MPGS',
+            self::Authorizenet => 'Authorize.net',
         };
     }
 }

@@ -7,6 +7,7 @@ use App\Enums\SupportedCurrency;
 use App\Exports\PaymentsExport;
 use App\Http\Requests\StorePaymentRequest;
 use App\Http\Requests\UpdatePaymentRequest;
+use App\Models\AuthorizenetAccount;
 use App\Models\Brand;
 use App\Models\CloverAccount;
 use App\Models\MpgsAccount;
@@ -86,7 +87,7 @@ class PaymentController extends Controller
     {
         $canViewAll = $user->hasRole('admin') || $user->hasRole('account');
 
-        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'user', 'relationshipManager'])
+        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'user', 'relationshipManager'])
             ->orderByDesc('created_at');
 
         if (! $canViewAll) {
@@ -267,7 +268,10 @@ class PaymentController extends Controller
         $mpgs = MpgsAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'supports_pkr'])
             ->map(fn (MpgsAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'mpgs', 'supports_pkr' => $a->supports_pkr]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->values();
+        $authorizenet = AuthorizenetAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'currency'])
+            ->map(fn (AuthorizenetAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'authorizenet', 'currency' => $a->currency]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->values();
     }
 
     /**
@@ -283,7 +287,7 @@ class PaymentController extends Controller
      * whichever branch happens to be last — see CLAUDE.md's warning about the
      * two Square CSV export bugs caused by exactly this pattern.
      *
-     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int, mpgs_account_id: ?int}|null
+     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int, mpgs_account_id: ?int, authorizenet_account_id: ?int}|null
      */
     private function agentAccountData(User $user, string $currency): ?array
     {
@@ -309,6 +313,7 @@ class PaymentController extends Controller
             'viva_account_id' => $provider === 'viva' ? $account->account_id : null,
             'clover_account_id' => $provider === 'clover' ? $account->account_id : null,
             'mpgs_account_id' => $provider === 'mpgs' ? $account->account_id : null,
+            'authorizenet_account_id' => $provider === 'authorizenet' ? $account->account_id : null,
         ];
     }
 
@@ -377,7 +382,7 @@ class PaymentController extends Controller
                 'uuid' => $payment->uuid,
                 'brand_id' => $payment->brand_id,
                 'provider' => $payment->provider->value,
-                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id ?? $payment->mpgs_account_id,
+                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id ?? $payment->mpgs_account_id ?? $payment->authorizenet_account_id,
                 'relationship_manager_id' => $payment->relationship_manager_id,
                 'currency' => $payment->currency,
                 // Cents → decimal string for the amount input.
@@ -445,6 +450,8 @@ class PaymentController extends Controller
             'clover_account_id' => ['clover_payment_id'],
             // MPGS's winning attempt order id, set by whichever path first completes the payment.
             'mpgs_account_id' => ['mpgs_order_id'],
+            // Authorize.net's transaction id, set by whichever path first resolves the payment.
+            'authorizenet_account_id' => ['authorizenet_transaction_id'],
         ];
 
         $cleared = [];
@@ -480,7 +487,7 @@ class PaymentController extends Controller
     public function show(Payment $payment): Response
     {
         Gate::authorize('view', $payment);
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'relationshipManager']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'relationshipManager']);
 
         $user = auth()->user();
         $canViewStripeAccount = $user->hasRole('admin') || $user->hasRole('account');
@@ -512,6 +519,7 @@ class PaymentController extends Controller
                     PaymentProvider::Viva => $payment->viva_transaction_id ?? $payment->viva_order_code,
                     PaymentProvider::Clover => $payment->clover_payment_id,
                     PaymentProvider::Mpgs => $payment->mpgs_order_id,
+                    PaymentProvider::Authorizenet => $payment->authorizenet_transaction_id,
                 },
                 'paid_at' => $payment->paid_at?->toISOString(),
                 'expires_at' => $payment->expires_at?->toISOString(),

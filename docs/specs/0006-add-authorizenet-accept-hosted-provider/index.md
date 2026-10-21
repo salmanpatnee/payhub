@@ -1,7 +1,7 @@
 # 0006. Add Authorize.net (Accept Hosted iframe) as a payment provider
 
 **Date**: 2026-10-21
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
