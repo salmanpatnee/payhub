@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\SupportedCurrency;
+use App\Models\AuthorizenetAccount;
 use App\Models\MpgsAccount;
 use App\Models\Payment;
 use App\Models\SquareAccount;
@@ -38,7 +39,7 @@ class StorePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -56,9 +57,11 @@ class StorePaymentRequest extends FormRequest
                     }
 
                     $provider = $this->input('provider');
-                    $accountCurrency = $provider === 'square'
-                        ? SquareAccount::find($this->input('account_id'))?->currency
-                        : null;
+                    $accountCurrency = match ($provider) {
+                        'square' => SquareAccount::find($this->input('account_id'))?->currency,
+                        'authorizenet' => AuthorizenetAccount::find($this->input('account_id'))?->currency,
+                        default => null,
+                    };
 
                     $acceptsPkr = $provider === 'mpgs'
                         && (bool) MpgsAccount::find($this->input('account_id'))?->supports_pkr;
@@ -76,6 +79,7 @@ class StorePaymentRequest extends FormRequest
                     $fail(match ($provider) {
                         'viva' => 'Viva payments must be in GBP.',
                         'clover' => 'This Clover account only accepts USD payments.',
+                        'authorizenet' => "This Authorize.net account only accepts {$accountCurrency} payments.",
                         default => "This Square account only accepts {$accountCurrency} payments.",
                     });
                 },
@@ -127,6 +131,7 @@ class StorePaymentRequest extends FormRequest
         $data['viva_account_id'] = $provider === 'viva' ? $accountId : null;
         $data['clover_account_id'] = $provider === 'clover' ? $accountId : null;
         $data['mpgs_account_id'] = $provider === 'mpgs' ? $accountId : null;
+        $data['authorizenet_account_id'] = $provider === 'authorizenet' ? $accountId : null;
 
         return $data;
     }

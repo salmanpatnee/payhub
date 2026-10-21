@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\AuthorizenetAccount;
 use App\Models\Brand;
 use App\Models\CloverAccount;
 use App\Models\MpgsAccount;
@@ -116,6 +117,20 @@ class PaymentFactory extends Factory
             'provider' => 'mpgs',
             'stripe_account_id' => null,
             'mpgs_account_id' => MpgsAccount::factory(),
+        ]);
+    }
+
+    /**
+     * Authorize.net payment: nulls the Stripe account and attaches an
+     * Authorize.net account. Accounts are USD only.
+     */
+    public function authorizenet(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'provider' => 'authorizenet',
+            'currency' => 'usd',
+            'stripe_account_id' => null,
+            'authorizenet_account_id' => AuthorizenetAccount::factory(),
         ]);
     }
 }

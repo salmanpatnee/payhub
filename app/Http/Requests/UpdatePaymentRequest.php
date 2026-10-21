@@ -2,8 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\PaymentProvider;
 use App\Enums\SupportedCurrency;
+use App\Models\AuthorizenetAccount;
 use App\Models\MpgsAccount;
+use App\Models\Payment;
 use App\Models\SquareAccount;
 use App\Models\User;
 use App\Models\UserPaymentAccount;
@@ -12,6 +15,7 @@ use App\Support\ProviderAccountTable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdatePaymentRequest extends FormRequest
 {
@@ -39,7 +43,7 @@ class UpdatePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -57,9 +61,11 @@ class UpdatePaymentRequest extends FormRequest
                     }
 
                     $provider = $this->input('provider');
-                    $accountCurrency = $provider === 'square'
-                        ? SquareAccount::find($this->input('account_id'))?->currency
-                        : null;
+                    $accountCurrency = match ($provider) {
+                        'square' => SquareAccount::find($this->input('account_id'))?->currency,
+                        'authorizenet' => AuthorizenetAccount::find($this->input('account_id'))?->currency,
+                        default => null,
+                    };
 
                     $acceptsPkr = $provider === 'mpgs'
                         && (bool) MpgsAccount::find($this->input('account_id'))?->supports_pkr;
@@ -77,6 +83,7 @@ class UpdatePaymentRequest extends FormRequest
                     $fail(match ($provider) {
                         'viva' => 'Viva payments must be in GBP.',
                         'clover' => 'This Clover account only accepts USD payments.',
+                        'authorizenet' => "This Authorize.net account only accepts {$accountCurrency} payments.",
                         default => "This Square account only accepts {$accountCurrency} payments.",
                     });
                 },
@@ -89,6 +96,33 @@ class UpdatePaymentRequest extends FormRequest
                 'in:basic,standard,premium,platinum,diamond'],
             'note' => ['nullable', 'string', 'max:2000'],
         ];
+    }
+
+    /**
+     * Once an Authorize.net token was issued the client may already be paying
+     * the old values, so amount, currency and account become read-only (spec 0006, AC-10).
+     */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            $payment = $this->route('payment');
+
+            if (! $payment instanceof Payment
+                || $payment->provider !== PaymentProvider::Authorizenet
+                || $payment->authorizenet_first_attempt_at === null) {
+                return;
+            }
+
+            $changed = (int) round(((float) $this->input('amount')) * 100) !== $payment->amount
+                || $this->input('currency') !== $payment->currency
+                || ($this->input('account_id') !== null
+                    && (int) $this->input('account_id') !== $payment->authorizenet_account_id)
+                || ($this->input('provider') !== null && $this->input('provider') !== 'authorizenet');
+
+            if ($changed) {
+                $validator->errors()->add('amount', 'This payment link was already opened by the client, so the amount, currency and account can no longer be changed.');
+            }
+        }];
     }
 
     public function validated($key = null, $default = null): mixed
@@ -125,6 +159,7 @@ class UpdatePaymentRequest extends FormRequest
         $data['viva_account_id'] = $provider === 'viva' ? $accountId : null;
         $data['clover_account_id'] = $provider === 'clover' ? $accountId : null;
         $data['mpgs_account_id'] = $provider === 'mpgs' ? $accountId : null;
+        $data['authorizenet_account_id'] = $provider === 'authorizenet' ? $accountId : null;
 
         return $data;
     }

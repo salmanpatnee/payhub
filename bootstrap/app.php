@@ -31,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'webhook/square/*',
             'webhook/viva/*',
             'webhook/mpgs/*',
+            'webhook/authorizenet/*',
             'pay/*/square',
             'pay/*/clover/charge',
             'pay/*/mpgs/3ds-return',

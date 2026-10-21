@@ -42,6 +42,7 @@ const mainNavItems = computed((): NavItem[] => [
                 { title: 'Revolut Accounts', href: '/admin/revolut-accounts', icon: Landmark },
                 { title: 'Square Accounts',  href: '/admin/square-accounts',  icon: Wallet },
                 { title: 'Viva Accounts',    href: '/admin/viva-accounts',    icon: Landmark },
+                { title: 'Authorize.net',     href: '/admin/authorizenet-accounts', icon: CreditCard },
             ],
         } as NavItem,
     ] : []),

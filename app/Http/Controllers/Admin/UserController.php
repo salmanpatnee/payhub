@@ -6,6 +6,7 @@ use App\Enums\SupportedCurrency;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
+use App\Models\AuthorizenetAccount;
 use App\Models\Brand;
 use App\Models\CloverAccount;
 use App\Models\MpgsAccount;
@@ -129,6 +130,7 @@ class UserController extends Controller
             'viva' => VivaAccount::pluck('account_name', 'id')->all(),
             'clover' => CloverAccount::pluck('account_name', 'id')->all(),
             'mpgs' => MpgsAccount::pluck('account_name', 'id')->all(),
+            'authorizenet' => AuthorizenetAccount::pluck('account_name', 'id')->all(),
         ];
     }
 
@@ -158,7 +160,10 @@ class UserController extends Controller
         $mpgs = MpgsAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'supports_pkr'])
             ->map(fn (MpgsAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'mpgs', 'currency' => null, 'supports_pkr' => $a->supports_pkr]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->values();
+        $authorizenet = AuthorizenetAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'currency'])
+            ->map(fn (AuthorizenetAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'authorizenet', 'currency' => $a->currency]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->values();
     }
 
     /**

@@ -117,6 +117,7 @@ watch(
                         <SelectItem value="viva">Viva</SelectItem>
                         <SelectItem value="clover">Clover</SelectItem>
                         <SelectItem value="mpgs">MPGS</SelectItem>
+                        <SelectItem value="authorizenet">Authorize.net</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
