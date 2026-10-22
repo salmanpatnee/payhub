@@ -4,6 +4,7 @@ import { ref, onMounted } from 'vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import { withBase } from '@/lib/basePath'
 
 const props = defineProps<{
     payment: {
@@ -207,7 +208,7 @@ async function submit(): Promise<void> {
         }
 
         if (data.outcome === 'approved') {
-            window.location.href = `/pay/${props.payment.uuid}/success`
+            window.location.href = withBase(`/pay/${props.payment.uuid}/success`)
 
             return
         }

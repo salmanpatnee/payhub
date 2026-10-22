@@ -13,6 +13,7 @@ import {
     type MpgsSession,
 } from '@/lib/mpgs/gateway'
 import { reloadWithNotice, takeNotice } from '@/lib/mpgs/notice'
+import { withBase } from '@/lib/basePath'
 
 const props = defineProps<{
     payment: {
@@ -190,7 +191,7 @@ async function submit(): Promise<void> {
         }
 
         if (data.outcome === 'approved') {
-            window.location.href = `/pay/${props.payment.uuid}/success`
+            window.location.href = withBase(`/pay/${props.payment.uuid}/success`)
 
             return
         }
