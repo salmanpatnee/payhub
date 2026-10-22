@@ -28,7 +28,7 @@ class BrandController extends Controller
                 'name'            => $brand->name,
                 'slug'            => $brand->slug,
                 'website_url'     => $brand->website_url,
-                'logo_url'        => $brand->logo_path ? '/storage/'.$brand->logo_path : null,
+                'logo_url'        => $brand->logo_path ? asset('storage/'.$brand->logo_path) : null,
                 'primary_color'   => $brand->primary_color,
                 'secondary_color' => $brand->secondary_color,
             ]);
@@ -66,7 +66,7 @@ class BrandController extends Controller
                 'id' => $brand->id,
                 'name' => $brand->name,
                 'website_url' => $brand->website_url,
-                'logo_url' => $brand->logo_path ? '/storage/'.$brand->logo_path : null,
+                'logo_url' => $brand->logo_path ? asset('storage/'.$brand->logo_path) : null,
                 'primary_color' => $brand->primary_color,
                 'secondary_color' => $brand->secondary_color,
             ],
