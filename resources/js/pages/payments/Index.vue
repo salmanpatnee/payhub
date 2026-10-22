@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentController';
 import { formatMoney } from '@/lib/utils';
+import { withBase } from '@/lib/basePath';
 
 type PaymentRow = {
     id: number;
@@ -273,7 +274,7 @@ function formatDate(iso: string): string {
 }
 
 async function copyLink(uuid: string): Promise<void> {
-    const url = `${window.location.origin}/pay/${uuid}`;
+    const url = `${window.location.origin}${withBase(`/pay/${uuid}`)}`;
     try {
         await navigator.clipboard.writeText(url);
     } catch {

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import PaymentProviderBadge from '@/components/PaymentProviderBadge.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
+import { withBase } from '@/lib/basePath';
 import {
     Card, CardContent, CardHeader, CardTitle,
 } from '@/components/ui/card';
@@ -57,7 +58,7 @@ defineOptions({
 });
 
 // /pay/{uuid} is the client-facing route (Phase 5). Show page is /payments/{uuid} (auth-only).
-const shareableLink = `${window.location.origin}/pay/${props.payment.uuid}`;
+const shareableLink = `${window.location.origin}${withBase(`/pay/${props.payment.uuid}`)}`;
 
 const copied = ref(false);
 

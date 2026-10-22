@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
 import { storeConsent } from '@/actions/App/Http/Controllers/ClientPaymentController'
 import SquarePaymentForm from './SquarePaymentForm.vue'
+import { withBase } from '@/lib/basePath'
 
 type Policy = { key: string; title: string; version: string; html: string }
 
@@ -182,7 +183,7 @@ async function submit(instance: any, elements: any): Promise<void> {
     const { error } = await instance.confirmPayment({
         elements,
         confirmParams: {
-            return_url: `${window.location.origin}/pay/${props.payment.uuid}/success`,
+            return_url: `${window.location.origin}${withBase(`/pay/${props.payment.uuid}/success`)}`,
         },
     })
 
