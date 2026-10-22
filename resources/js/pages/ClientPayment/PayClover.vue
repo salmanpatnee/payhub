@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
 import { storeConsent } from '@/actions/App/Http/Controllers/ClientPaymentController'
 import CloverPaymentForm from './CloverPaymentForm.vue'
+import { withBase } from '@/lib/basePath'
 
 type Policy = { key: string; title: string; version: string; html: string }
 
@@ -115,7 +116,7 @@ async function pollStatus(): Promise<void> {
 
         if (data.status === 'completed') {
             stopPolling()
-            window.location.href = `/pay/${props.payment.uuid}/success`
+            window.location.href = withBase(`/pay/${props.payment.uuid}/success`)
             return
         }
 
@@ -128,7 +129,7 @@ async function pollStatus(): Promise<void> {
 
         if (data.status === 'cancelled') {
             stopPolling()
-            window.location.href = `/pay/${props.payment.uuid}`
+            window.location.href = withBase(`/pay/${props.payment.uuid}`)
             return
         }
     } catch {

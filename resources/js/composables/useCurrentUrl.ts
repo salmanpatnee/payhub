@@ -2,6 +2,7 @@ import type { InertiaLinkProps } from '@inertiajs/vue3';
 import { usePage } from '@inertiajs/vue3';
 import type { ComputedRef, DeepReadonly } from 'vue';
 import { computed, readonly } from 'vue';
+import { stripBase } from '@/lib/basePath';
 import { toUrl } from '@/lib/utils';
 
 export type UseCurrentUrlReturn = {
@@ -23,14 +24,16 @@ export type UseCurrentUrlReturn = {
 };
 
 const page = usePage();
-const currentUrlReactive = computed(
-    () =>
+// page.url includes the folder PayHub is served from; sidebar links do not, so compare without it.
+const currentUrlReactive = computed(() =>
+    stripBase(
         new URL(
             page.url,
             typeof window !== 'undefined'
                 ? window.location.origin
                 : 'http://localhost',
         ).pathname,
+    ),
 );
 
 export function useCurrentUrl(): UseCurrentUrlReturn {

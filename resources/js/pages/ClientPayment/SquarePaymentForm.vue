@@ -4,6 +4,7 @@ import { AlertCircle, LockIcon } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
+import { withBase } from '@/lib/basePath'
 
 const props = defineProps<{
     payment: {
@@ -171,7 +172,7 @@ async function submit(): Promise<void> {
         const data = await response.json().catch(() => ({ ok: false }))
 
         if (response.ok && data.ok) {
-            window.location.href = `/pay/${props.payment.uuid}/success?redirect_status=succeeded`
+            window.location.href = withBase(`/pay/${props.payment.uuid}/success?redirect_status=succeeded`)
             return
         }
 

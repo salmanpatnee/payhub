@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
 import { storeConsent } from '@/actions/App/Http/Controllers/ClientPaymentController'
+import { withBase } from '@/lib/basePath'
 
 type Policy = { key: string; title: string; version: string; html: string }
 
@@ -113,7 +114,7 @@ onMounted(async () => {
             },
             onSuccess: () => {
                 // Truth still comes from the webhook; this is UX only.
-                window.location.href = `${window.location.origin}/pay/${props.payment.uuid}/success`
+                window.location.href = `${window.location.origin}${withBase(`/pay/${props.payment.uuid}/success`)}`
             },
             onError: (error: { message?: string }) => {
                 errorMessage.value = error?.message ?? 'An unexpected error occurred. Please try again.'

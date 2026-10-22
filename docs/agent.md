@@ -211,3 +211,33 @@ Seventh provider (`payments.provider = authorizenet`). Spec: `docs/specs/0007-au
 ### Upgrading a database from the iframe version
 
 Run `php artisan migrate`. Migration `2026_10_21_000005_upgrade_authorizenet_to_accept_js` adds `public_client_key`, copies the old token timestamps into `authorizenet_first_attempt_at` / `authorizenet_last_attempt_at` and drops the old columns. It is safe to run on a fresh database. Never `migrate:fresh` a database with real data.
+
+---
+
+## Serving PayHub from a folder (e.g. `https://example.com/payhub/`)
+
+PayHub works at the top of a domain and from a folder. One build serves both: the root view (`resources/views/app.blade.php`) writes the folder into `<meta name="app-base">` from `request()->getBasePath()`, and `resources/js/lib/basePath.ts` reads it. At the top of a domain the value is empty and nothing changes.
+
+What the front end does when the value is set (e.g. `/payhub`):
+
+- Adds the folder to every Inertia request (`http.onRequest`), every `fetch('/...')` call and every `<a href="/...">` (including `Link`). Wayfinder routes and hard-coded `/pay/...` strings keep working unchanged.
+- Script chunks load through `window.__assetUrl()` (set in `basePath.ts`, wired by `experimental.renderBuiltUrl` in `vite.config.ts`), and the root view rewrites the `@fonts` addresses.
+- `useCurrentUrl` strips the folder before comparing with sidebar links, so active highlighting still works.
+- Code that sets `window.location.href` by hand must wrap the path in `withBase()`.
+
+What the server does: Laravel works out the folder from the script path, so `route()`, redirects, `asset()` and the Authorize.net webhook URL all include it. This only works when the web server runs PayHub's `public/index.php` **from that folder**, so do not point `/payhub` at the project root with a rewrite rule.
+
+### cPanel setup (symlink, recommended)
+
+1. Keep the Laravel project outside the web folder, e.g. `~/payhub-app` (not inside `public_html`, so `.env` and the code cannot be reached from the web).
+2. Link the web folder to the app's `public` directory: `ln -s ~/payhub-app/public ~/public_html/payhub` (use the real document root of the domain). Remove any old `payhub` folder or custom `.htaccess` rewrite first.
+3. In `.env` set `APP_URL=https://example.com/payhub`. `ASSET_URL` is not needed.
+4. `php artisan migrate --force`, then `php artisan config:clear` and `php artisan view:clear`, and reset opcache.
+5. Open `https://example.com/payhub/login`.
+6. Set payment-provider webhook URLs to include the folder, e.g. `https://example.com/payhub/webhook/authorizenet/{account id}`.
+
+If the host does not allow symlinks, copy the contents of `public/` into `public_html/payhub/` instead and edit its `index.php` so the two `__DIR__.'/../...'` paths point at the app directory (`~/payhub-app`). Copy `public/build` again after every deploy.
+
+### Testing a folder locally
+
+Run a router script with PHP's built-in server that maps `/payhub/*` to `public/` and sets `SCRIPT_NAME` to `/payhub/index.php` (this is what Apache does with the symlink). Hide `public/hot` first so the built assets are used, and put it back afterwards.
