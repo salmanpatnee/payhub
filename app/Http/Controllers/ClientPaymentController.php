@@ -793,7 +793,7 @@ class ClientPaymentController extends Controller
         return [
             'name' => $brand->name,
             'slug' => $brand->slug,
-            'logo_url' => $brand->logo_path ? '/storage/'.$brand->logo_path : null,
+            'logo_url' => $brand->logo_path ? asset('storage/'.$brand->logo_path) : null,
             'primary_color' => $brand->primary_color,
             'secondary_color' => $brand->secondary_color,
         ];
