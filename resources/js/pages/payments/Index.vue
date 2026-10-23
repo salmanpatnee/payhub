@@ -33,6 +33,7 @@ type PaymentRow = {
     id: number;
     uuid: string;
     reference_code: string | null;
+    reference_slug: string | null;
     amount: number;
     currency: string;
     brand_name: string;
@@ -273,8 +274,8 @@ function formatDate(iso: string): string {
     return `${d.getDate()}-${month}-${d.getFullYear()}`;
 }
 
-async function copyLink(uuid: string): Promise<void> {
-    const url = `${window.location.origin}${withBase(`/pay/${uuid}`)}`;
+async function copyLink(uuid: string, referenceSlug: string | null): Promise<void> {
+    const url = `${window.location.origin}${withBase(`/pay/${uuid}${referenceSlug ? `/${referenceSlug}` : ''}`)}`;
     try {
         await navigator.clipboard.writeText(url);
     } catch {
@@ -531,7 +532,7 @@ async function copyLink(uuid: string): Promise<void> {
                                         <Eye class="size-3.5" />
                                     </Link>
                                 </Button>
-                                <Button v-if="!readOnly" variant="ghost" size="icon-sm" title="Copy payment link" @click="copyLink(payment.uuid)">
+                                <Button v-if="!readOnly" variant="ghost" size="icon-sm" title="Copy payment link" @click="copyLink(payment.uuid, payment.reference_slug)">
                                     <Check v-if="copiedUuid === payment.uuid" class="size-3.5 text-green-600" />
                                     <Copy v-else class="size-3.5" />
                                 </Button>

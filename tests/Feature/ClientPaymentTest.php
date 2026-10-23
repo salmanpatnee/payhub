@@ -104,6 +104,39 @@ it('unknown uuid returns 404', function () {
     $this->get('/pay/00000000-0000-0000-0000-000000000000')->assertStatus(404);
 });
 
+it('pay link with the reference code loads the same page', function () {
+    $payment = Payment::factory()->create(['status' => 'pending']);
+    mockStripeClient();
+    $this->get("/pay/{$payment->uuid}/{$payment->urlReference()}")->assertStatus(200);
+});
+
+it('pay link ignores a wrong reference code', function () {
+    $payment = Payment::factory()->create(['status' => 'pending']);
+    mockStripeClient();
+    $this->get("/pay/{$payment->uuid}/999999")->assertStatus(200);
+});
+
+it('pay link with a reference code and unknown uuid returns 404', function () {
+    $this->get('/pay/00000000-0000-0000-0000-000000000000/001001')->assertStatus(404);
+});
+
+it('success and failed pages are not swallowed by the reference route', function () {
+    $payment = Payment::factory()->create(['status' => 'pending']);
+    $this->get("/pay/{$payment->uuid}/failed")->assertStatus(200);
+});
+
+it('urlReference is zero padded, with the account prefix when there is one', function () {
+    $payment = Payment::factory()->create(['status' => 'pending']);
+    $payment->reference_code = 1020;
+    $number = '001020';
+
+    expect($payment->urlReference())->toEndWith($number)
+        ->and($payment->urlReference())->not->toContain('#')
+        ->and((new Payment)->urlReference())->toBeNull();
+    mockStripeClient();
+    $this->get("/pay/{$payment->uuid}/AUTH-001020")->assertStatus(200);
+});
+
 // CLIENT-02: Brand props are passed to Pay page
 it('brand props are passed to ClientPayment/Pay component', function () {
     $payment = Payment::factory()->create(['status' => 'pending']);

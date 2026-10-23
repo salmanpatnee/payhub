@@ -47,6 +47,7 @@ class PaymentController extends Controller
                 'id' => $p->id,
                 'uuid' => $p->uuid,
                 'reference_code' => $p->formattedReferenceCode(),
+                'reference_slug' => $p->urlReference(),
                 'amount' => $p->amount,
                 'currency' => $p->currency,
                 'brand_name' => $p->brand->name,
@@ -498,6 +499,7 @@ class PaymentController extends Controller
             'payment' => [
                 'uuid' => $payment->uuid,
                 'reference_code' => $payment->formattedReferenceCode(),
+                'reference_slug' => $payment->urlReference(),
                 'amount' => $payment->amount,
                 'currency' => $payment->currency,
                 'status' => $payment->status,

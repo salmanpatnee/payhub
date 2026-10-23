@@ -35,7 +35,7 @@ use Stripe\StripeClient;
 
 class ClientPaymentController extends Controller
 {
-    public function show(Payment $payment): Response|RedirectResponse
+    public function show(Payment $payment, ?string $ref = null): Response|RedirectResponse
     {
         $payment->loadMissing('brand');
 

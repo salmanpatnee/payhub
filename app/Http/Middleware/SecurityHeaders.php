@@ -55,7 +55,7 @@ class SecurityHeaders
         // MPGS payment; every other route keeps the strict policy.
         $route = $request->route();
         $routePayment = $route?->parameter('payment');
-        $isMpgsPayPage = $route?->getName() === 'pay.show'
+        $isMpgsPayPage = in_array($route?->getName(), ['pay.show', 'pay.show.ref'], true)
             && $routePayment instanceof Payment
             && $routePayment->provider === PaymentProvider::Mpgs;
         $mpgsHost = $isMpgsPayPage ? ' '.$routePayment->loadMissing('mpgsAccount')->mpgsAccount?->gatewayHost() : '';
@@ -64,7 +64,7 @@ class SecurityHeaders
         // Authorize.net Accept.js (spec 0007, AC-14): only the pay page of an Authorize.net
         // payment loads Accept.js and lets it post the card, and only to that account's
         // environment hosts. No unsafe-inline or unsafe-eval is added.
-        $isAuthorizenetPayPage = $route?->getName() === 'pay.show'
+        $isAuthorizenetPayPage = in_array($route?->getName(), ['pay.show', 'pay.show.ref'], true)
             && $routePayment instanceof Payment
             && $routePayment->provider === PaymentProvider::Authorizenet;
         $authorizenetEnv = $isAuthorizenetPayPage
