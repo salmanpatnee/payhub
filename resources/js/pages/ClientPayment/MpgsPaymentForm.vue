@@ -52,6 +52,7 @@ const fieldInvalid = ref<Record<keyof MpgsFieldTargets, boolean>>({
 // Fields the gateway needs before a charge can work. The gateway only reports a field
 // after the payer touches it, so every one starts as not complete.
 const requiredFields = {
+    cardholderName: 'name on card',
     cardNumber: 'card number',
     expiryMonth: 'expiry month',
     expiryYear: 'expiry year',
@@ -59,6 +60,7 @@ const requiredFields = {
 } as const
 
 const fieldComplete = ref<Record<keyof typeof requiredFields, boolean>>({
+    cardholderName: false,
     cardNumber: false,
     expiryMonth: false,
     expiryYear: false,
