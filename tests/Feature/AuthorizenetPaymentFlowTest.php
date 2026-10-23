@@ -103,15 +103,48 @@ function listRow(Payment $payment, string $transId = '60000001', string $status 
     ];
 }
 
-it('builds a 20 character invoice number from the id and uuid', function () {
-    $payment = anetPayment();
+it('uses the prefixed reference code as the invoice number', function () {
+    $payment = anetPayment(['reference_code' => 1020]);
+    $payment->authorizenetAccount->forceFill(['prefix' => 'AUTH'])->save();
 
-    $invoice = AuthorizenetInvoice::for($payment);
-
-    expect(strlen($invoice))->toBeLessThanOrEqual(20)
-        ->and($invoice)->toStartWith(str_pad((string) $payment->id, 6, '0', STR_PAD_LEFT))
-        ->and($invoice)->toEndWith(substr(str_replace('-', '', $payment->uuid), 0, 8));
+    expect(AuthorizenetInvoice::for($payment->fresh()))->toBe('AUTH-001020');
 });
+
+it('uses the bare reference code when the account has no prefix', function () {
+    $payment = anetPayment(['reference_code' => 1020]);
+    $payment->authorizenetAccount->forceFill(['prefix' => null])->save();
+
+    expect(AuthorizenetInvoice::for($payment->fresh()))->toBe('001020');
+});
+
+it('keeps the longest prefixed invoice number inside the 20 character limit', function () {
+    $payment = anetPayment(['reference_code' => 1234567]);
+    $payment->authorizenetAccount->forceFill(['prefix' => 'ABCDEFGHIJ'])->save();
+
+    expect(strlen(AuthorizenetInvoice::for($payment->fresh())))->toBeLessThanOrEqual(AuthorizenetInvoice::MAX_LENGTH);
+});
+
+it('still accepts the legacy id and uuid invoice number', function () {
+    $payment = anetPayment();
+    $legacy = AuthorizenetInvoice::legacy($payment);
+
+    expect(strlen($legacy))->toBeLessThanOrEqual(20)
+        ->and($legacy)->toStartWith(str_pad((string) $payment->id, 6, '0', STR_PAD_LEFT))
+        ->and(AuthorizenetInvoice::matches($payment, $legacy))->toBeTrue()
+        ->and(AuthorizenetInvoice::matches($payment, AuthorizenetInvoice::for($payment)))->toBeTrue()
+        ->and(AuthorizenetInvoice::matches($payment, '999999deadbeef'))->toBeFalse()
+        ->and(AuthorizenetInvoice::matches($payment, null))->toBeFalse();
+});
+
+it('reads the reference number out of an invoice number', function (string $invoice, ?int $expected) {
+    expect(AuthorizenetInvoice::referenceFromInvoice($invoice))->toBe($expected);
+})->with([
+    'prefixed' => ['AUTH-001020', 1020],
+    'no prefix' => ['001020', 1020],
+    'seven digits' => ['PRISM-1234567', 1234567],
+    'lowercase prefix' => ['auth-001020', null],
+    'junk' => ['not an invoice', null],
+]);
 
 it('converts amounts in integer cents without float noise', function () {
     expect(AuthorizenetInvoice::centsToDecimal(1234))->toBe('12.34')
@@ -601,6 +634,16 @@ describe('webhook', function () {
     it('completes the payment from the job by reading the transaction, never the body', function () {
         $payment = anetPayment();
         fakeAnet([], ['60000001' => anetTx($payment)]);
+
+        (new HandleAuthorizenetWebhookJob($payment->authorizenet_account_id, '60000001'))
+            ->handle(app(AuthorizenetInvoiceLookup::class));
+
+        expect($payment->fresh()->status)->toBe('completed');
+    });
+
+    it('finds the payment from a legacy id and uuid invoice number', function () {
+        $payment = anetPayment();
+        fakeAnet([], ['60000001' => anetTx($payment, ['order' => ['invoiceNumber' => AuthorizenetInvoice::legacy($payment)]])]);
 
         (new HandleAuthorizenetWebhookJob($payment->authorizenet_account_id, '60000001'))
             ->handle(app(AuthorizenetInvoiceLookup::class));

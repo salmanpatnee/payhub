@@ -35,7 +35,7 @@ class AuthorizenetChargeClassifier
 
         // The invoice number is the link to this payment; a mismatch is never trusted
         // in any bucket, not even held or declined.
-        if (($transaction['order']['invoiceNumber'] ?? null) !== AuthorizenetInvoice::for($payment)) {
+        if (! AuthorizenetInvoice::matches($payment, $transaction['order']['invoiceNumber'] ?? null)) {
             return self::UNKNOWN;
         }
 
