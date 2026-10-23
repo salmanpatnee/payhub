@@ -9,6 +9,7 @@ import {
     captureCard,
     loadLibraries,
     mountFields,
+    MpgsUserError,
     type MpgsFieldTargets,
     type MpgsSession,
 } from '@/lib/mpgs/gateway'
@@ -46,6 +47,22 @@ const fieldInvalid = ref<Record<keyof MpgsFieldTargets, boolean>>({
     expiryYear: false,
     securityCode: false,
     cardholderName: false,
+})
+
+// Fields the gateway needs before a charge can work. The gateway only reports a field
+// after the payer touches it, so every one starts as not complete.
+const requiredFields = {
+    cardNumber: 'card number',
+    expiryMonth: 'expiry month',
+    expiryYear: 'expiry year',
+    securityCode: 'security code (CVV)',
+} as const
+
+const fieldComplete = ref<Record<keyof typeof requiredFields, boolean>>({
+    cardNumber: false,
+    expiryMonth: false,
+    expiryYear: false,
+    securityCode: false,
 })
 
 const targets: MpgsFieldTargets = {
@@ -110,6 +127,11 @@ async function prepare(): Promise<boolean> {
 
     await mountFields(session, targets, {
         onFieldInvalid: (field, invalid) => { fieldInvalid.value[field] = invalid },
+        onFieldComplete: (field, complete) => {
+            if (field in fieldComplete.value) {
+                fieldComplete.value[field as keyof typeof requiredFields] = complete
+            }
+        },
     })
 
     return true
@@ -139,6 +161,18 @@ onMounted(async () => {
 async function submit(): Promise<void> {
     if (!ready.value || !session) {
         errorMessage.value = 'Payment system is unavailable. Please refresh and try again.'
+
+        return
+    }
+
+    // Stop here when card details are unfinished: the gateway accepts a session without a
+    // CVV, so the payer would otherwise clear 3DS and only then fail at the charge.
+    const missing = (Object.keys(requiredFields) as (keyof typeof requiredFields)[])
+        .filter((field) => !fieldComplete.value[field])
+
+    if (missing.length > 0) {
+        missing.forEach((field) => { fieldInvalid.value[field] = true })
+        errorMessage.value = `Please enter your ${missing.map((field) => requiredFields[field]).join(', ')}.`
 
         return
     }
@@ -207,7 +241,7 @@ async function submit(): Promise<void> {
         emit('unknown')
     } catch (e) {
         console.error('[MPGS] payment failed:', e)
-        errorMessage.value = 'An unexpected error occurred. Please try again.'
+        errorMessage.value = e instanceof MpgsUserError ? e.message : 'An unexpected error occurred. Please try again.'
         processing.value = false
     }
 }
