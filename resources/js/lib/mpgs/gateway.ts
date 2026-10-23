@@ -35,7 +35,12 @@ export type MpgsFieldTargets = {
 export type MpgsFieldCallbacks = {
     /** A hosted field's validity changed. `field` is a key of MpgsFieldTargets. */
     onFieldInvalid: (field: keyof MpgsFieldTargets, invalid: boolean) => void
+    /** A hosted field is finished and valid (false while empty, partial or wrong). */
+    onFieldComplete: (field: keyof MpgsFieldTargets, complete: boolean) => void
 }
+
+/** An error whose message is safe and useful to show the payer as is. */
+export class MpgsUserError extends Error {}
 
 export type MpgsGatewayConfig = {
     gatewayHost: string
@@ -159,7 +164,7 @@ export async function mountFields(
                         return
                     }
 
-                    pending.reject(new Error(
+                    pending.reject(new MpgsUserError(
                         response?.status === 'fields_in_error'
                             ? 'Please check your card details and try again.'
                             : 'Your card details could not be read. Please try again.',
@@ -189,6 +194,7 @@ export async function mountFields(
         if (field) {
             // Incomplete is not an error while the payer is still typing.
             callbacks.onFieldInvalid(field, !result?.isValid && !result?.isIncomplete)
+            callbacks.onFieldComplete(field, !!result?.isValid)
         }
     })
 
