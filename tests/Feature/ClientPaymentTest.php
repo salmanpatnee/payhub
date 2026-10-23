@@ -194,6 +194,14 @@ it('completed payment renders ClientPayment/Unavailable not Pay', function () {
         ->assertInertia(fn ($page) => $page->component('ClientPayment/Unavailable'));
 });
 
+it('already paid page receives the reference code and no client details', function () {
+    $payment = Payment::factory()->create(['status' => 'completed']);
+    $this->get("/pay/{$payment->uuid}")
+        ->assertInertia(fn ($page) => $page->component('ClientPayment/Unavailable')
+            ->where('payment.reference_code', $payment->formattedReferenceCode())
+            ->missing('payment.client_email'));
+});
+
 // D-03: Cancelled payment renders Unavailable
 it('cancelled payment renders ClientPayment/Unavailable', function () {
     $payment = Payment::factory()->create(['status' => 'cancelled']);

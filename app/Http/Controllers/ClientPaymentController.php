@@ -45,6 +45,7 @@ class ClientPaymentController extends Controller
         if (! in_array($payment->status, ['pending', 'failed'])) {
             return Inertia::render('ClientPayment/Unavailable', [
                 'status' => $payment->status,
+                'payment' => $this->paymentProps($payment),
                 'brand' => $this->brandProps($payment->brand),
                 'provider' => $payment->provider->value,
             ]);
@@ -699,6 +700,7 @@ class ClientPaymentController extends Controller
         if ($payment->status === 'cancelled') {
             return Inertia::render('ClientPayment/Unavailable', [
                 'status' => $payment->status,
+                'payment' => $this->paymentProps($payment),
                 'brand' => $this->brandProps($payment->brand),
                 'provider' => $payment->provider->value,
             ]);
