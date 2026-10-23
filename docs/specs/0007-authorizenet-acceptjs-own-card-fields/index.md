@@ -95,7 +95,7 @@ The status endpoint no longer takes the optional `trans_id` hint (there is no br
 | Tokenize | opaque data | Accept.js in the browser from the typed card fields |
 | Charge | API host | `authorizenet_accounts.environment` mapped through `config('services.authorizenet.hosts')` (`api`) |
 | Charge | amount | `Payment.amount` cents converted with integer math (`sprintf('%d.%02d')`), never the request |
-| Charge | `order.invoiceNumber` and `refId` | `AuthorizenetInvoice::for($payment)` (the one helper the lookup also uses) |
+| Charge | `order.invoiceNumber` and `refId` | `AuthorizenetInvoice::for($payment)` (the one helper the lookup also uses): the reference code with the account prefix, e.g. `AUTH-001020`, or `001020` with no prefix. The invoice number is the only column the Authorize.net reports show. **Known limitation:** it is built from the live account prefix, so editing a prefix after a charge stops that payment from matching its transaction (prefix edits are not blocked yet). Payments charged earlier with the old id + UUID format still match. |
 | Charge | `order.description` | `Payment::formattedReferenceCode()` |
 | Charge | email, first and last name | `Payment.client_email`, `Payment.client_name` (split at the first space; a single word used for both; each cut to 50; email cut to 255) |
 | Charge | ZIP | request `postal_code`, validated by AC-6 |
@@ -105,7 +105,7 @@ The status endpoint no longer takes the optional `trans_id` hint (there is no br
 | Charge | client message | `AuthorizenetChargeReply` outcome mapped to the fixed strings in AC-10 |
 | Status | state shown | `Payment.status`, and `held` when `authorizenet_transaction_id` is set on a pending payment |
 | Status, show, job | which transaction | invoice number lookup (rules above), then `getTransactionDetails` |
-| Webhook | which payment | `payload.id` is the `transId`; the job reads `order.invoiceNumber` and checks the payment belongs to the route's account |
+| Webhook | which payment | `payload.id` is the `transId`; the job reads `order.invoiceNumber`, finds the payment by reference code (or the legacy id + UUID format) and checks it belongs to the route's account |
 | Webhook | idempotency key | body `notificationId` |
 | Sweep | which payments | `provider = authorizenet`, `status = pending`, `authorizenet_last_attempt_at` in the last 24 hours |
 

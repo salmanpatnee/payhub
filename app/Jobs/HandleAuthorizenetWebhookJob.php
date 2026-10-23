@@ -62,15 +62,18 @@ class HandleAuthorizenetWebhookJob implements ShouldQueue
 
     private function paymentForInvoice(string $invoice, AuthorizenetAccount $account): ?Payment
     {
-        // Invoice = 6+ digit zero padded id followed by 8 hex characters of the UUID.
-        if (! preg_match('/^(\d{6,})[0-9a-f]{8}$/', $invoice, $m)) {
-            return null;
+        // Soft deleted payments are excluded on purpose.
+        $query = fn () => Payment::query()->where('authorizenet_account_id', $account->id);
+
+        // Current format: the reference code ("AUTH-001020" or "001020").
+        $reference = AuthorizenetInvoice::referenceFromInvoice($invoice);
+        $payment = $reference !== null ? $query()->where('reference_code', $reference)->first() : null;
+
+        // Legacy format: 6+ digit zero padded id followed by 8 hex characters of the UUID.
+        if (! $payment && preg_match('/^(\d{6,})[0-9a-f]{8}$/', $invoice, $m)) {
+            $payment = $query()->find((int) $m[1]);
         }
 
-        $payment = Payment::query() // soft deleted payments are excluded on purpose
-            ->where('authorizenet_account_id', $account->id)
-            ->find((int) $m[1]);
-
-        return $payment && AuthorizenetInvoice::for($payment) === $invoice ? $payment : null;
+        return $payment && AuthorizenetInvoice::matches($payment, $invoice) ? $payment : null;
     }
 }
