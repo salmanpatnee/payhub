@@ -288,6 +288,9 @@ Route::get('/pay/{payment}', [ClientPaymentController::class, 'show'])->name('pa
 Route::post('/pay/{payment}/consent', [ClientPaymentController::class, 'storeConsent'])->name('pay.consent');
 Route::get('/pay/{payment}/success', [ClientPaymentController::class, 'success'])->name('pay.success');
 Route::get('/pay/{payment}/failed', [ClientPaymentController::class, 'failed'])->name('pay.failed');
+// Same page with a readable reference code (PREFIX-000000 or 000000); the uuid alone resolves the payment, {ref}
+// is ignored. Must stay after success/failed so those words are never taken as a ref. Must end in a digit.
+Route::get('/pay/{payment}/{ref}', [ClientPaymentController::class, 'show'])->where('ref', '[A-Za-z0-9_-]*[0-9]')->name('pay.show.ref');
 
 // Viva Smart Checkout return endpoints — the Success/Failure URL is configured once per
 // VivaAccount in Viva's own dashboard (self-care), a static URL that can't embed our
