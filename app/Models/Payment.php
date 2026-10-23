@@ -144,6 +144,20 @@ class Payment extends Model
     }
 
     /**
+     * URL-safe reference code for the shareable pay link (/pay/{uuid}/{ref}):
+     * "PREFIX-000000", or just "000000" when the account has no prefix (no '#').
+     * Display only; never used for lookup.
+     */
+    public function urlReference(): ?string
+    {
+        if ($this->reference_code === null) {
+            return null;
+        }
+
+        return preg_replace('/[^A-Za-z0-9_-]/', '', ltrim($this->formattedReferenceCode(), '#'));
+    }
+
+    /**
      * Display name of the payment account that processed (or will process) this
      * payment, resolved by provider. Null if the account is missing.
      *

@@ -18,6 +18,7 @@ import {
 type PaymentDetail = {
     uuid: string;
     reference_code: string | null;
+    reference_slug: string | null;
     amount: number;
     currency: string;
     status: string;
@@ -58,7 +59,7 @@ defineOptions({
 });
 
 // /pay/{uuid} is the client-facing route (Phase 5). Show page is /payments/{uuid} (auth-only).
-const shareableLink = `${window.location.origin}${withBase(`/pay/${props.payment.uuid}`)}`;
+const shareableLink = `${window.location.origin}${withBase(`/pay/${props.payment.uuid}${props.payment.reference_slug ? `/${props.payment.reference_slug}` : ''}`)}`;
 
 const copied = ref(false);
 
