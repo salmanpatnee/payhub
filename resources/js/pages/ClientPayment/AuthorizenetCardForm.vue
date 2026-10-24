@@ -135,8 +135,15 @@ async function submit(): Promise<void> {
 
         const data: { outcome?: Outcome } = await response.json().catch(() => ({}))
 
+        // Too many failed cards: the server paused this payment. Reload so the page shows the paused notice.
+        if (response.status === 423) {
+            window.location.reload()
+
+            return
+        }
+
         if (response.status === 429) {
-            message.value = 'Too many attempts. Please try again later.'
+            message.value = 'Too many attempts. Please wait a while, or contact your representative for help.'
 
             return
         }

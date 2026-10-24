@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref, type Component } from 'vue';
 import {
     ArrowLeft, Ban, Check, CheckCircle2,
-    Clock4, Copy, Link2, Pencil, Plus, Trash2, XCircle,
+    Clock4, Copy, Link2, LockKeyhole, LockOpen, Pencil, Plus, Trash2, XCircle,
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
@@ -33,6 +33,8 @@ type PaymentDetail = {
     provider_reference: string | null;
     paid_at: string | null;
     expires_at: string | null;
+    /** Admin only: when the card attempt lock ends, or null when not locked. */
+    card_locked_until: string | null;
 };
 
 type AttemptRow = { sequence: number; reference: string | null; status: string; reason: string | null; started_at: string };
@@ -71,6 +73,18 @@ const attemptTone: Record<string, string> = {
 
 const deleteOpen = ref(false);
 const deleteForm = useForm({});
+
+const releasing = ref(false);
+
+function releaseLock() {
+    releasing.value = true;
+    router.patch(`/payments/${props.payment.uuid}/reset-lock`, {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            releasing.value = false;
+        },
+    });
+}
 
 function executeDelete() {
     deleteForm.delete(`/payments/${props.payment.uuid}`, {
@@ -239,6 +253,24 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                     Delete
                 </Button>
             </div>
+        </div>
+
+        <div
+            v-if="isAdmin && payment.card_locked_until"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50/70 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-300"
+            role="alert"
+        >
+            <div class="flex items-start gap-2">
+                <LockKeyhole class="mt-0.5 size-4 shrink-0" />
+                <span>
+                    Card payments are paused until {{ formatDateTime(payment.card_locked_until) }} after too many failed attempts.
+                    Please contact the customer to help them pay.
+                </span>
+            </div>
+            <Button variant="outline" size="sm" :disabled="releasing" @click="releaseLock">
+                <LockOpen class="mr-1 size-3.5" />
+                Release lock
+            </Button>
         </div>
 
         <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">

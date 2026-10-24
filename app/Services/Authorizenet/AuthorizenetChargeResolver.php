@@ -4,6 +4,7 @@ namespace App\Services\Authorizenet;
 
 use App\Jobs\SendPaymentNotification;
 use App\Models\Payment;
+use App\Services\CardLock\CardLockGuard;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -78,6 +79,9 @@ class AuthorizenetChargeResolver
     private function decline(Payment $payment, string $transactionId): void
     {
         $this->syncAttempt($payment, $transactionId, 'declined');
+
+        // A decline found late (lookup, webhook) counts toward the card attempt lock too.
+        app(CardLockGuard::class)->recordFailure($payment);
 
         // Only a held transaction that was then declined (fraud review) ends the payment.
         // A plain decline stays on the card form where the client retries.

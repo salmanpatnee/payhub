@@ -117,6 +117,13 @@ async function prepare(): Promise<boolean> {
     })
     const data = await response.json().catch(() => ({}))
 
+    // Paused after too many failed cards: reload so the page shows the paused notice.
+    if (response.status === 423) {
+        window.location.reload()
+
+        return false
+    }
+
     if (!response.ok) {
         errorMessage.value = response.status === 429
             ? (data.error ?? 'Too many attempts. Please wait a while and try again.')
@@ -212,6 +219,12 @@ async function submit(): Promise<void> {
         })
 
         const data = await response.json().catch(() => ({}))
+
+        if (response.status === 423) {
+            window.location.reload()
+
+            return
+        }
 
         if (response.status === 422) {
             reloadWithNotice(props.payment.uuid, data.error ?? 'This payment session is no longer valid. Please try again.')

@@ -6,6 +6,7 @@ import AccountsTodayPanel from '@/components/dashboard/AccountsTodayPanel.vue';
 import BrandPerformanceChart from '@/components/dashboard/BrandPerformanceChart.vue';
 import ConversionFunnel from '@/components/dashboard/ConversionFunnel.vue';
 import DashboardFilters from '@/components/dashboard/DashboardFilters.vue';
+import LockedPaymentsTable from '@/components/dashboard/LockedPaymentsTable.vue';
 import KpiCard from '@/components/dashboard/KpiCard.vue';
 import RevenueTrendChart from '@/components/dashboard/RevenueTrendChart.vue';
 import RmLeaderboard from '@/components/dashboard/RmLeaderboard.vue';
@@ -67,6 +68,8 @@ const pendingSublines = computed(() => [`${props.kpis.pendingPipeline.count} lin
     <Head title="Dashboard" />
 
     <div class="space-y-6 p-4 md:p-6">
+        <LockedPaymentsTable v-if="lockedPayments && lockedPayments.length > 0" :rows="lockedPayments" />
+
         <DashboardFilters :filters="filters" :options="filterOptions" />
 
         <!-- Tier 1 — the situation -->

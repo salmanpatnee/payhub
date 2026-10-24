@@ -83,4 +83,10 @@ return [
         'unclear_pause_seconds' => (int) env('AUTHORIZENET_UNCLEAR_PAUSE_SECONDS', 120),
     ],
 
+    // Card attempt lock (MPGS and Authorize.net): this many failed attempts pause the pay page.
+    'card_lock' => [
+        'max_attempts' => (int) env('CARD_LOCK_MAX_ATTEMPTS', 3),
+        'minutes' => (int) env('CARD_LOCK_MINUTES', 60),
+    ],
+
 ];

@@ -30,6 +30,11 @@ class PaymentPolicy
         return $user->hasRole('admin');
     }
 
+    public function resetLock(User $user, Payment $payment): bool
+    {
+        return $user->hasRole('admin');
+    }
+
     public function export(User $user): bool
     {
         // Only admins and the read-only `account` (finance) role may export the
