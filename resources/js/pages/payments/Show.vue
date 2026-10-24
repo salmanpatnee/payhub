@@ -38,13 +38,14 @@ type PaymentDetail = {
     expires_at: string | null;
 };
 
+type AttemptRow = { sequence: number; reference: string | null; status: string; reason: string | null; started_at: string };
+
+// Authorize.net payments made before attempts were stored have no rows, only the summary.
 type AttemptHistory =
-    | {
-        provider: 'mpgs';
-        rows: { sequence: number; order_id: string; status: string; reason: string | null; started_at: string }[];
-    }
+    | { provider: 'mpgs'; rows: AttemptRow[] }
     | {
         provider: 'authorizenet';
+        rows: AttemptRow[];
         summary: { first_attempt_at: string | null; last_attempt_at: string | null; transaction_id: string | null; status: string };
     };
 
@@ -63,6 +64,12 @@ const attemptTone: Record<string, string> = {
     prepared: 'pending',
     pending: 'pending',
     abandoned: 'cancelled',
+    // Authorize.net
+    sent: 'pending',
+    held: 'pending',
+    unclear: 'pending',
+    check_details: 'failed',
+    error: 'failed',
 };
 
 const deleteOpen = ref(false);
@@ -385,7 +392,7 @@ const timeline = computed<TimelineStep[]>(() => {
                 <CardTitle class="text-base">Payment attempts</CardTitle>
             </CardHeader>
             <CardContent>
-                <div v-if="attempts.provider === 'mpgs'" class="overflow-x-auto">
+                <div v-if="attempts.rows.length || attempts.provider === 'mpgs'" class="overflow-x-auto">
                     <table
                         v-if="attempts.rows.length"
                         class="w-full text-sm max-sm:block [&_tbody]:max-sm:block [&_tr]:max-sm:block"
@@ -394,7 +401,7 @@ const timeline = computed<TimelineStep[]>(() => {
                             <tr class="border-b border-border text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 <th class="px-2.5 py-2">#</th>
                                 <th class="px-2.5 py-2">Started</th>
-                                <th class="px-2.5 py-2">Order ID</th>
+                                <th class="px-2.5 py-2">{{ attempts.provider === 'mpgs' ? 'Order ID' : 'Transaction ID' }}</th>
                                 <th class="px-2.5 py-2">Status</th>
                                 <th class="px-2.5 py-2">Reason</th>
                             </tr>
@@ -402,12 +409,12 @@ const timeline = computed<TimelineStep[]>(() => {
                         <tbody>
                             <tr
                                 v-for="row in attempts.rows"
-                                :key="row.order_id"
+                                :key="row.sequence"
                                 class="border-b border-border last:border-0 max-sm:mb-2 max-sm:flex max-sm:flex-col max-sm:gap-1 max-sm:rounded-lg max-sm:border max-sm:p-2.5"
                             >
                                 <td class="px-2.5 py-2.5 align-top tabular-nums">{{ row.sequence }}</td>
                                 <td class="px-2.5 py-2.5 align-top tabular-nums whitespace-nowrap">{{ formatDateTime(row.started_at) }}</td>
-                                <td class="px-2.5 py-2.5 align-top font-mono text-xs">{{ row.order_id }}</td>
+                                <td class="px-2.5 py-2.5 align-top font-mono text-xs">{{ row.reference ?? '—' }}</td>
                                 <td class="px-2.5 py-2.5 align-top">
                                     <PaymentStatusBadge
                                         :status="attemptTone[row.status] ?? 'cancelled'"
@@ -421,7 +428,7 @@ const timeline = computed<TimelineStep[]>(() => {
                     <p v-else class="text-sm text-muted-foreground">No attempts yet. The client has not opened the payment link.</p>
                 </div>
 
-                <div v-else class="space-y-3">
+                <div v-else-if="attempts.provider === 'authorizenet'" class="space-y-3">
                     <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
                         <div>
                             <dt class="text-xs font-medium uppercase tracking-wide text-foreground/60">First attempt</dt>
@@ -441,7 +448,7 @@ const timeline = computed<TimelineStep[]>(() => {
                         </div>
                     </dl>
                     <p class="text-xs text-muted-foreground">
-                        Authorize.net does not store each attempt separately, only the first and latest attempt times.
+                        No attempts were recorded for this payment. Only the first and latest attempt times were kept before attempts were stored.
                     </p>
                 </div>
             </CardContent>

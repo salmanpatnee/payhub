@@ -4,6 +4,7 @@ use App\Jobs\HandleAuthorizenetWebhookJob;
 use App\Jobs\ResolveAuthorizenetCharge;
 use App\Jobs\SendPaymentNotification;
 use App\Models\AuthorizenetAccount;
+use App\Models\AuthorizenetChargeAttempt;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Authorizenet\AuthorizenetChargeClassifier;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -712,4 +714,129 @@ describe('sweep', function () {
         expect($good->fresh()->status)->toBe('completed')
             ->and($bad->fresh()->status)->toBe('pending');
     });
+});
+
+// Attempt history
+
+/** A createTransaction reply with the optional result letters. */
+function chargeReplyWith(string $code, ?string $errorCode, array $extra = []): array
+{
+    $reply = chargeReply($code, $code === '1' ? '60000001' : null, $errorCode);
+    $reply['transactionResponse'] = array_merge($reply['transactionResponse'], $extra);
+
+    return $reply;
+}
+
+it('records an approved charge with its transaction id', function () {
+    $payment = anetPayment();
+    fakeAnet([], ['60000001' => anetTx($payment)], chargeReplyWith('1', null, ['avsResultCode' => 'Y', 'cvvResultCode' => 'M', 'cavvResultCode' => '2']));
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertJsonPath('outcome', 'approved');
+
+    $attempt = $payment->authorizenetChargeAttempts()->sole();
+    expect($attempt->sequence)->toBe(1)
+        ->and($attempt->status)->toBe('approved')
+        ->and($attempt->transaction_id)->toBe('60000001')
+        ->and($attempt->response_code)->toBe('1')
+        ->and($attempt->reason)->toBeNull()
+        ->and([$attempt->avs_result, $attempt->cvv_result, $attempt->cavv_result])->toBe(['Y', 'M', '2']);
+});
+
+it('records each decline with a plain reason, then the approved retry as attempt 2', function () {
+    $payment = anetPayment();
+    fakeAnet([], [], chargeReplyWith('2', '2', ['cvvResultCode' => 'N']));
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertJsonPath('outcome', 'declined');
+
+    fakeAnet([], ['60000001' => anetTx($payment)], chargeReply('1'));
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertJsonPath('outcome', 'approved');
+
+    $attempts = $payment->authorizenetChargeAttempts()->orderBy('sequence')->get();
+    expect($attempts)->toHaveCount(2)
+        ->and($attempts[0]->status)->toBe('declined')
+        ->and($attempts[0]->reason)->toBe('Card security code did not match')
+        ->and($attempts[0]->error_code)->toBe('2')
+        ->and($attempts[1]->status)->toBe('approved')
+        ->and($attempts[1]->sequence)->toBe(2);
+    expect($payment->fresh()->status)->toBe('completed');
+});
+
+it('maps each reply to a status and a plain reason', function (array $charge, string $status, string $reason) {
+    $payment = anetPayment();
+    fakeAnet([], ['60000001' => anetTx($payment, ['responseCode' => 4, 'transactionStatus' => 'FDSPendingReview'])], $charge);
+    Queue::fake();
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody());
+
+    $attempt = $payment->authorizenetChargeAttempts()->sole();
+    expect($attempt->status)->toBe($status)->and($attempt->reason)->toBe($reason);
+})->with([
+    'declined' => [chargeReply('2', null, '2'), 'declined', 'Card declined by the bank'],
+    'address mismatch' => [chargeReply('2', null, '27'), 'check_details', 'Address (ZIP) did not match'],
+    'expired card' => [chargeReply('3', null, '8'), 'check_details', 'Card has expired'],
+    'duplicate' => [chargeReply('3', null, '11'), 'unclear', 'No clear answer from the gateway; PayHub checks again'],
+    'unmapped error falls back to the gateway text' => [chargeReply('3', null, '13'), 'error', 'gateway text'],
+    'held' => [chargeReply('4'), 'held', 'Held for fraud review'],
+]);
+
+it('keeps a row when the gateway times out, then settles it when the lookup approves', function () {
+    $payment = anetPayment();
+    fakeAnet([], [], 'timeout');
+    Queue::fake();
+
+    $this->postJson(route('pay.authorizenet.charge', $payment))->assertStatus(422); // bad body: no row
+    expect($payment->authorizenetChargeAttempts()->count())->toBe(0);
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertJsonPath('outcome', 'unclear');
+    expect($payment->authorizenetChargeAttempts()->sole()->status)->toBe('unclear');
+
+    fakeAnet([listRow($payment)], ['60000001' => anetTx($payment)]);
+    Cache::flush();
+    app(AuthorizenetInvoiceLookup::class)->lookup($payment->fresh());
+
+    $attempt = $payment->authorizenetChargeAttempts()->sole();
+    expect($attempt->status)->toBe('approved')
+        ->and($attempt->transaction_id)->toBe('60000001')
+        ->and($payment->fresh()->status)->toBe('completed');
+});
+
+it('never stores or logs the card code or the request body', function () {
+    $payment = anetPayment();
+    fakeAnet([], [], chargeReplyWith('2', '2'));
+    Log::spy();
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody())->assertOk();
+
+    $row = json_encode(AuthorizenetChargeAttempt::query()->sole()->getAttributes());
+    expect($row)->not->toContain('opaque-code-from-acceptjs')->and($row)->not->toContain('90210');
+});
+
+it('keeps the pure reply reason free of client text', function () {
+    $reply = AuthorizenetChargeReply::fromResult(['status' => 200, 'body' => chargeReply('2', null, '2')]);
+
+    expect($reply->reason())->toBe('Card declined by the bank')
+        ->and(AuthorizenetChargeReply::message($reply->outcome))->not->toContain('bank');
+});
+
+it('shows Authorize.net attempts to admins, and the old summary when there are none', function () {
+    Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+    Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
+    $admin = User::factory()->create()->assignRole('admin');
+    $agent = User::factory()->create()->assignRole('agent');
+    $payment = anetPayment(['user_id' => $agent->id]);
+    AuthorizenetChargeAttempt::factory()->create(['payment_id' => $payment->id, 'sequence' => 1, 'reason' => 'Card declined by the bank']);
+    AuthorizenetChargeAttempt::factory()->create(['payment_id' => $payment->id, 'sequence' => 2, 'status' => 'approved', 'transaction_id' => '60000001', 'reason' => null]);
+    $old = anetPayment();
+
+    $this->actingAs($admin)->get(route('payments.show', $payment))->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('attempts.provider', 'authorizenet')
+        ->has('attempts.rows', 2)
+        ->where('attempts.rows.0.sequence', 2)
+        ->where('attempts.rows.0.reference', '60000001')
+        ->where('attempts.rows.1.reason', 'Card declined by the bank'));
+
+    $this->actingAs($admin)->get(route('payments.show', $old))->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('attempts.rows', 0)
+        ->has('attempts.summary'));
+
+    $this->actingAs($agent)->get(route('payments.show', $payment))->assertInertia(fn (AssertableInertia $page) => $page->where('attempts', null));
 });

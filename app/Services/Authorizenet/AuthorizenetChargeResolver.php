@@ -43,12 +43,15 @@ class AuthorizenetChargeResolver
             ]);
 
         if ($updated > 0) {
+            $this->syncAttempt($payment, $transactionId, 'approved');
             SendPaymentNotification::dispatch($payment->fresh());
 
             return;
         }
 
         if ($payment->status === 'completed' && $payment->authorizenet_transaction_id === $transactionId) {
+            $this->syncAttempt($payment, $transactionId, 'approved');
+
             return; // the same transaction seen again
         }
 
@@ -68,15 +71,42 @@ class AuthorizenetChargeResolver
             ->where('status', 'pending')
             ->whereNull('authorizenet_transaction_id')
             ->update(['authorizenet_transaction_id' => $transactionId]);
+
+        $this->syncAttempt($payment, $transactionId, 'held');
     }
 
     private function decline(Payment $payment, string $transactionId): void
     {
+        $this->syncAttempt($payment, $transactionId, 'declined');
+
         // Only a held transaction that was then declined (fraud review) ends the payment.
         // A plain decline stays on the card form where the client retries.
         if ($payment->authorizenet_transaction_id === $transactionId) {
             Payment::whereKey($payment->id)->where('status', 'pending')->update(['status' => 'failed']);
         }
+    }
+
+    /**
+     * Brings the attempt record in line with what the gateway now says about this
+     * transaction: the row that already carries the id, else the latest charge that
+     * got no clear answer. Diagnostic only; never touches the payment.
+     */
+    private function syncAttempt(Payment $payment, string $transactionId, string $status): void
+    {
+        $attempts = $payment->authorizenetChargeAttempts();
+
+        $attempt = (clone $attempts)->where('transaction_id', $transactionId)->first()
+            ?? (clone $attempts)->whereIn('status', ['sent', 'unclear'])->whereNull('transaction_id')->orderByDesc('sequence')->first();
+
+        if ($attempt === null || $attempt->status === $status) {
+            return;
+        }
+
+        $attempt->update([
+            'status' => $status,
+            'transaction_id' => $transactionId,
+            'reason' => $status === 'approved' ? null : $attempt->reason,
+        ]);
     }
 
     /**

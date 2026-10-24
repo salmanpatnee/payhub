@@ -128,7 +128,7 @@ The status endpoint no longer takes the optional `trans_id` hint (there is no br
 - The card form lives in memory only (AC-4). The server only ever receives the one time code and the ZIP.
 - Card testing abuse is limited by the charge limiter, the one charge at a time lock and the unclear pause (AC-7, AC-9, AC-11).
 - Raw gateway text and codes go to the logs for operators only. Clients always see the fixed strings in AC-10.
-- Audit trail: the stored `authorizenet_transaction_id` on the payment plus the activity of the shared resolver; a duplicate paid transaction is logged with both ids. Plain declines are only logged, not stored (no attempts table).
+- Audit trail: the stored `authorizenet_transaction_id` on the payment plus the activity of the shared resolver; a duplicate paid transaction is logged with both ids. Every charge call is also recorded in `authorizenet_charge_attempts` (status, response and error codes, a plain reason, transaction id, AVS/CVV/3DS result letters; never a card value, the Accept.js code or the request body), shown to admins on the payment page. Added after this spec; the attempt rows are diagnostic only and never decide payment status.
 
 **Configuration required**:
 - `config/services.php` `authorizenet.hosts` per environment: `api` (already there), `script` (sandbox `https://jstest.authorize.net`, production `https://js.authorize.net`) and `connect` (the host Accept.js posts to: sandbox `https://apitest.authorize.net`, production `https://api2.authorize.net`). Remove `form`. These are constants, not secrets.
@@ -207,7 +207,7 @@ No build approach is recorded in `AGENTS.md` or a scope header, so this plan def
 - PCI scope rises from SAQ A to SAQ A-EP: card numbers pass through PayHub's page scripts, so a script injected into the pay page could steal cards. The strict CSP, no third party scripts and replay blocking reduce this, but do not remove it. The assessor decides the exact obligations.
 - PayHub now owns the card form: validation, input behaviour on every browser and accessibility are PayHub's job.
 - A charge call that times out can leave the outcome unknown; the lock, pause, duplicate window and invoice lookup handle it, but the client may wait a couple of minutes.
-- Plain declines are logged but not stored, so operators see them in logs and the Merchant Interface, not inside PayHub.
+- Browser-side failures (Accept.js could not read the card) never reach the server, so they are in neither the logs nor `authorizenet_charge_attempts`. Plain declines are stored there, one row per charge call.
 - The unclear lookup depends on `getUnsettledTransactionListRequest`, which lists only unsettled transactions; a charge that settles before the lookup sees it leaves the list (the webhook must cover it).
 - The webhook format and delay are still unverified (Open questions 9 and 10); it is the secondary path.
 - Paid status again comes from a server to server read, a third exception to the "webhooks only" rule in `AGENTS.md`.

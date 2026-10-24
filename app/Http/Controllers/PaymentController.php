@@ -531,11 +531,12 @@ class PaymentController extends Controller
     }
 
     /**
-     * Attempt history for the admin-only "Payment attempts" card. MPGS keeps one row
-     * per attempt; Authorize.net only keeps the first and latest attempt time on the
-     * payment, so it gets a single summary. Other providers have no attempt history.
+     * Attempt history for the admin-only "Payment attempts" card. MPGS and Authorize.net
+     * keep one row per attempt (`reference` is the order id or the transaction id).
+     * Authorize.net payments made before attempts were stored have no rows, so they also
+     * carry the first/latest attempt summary. Other providers have no attempt history.
      *
-     * @return array{provider: string, rows?: list<array<string, mixed>>, summary?: array<string, mixed>}|null
+     * @return array{provider: string, rows: list<array<string, mixed>>, summary?: array<string, mixed>}|null
      */
     private function attemptHistory(Payment $payment): ?array
     {
@@ -547,7 +548,7 @@ class PaymentController extends Controller
                     ->get()
                     ->map(fn ($attempt) => [
                         'sequence' => $attempt->sequence,
-                        'order_id' => $attempt->order_id,
+                        'reference' => $attempt->order_id,
                         'status' => $attempt->status,
                         'reason' => $attempt->decline_reason,
                         'started_at' => $attempt->created_at->toISOString(),
@@ -556,6 +557,17 @@ class PaymentController extends Controller
             ],
             PaymentProvider::Authorizenet => [
                 'provider' => 'authorizenet',
+                'rows' => $payment->authorizenetChargeAttempts()
+                    ->orderByDesc('sequence')
+                    ->get()
+                    ->map(fn ($attempt) => [
+                        'sequence' => $attempt->sequence,
+                        'reference' => $attempt->transaction_id,
+                        'status' => $attempt->status,
+                        'reason' => $attempt->reason,
+                        'started_at' => $attempt->created_at->toISOString(),
+                    ])
+                    ->all(),
                 'summary' => [
                     'first_attempt_at' => $payment->authorizenet_first_attempt_at?->toISOString(),
                     'last_attempt_at' => $payment->authorizenet_last_attempt_at?->toISOString(),
