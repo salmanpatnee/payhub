@@ -134,11 +134,14 @@ const providerReferenceLabels: Record<string, string> = {
     square: 'Square Payment ID',
     viva: 'Viva Order/Transaction ID',
     clover: 'Clover Payment ID',
-    mpgs: 'MPGS Order ID',
+    mpgs: 'Online Bank Order ID',
     authorizenet: 'Authorize.net Transaction ID',
 };
 
 // Unknown providers fall back to Stripe's label, as the old inline ternary did.
+// MPGS is shown to staff as "Online Bank" on this page only.
+const providerName = computed(() => (props.payment.provider === 'mpgs' ? 'Online Bank' : props.payment.provider_label));
+
 const providerReferenceLabel = computed(() => providerReferenceLabels[props.payment.provider] ?? providerReferenceLabels.stripe);
 
 type Tone = 'done' | 'pending' | 'failed' | 'muted';
@@ -408,7 +411,7 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                             <PaymentProviderBadge :provider="payment.provider" />
                         </span>
                         <div class="min-w-0">
-                            <p class="font-semibold">{{ payment.provider_label }}</p>
+                            <p class="font-semibold">{{ providerName }}</p>
                             <p class="truncate text-sm text-muted-foreground">{{ payment.account_name ?? '—' }}</p>
                         </div>
                     </div>
