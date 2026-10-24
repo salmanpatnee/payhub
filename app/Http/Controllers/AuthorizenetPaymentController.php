@@ -126,6 +126,8 @@ class AuthorizenetPaymentController extends Controller
             $reply = $this->readBack($payment, $client, $reply);
         }
 
+        $reply = $this->duplicateOfDecline($payment, $reply);
+
         $this->recordAttempt($attempt, $reply);
 
         if (in_array($reply->outcome, [AuthorizenetChargeReply::DECLINED, AuthorizenetChargeReply::CHECK_DETAILS], true)) {
@@ -160,6 +162,28 @@ class AuthorizenetPaymentController extends Controller
 
             return null;
         }
+    }
+
+    /**
+     * The gateway's duplicate window rejects the same card sent again within minutes and hands
+     * back the first transaction. When that first transaction was a decline, this is the payer
+     * retrying a declined card: a decline, not an unclear answer (no pause, and it counts toward
+     * the card attempt lock).
+     */
+    private function duplicateOfDecline(Payment $payment, AuthorizenetChargeReply $reply): AuthorizenetChargeReply
+    {
+        if ($reply->outcome !== AuthorizenetChargeReply::UNCLEAR
+            || $reply->gatewayCode !== '11'
+            || $reply->transactionId === null) {
+            return $reply;
+        }
+
+        $wasDeclined = $payment->authorizenetChargeAttempts()
+            ->where('transaction_id', $reply->transactionId)
+            ->whereIn('status', [AuthorizenetChargeReply::DECLINED, AuthorizenetChargeReply::CHECK_DETAILS])
+            ->exists();
+
+        return $wasDeclined ? $reply->withOutcome(AuthorizenetChargeReply::DECLINED) : $reply;
     }
 
     /**

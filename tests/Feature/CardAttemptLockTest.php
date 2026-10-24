@@ -268,3 +268,60 @@ it('marks locked payments in the admin payments list only', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('payments.data.0.card_locked_until', null));
 });
+
+// ── Same card retried (gateway duplicate window) ─────────────────────────────
+
+/** A createTransaction reply carrying a transaction id (decline, or the duplicate echo). */
+function lockFakeAnetReplyWithId(string $code, string $errorCode, string $transId): void
+{
+    Http::fake(['*' => Http::response("\xEF\xBB\xBF".json_encode([
+        'transactionResponse' => [
+            'responseCode' => $code,
+            'transId' => $transId,
+            'errors' => [['errorCode' => $errorCode, 'errorText' => 'gateway text']],
+        ],
+        'messages' => ['resultCode' => 'Error'],
+    ]), 200)]);
+}
+
+it('treats a duplicate of a declined charge as a decline, not an unclear answer', function () {
+    $payment = lockAnetPayment();
+
+    lockFakeAnetReplyWithId('2', '2', '80061533312');
+    $this->postJson(route('pay.authorizenet.charge', $payment), lockChargeBody())->assertJsonPath('outcome', 'declined');
+
+    // Same card again: the gateway answers "duplicate" (code 3, error 11) with the first transaction id.
+    lockFakeAnetReplyWithId('3', '11', '80061533312');
+    $this->postJson(route('pay.authorizenet.charge', $payment), lockChargeBody())
+        ->assertOk()
+        ->assertJsonPath('outcome', 'declined');
+
+    expect($payment->authorizenetChargeAttempts()->orderBy('sequence')->pluck('status')->all())->toBe(['declined', 'declined'])
+        ->and(Cache::has("authorizenet:pause:{$payment->id}"))->toBeFalse();
+});
+
+it('locks after the third try even when the same card is used every time', function () {
+    $payment = lockAnetPayment();
+
+    lockFakeAnetReplyWithId('2', '2', '80061533312');
+    $this->postJson(route('pay.authorizenet.charge', $payment), lockChargeBody())->assertJsonPath('outcome', 'declined');
+
+    lockFakeAnetReplyWithId('3', '11', '80061533312');
+    $this->postJson(route('pay.authorizenet.charge', $payment), lockChargeBody())->assertJsonPath('outcome', 'declined');
+    $this->postJson(route('pay.authorizenet.charge', $payment), lockChargeBody())
+        ->assertStatus(423)
+        ->assertJsonPath('outcome', 'locked');
+
+    expect($payment->fresh()->isCardLocked())->toBeTrue();
+});
+
+it('keeps a duplicate of a charge that was not declined as unclear', function () {
+    $payment = lockAnetPayment();
+
+    lockFakeAnetReplyWithId('3', '11', '80061599999'); // no earlier declined attempt carries this id
+    $this->postJson(route('pay.authorizenet.charge', $payment), lockChargeBody())
+        ->assertStatus(200)
+        ->assertJsonPath('outcome', 'unclear');
+
+    expect($payment->fresh()->isCardLocked())->toBeFalse();
+});
