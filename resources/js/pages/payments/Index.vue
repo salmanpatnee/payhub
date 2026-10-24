@@ -2,7 +2,7 @@
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
-import { Check, Columns, Copy, Download, Eye, Filter, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-vue-next';
+import { Check, Columns, Copy, Download, Eye, Filter, LockKeyhole, LockOpen, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import PaymentProviderBadge from '@/components/PaymentProviderBadge.vue';
@@ -44,6 +44,8 @@ type PaymentRow = {
     created_at: string;
     client_email: string;
     client_name: string;
+    /** Admin only: when the card attempt lock ends, or null when the payment is not locked. */
+    card_locked_until: string | null;
 };
 
 type FilterState = {
@@ -99,6 +101,22 @@ function executeDelete() {
             deleteTarget.value = null;
         },
     });
+}
+
+const resetting = ref<string | null>(null);
+
+function resetLock(payment: PaymentRow) {
+    resetting.value = payment.uuid;
+    router.patch(`/payments/${payment.uuid}/reset-lock`, {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            resetting.value = null;
+        },
+    });
+}
+
+function lockedUntilLabel(iso: string): string {
+    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 const COLUMN_DEFS = [
@@ -504,10 +522,17 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                         v-for="(payment, index) in payments.data"
                         :key="payment.id"
                         class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
+                        :class="{ 'bg-red-50/70 hover:bg-red-50 dark:bg-red-950/20 dark:hover:bg-red-950/30': isAdmin && payment.card_locked_until }"
                     >
                         <td class="px-5 py-3.5 text-muted-foreground tabular-nums">{{ (payments.from ?? 1) + index }}</td>
                         <td v-if="visibleColumns.reference_code" class="px-5 py-3.5 font-mono text-muted-foreground">{{ payment.reference_code ?? '—' }}</td>
-                        <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">{{ payment.client_name }}</td>
+                        <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">
+                            {{ payment.client_name }}
+                            <p v-if="isAdmin && payment.card_locked_until" class="mt-0.5 flex items-center gap-1 text-[11px] font-normal text-red-600 dark:text-red-400">
+                                <LockKeyhole class="size-3 shrink-0" />
+                                Card payments paused until {{ lockedUntilLabel(payment.card_locked_until) }}. Customer should contact their representative.
+                            </p>
+                        </td>
                         <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatMoney(payment.amount, payment.currency) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
                         <td v-if="canViewStripeAccount && visibleColumns.provider" class="px-5 py-3.5">
@@ -546,6 +571,17 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                                     <Link :href="`/payments/${payment.uuid}/edit`">
                                         <Pencil class="size-3.5" />
                                     </Link>
+                                </Button>
+                                <Button
+                                    v-if="isAdmin && payment.card_locked_until"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    class="cursor-pointer"
+                                    title="Release card lock"
+                                    :disabled="resetting === payment.uuid"
+                                    @click="resetLock(payment)"
+                                >
+                                    <LockOpen class="size-3.5 text-red-600" />
                                 </Button>
                                 <Button
                                     v-if="isAdmin"

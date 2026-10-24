@@ -18,6 +18,7 @@ use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use App\Models\VivaAccount;
+use App\Services\CardLock\CardLockGuard;
 use App\Support\ProviderAccountTable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -58,6 +59,7 @@ class PaymentController extends Controller
                 'created_at' => $p->created_at->toISOString(),
                 'client_email' => $p->client_email,
                 'client_name' => $p->client_name,
+                'card_locked_until' => $isAdmin && $p->isCardLocked() ? $p->card_locked_until->toIso8601String() : null,
             ]),
             'filters' => $request->only(['brand_id', 'stripe_account_id', 'provider', 'relationship_manager_id', 'status', 'from', 'to', 'search']),
             'brands' => $canViewAll
@@ -485,6 +487,17 @@ class PaymentController extends Controller
         return redirect()->route('payments.index');
     }
 
+    public function resetLock(Payment $payment, CardLockGuard $guard): RedirectResponse
+    {
+        Gate::authorize('resetLock', $payment);
+
+        $guard->reset($payment);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Card lock released. The customer can try again.']);
+
+        return back();
+    }
+
     public function show(Payment $payment): Response
     {
         Gate::authorize('view', $payment);
@@ -515,6 +528,7 @@ class PaymentController extends Controller
                 'account_name' => $canViewStripeAccount ? $payment->providerAccountName() : null,
                 'relationship_manager_name' => $payment->relationshipManager?->name,
                 'created_at' => $payment->created_at->toISOString(),
+                'card_locked_until' => $user->hasRole('admin') && $payment->isCardLocked() ? $payment->card_locked_until->toIso8601String() : null,
                 'provider_reference' => match ($payment->provider) {
                     PaymentProvider::Stripe => $payment->stripe_payment_intent_id,
                     PaymentProvider::Revolut => $payment->revolut_order_id,

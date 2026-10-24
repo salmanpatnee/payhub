@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
 import { storeConsent } from '@/actions/App/Http/Controllers/ClientPaymentController'
 import { reloadWithNotice } from '@/lib/mpgs/notice'
+import CardLockedNotice from './CardLockedNotice.vue'
 import MpgsPaymentForm from './MpgsPaymentForm.vue'
 import { withBase } from '@/lib/basePath'
 
@@ -38,6 +39,7 @@ const props = defineProps<{
         api_version: number
     }
     policies: Policy[]
+    lockedUntil: string | null
 }>()
 
 // 'form': entering card details. 'processing': the synchronous charge response was
@@ -171,7 +173,13 @@ onBeforeUnmount(stopPolling)
         <Head :title="`Pay ${props.brand.name}`" />
 
         <div class="form-content space-y-6" :style="{ '--brand-primary': brand.primary_color }">
-            <template v-if="uiState === 'form'">
+            <CardLockedNotice
+                v-if="props.lockedUntil"
+                :locked-until="props.lockedUntil"
+                :reference-code="payment.reference_code"
+            />
+
+            <template v-else-if="uiState === 'form'">
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight text-slate-900">Complete your payment</h1>
                     <p class="text-sm text-slate-500 mt-1.5 leading-relaxed">

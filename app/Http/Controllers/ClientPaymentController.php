@@ -85,6 +85,7 @@ class ClientPaymentController extends Controller
                 'merchant_id' => $payment->mpgsAccount->merchant_id,
                 'api_version' => $payment->mpgsAccount->api_version,
             ],
+            'lockedUntil' => $payment->isCardLocked() ? $payment->card_locked_until->toIso8601String() : null,
             'policies' => $this->policyProps(),
         ]);
     }
@@ -120,6 +121,7 @@ class ClientPaymentController extends Controller
             ],
             // A held charge has a transaction id but is not completed: the page must not show the form again.
             'held' => $payment->authorizenet_transaction_id !== null,
+            'lockedUntil' => $payment->isCardLocked() ? $payment->card_locked_until->toIso8601String() : null,
             'policies' => $this->policyProps(),
         ]);
     }

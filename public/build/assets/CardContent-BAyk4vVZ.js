@@ -1,1 +1,0 @@
-import{B as e,L as t,S as n,gt as r,v as i,vt as a}from"./vue.runtime.esm-bundler-bgzCd6xx.js";import{i as o}from"./Primitive-DPLUiinu.js";var s=n({__name:`CardContent`,props:{class:{type:[Boolean,null,String,Object,Array]}},setup(n){let s=n;return(n,c)=>(t(),i(`div`,{"data-slot":`card-content`,class:a(r(o)(`px-6`,s.class))},[e(n.$slots,`default`)],2))}});export{s as t};

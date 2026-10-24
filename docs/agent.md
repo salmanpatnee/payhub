@@ -214,6 +214,15 @@ Run `php artisan migrate`. Migration `2026_10_21_000005_upgrade_authorizenet_to_
 
 ---
 
+## Card attempt lock (MPGS + Authorize.net)
+
+After 3 failed card attempts (`CARD_LOCK_MAX_ATTEMPTS`) the pay page is paused for 60 minutes (`CARD_LOCK_MINUTES`), so repeated declines do not hurt the merchant's health. Other providers are not affected.
+
+- Columns on `payments`: `card_locked_until` (pause end) and `card_attempts_since` (where the next count starts: the end of the last lock, or an admin release).
+- `App\Services\CardLock\CardLockGuard` does the counting from the attempt tables. Only real declines count: Authorize.net `declined` and `check_details`, MPGS `declined`. Unclear, held, error, hard_error and abandoned do not. It runs after every decline write (pay controllers, `MpgsChargeResolver::decline`, `AuthorizenetChargeResolver::decline`), so late declines count too.
+- While locked, `MpgsPaymentController::session/pay` and `AuthorizenetPaymentController::charge` answer HTTP 423 `{outcome: 'locked', locked_until}` before any gateway call. The pay pages get a `lockedUntil` prop and show `CardLockedNotice.vue` ("contact your representative").
+- Admin only: `PATCH payments/{payment}/reset-lock` (`PaymentPolicy::resetLock`) releases the lock. Locked payments show first on the dashboard (`DashboardMetrics::lockedPayments`, `LockedPaymentsTable.vue`), as a red row with a note in the payments list, and as a notice on the payment page.
+
 ## Serving PayHub from a folder (e.g. `https://example.com/payhub/`)
 
 PayHub works at the top of a domain and from a folder. One build serves both: the root view (`resources/views/app.blade.php`) writes the folder into `<meta name="app-base">` from `request()->getBasePath()`, and `resources/js/lib/basePath.ts` reads it. At the top of a domain the value is empty and nothing changes.

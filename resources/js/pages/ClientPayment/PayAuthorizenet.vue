@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } fr
 import { Label } from '@/components/ui/label'
 import PaymentLayout from '@/layouts/PaymentLayout.vue'
 import AuthorizenetCardForm from './AuthorizenetCardForm.vue'
+import CardLockedNotice from './CardLockedNotice.vue'
 
 type Policy = { key: string; title: string; version: string; html: string }
 
@@ -36,6 +37,7 @@ const props = defineProps<{
     }
     policies: Policy[]
     held: boolean
+    lockedUntil: string | null
 }>()
 
 // 'form': PayHub's own card fields. 'waiting': the charge was held for review or its outcome
@@ -210,7 +212,13 @@ onBeforeUnmount(stopPolling)
         <Head :title="`Pay ${props.brand.name}`" />
 
         <div class="form-content space-y-6" :style="{ '--brand-primary': brand.primary_color }">
-            <template v-if="uiState !== 'timed-out'">
+            <CardLockedNotice
+                v-if="props.lockedUntil"
+                :locked-until="props.lockedUntil"
+                :reference-code="payment.reference_code"
+            />
+
+            <template v-else-if="uiState !== 'timed-out'">
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight text-slate-900">Complete your payment</h1>
                     <p class="text-sm text-slate-500 mt-1.5 leading-relaxed">

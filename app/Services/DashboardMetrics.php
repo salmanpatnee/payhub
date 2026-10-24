@@ -473,6 +473,29 @@ class DashboardMetrics
     }
 
     /**
+     * Payments whose pay page is paused by the card attempt lock right now (admin only,
+     * ignores the dashboard filters so a locked payment is never hidden by one).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function lockedPayments(): array
+    {
+        $self = new self;
+
+        return Payment::query()
+            ->cardLocked()
+            ->with(['brand', 'relationshipManager'])
+            ->orderBy('card_locked_until')
+            ->limit(50)
+            ->get()
+            ->map(fn (Payment $p) => $self->paymentRow($p) + [
+                'provider' => $p->provider->value,
+                'locked_until' => $p->card_locked_until?->toIso8601String(),
+            ])
+            ->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function paymentRow(Payment $p): array
