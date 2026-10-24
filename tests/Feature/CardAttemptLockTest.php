@@ -325,3 +325,23 @@ it('keeps a duplicate of a charge that was not declined as unclear', function ()
 
     expect($payment->fresh()->isCardLocked())->toBeFalse();
 });
+
+it('locks again after an admin release, within the hourly request limit', function () {
+    $payment = lockAnetPayment();
+    lockFakeAnetReply('2', '2');
+
+    foreach (range(1, 3) as $_) {
+        $this->postJson(route('pay.authorizenet.charge', $payment), lockChargeBody());
+    }
+    expect($payment->fresh()->isCardLocked())->toBeTrue();
+
+    $this->travel(5)->seconds(); // attempt times have one second precision
+    $this->actingAs(lockUser('admin'))->patch(route('payments.reset-lock', $payment))->assertRedirect();
+    $this->app['auth']->forgetGuards();
+    $this->travel(5)->seconds();
+
+    // A full new set of tries: two declines, then the third locks (6 requests in the hour, not stopped by the limit).
+    $this->postJson(route('pay.authorizenet.charge', $payment), lockChargeBody())->assertOk();
+    $this->postJson(route('pay.authorizenet.charge', $payment), lockChargeBody())->assertOk();
+    $this->postJson(route('pay.authorizenet.charge', $payment), lockChargeBody())->assertStatus(423);
+});
