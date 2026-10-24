@@ -88,6 +88,7 @@ class ResolveMpgsChargeAttempt implements ShouldQueue
 
         if ($attempt && $attempt->status === 'pending') {
             $attempt->update(['status' => 'abandoned', 'session_id' => null]);
+            RecordMpgsAttemptOutcome::dispatch($attempt->id);
         }
 
         Log::error('ResolveMpgsChargeAttempt exhausted its retries: attempt abandoned, payment stays pending', [

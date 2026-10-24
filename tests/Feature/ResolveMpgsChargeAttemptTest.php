@@ -100,7 +100,7 @@ it('marks a declined attempt declined and fails the pending payment', function (
 
     expect($payment->refresh()->status)->toBe('failed');
     expect($attempt->refresh()->status)->toBe('declined');
-    expect($attempt->decline_reason)->toBe('Do not honour');
+    expect($attempt->decline_reason)->toBe("Card's bank declined (Do not honour)");
 });
 
 it('keeps the attempt pending and retries when the order has no matching PAY transaction', function () {

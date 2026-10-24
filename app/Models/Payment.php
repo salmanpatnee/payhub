@@ -113,6 +113,11 @@ class Payment extends Model
         return $this->hasMany(MpgsChargeAttempt::class);
     }
 
+    public function authorizenetChargeAttempts(): HasMany
+    {
+        return $this->hasMany(AuthorizenetChargeAttempt::class);
+    }
+
     public function cloverChargeAttempts(): HasMany
     {
         return $this->hasMany(CloverChargeAttempt::class);

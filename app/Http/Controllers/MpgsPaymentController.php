@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\PaymentProvider;
+use App\Jobs\RecordMpgsAttemptOutcome;
 use App\Jobs\ResolveMpgsChargeAttempt;
 use App\Models\MpgsAccount;
 use App\Models\MpgsChargeAttempt;
@@ -55,7 +56,10 @@ class MpgsPaymentController extends Controller
             // Only the newest prepared session is usable: retire earlier ones so
             // a reload or a retry never leaves several live sessions behind.
             $payment->mpgsChargeAttempts()->where('status', 'prepared')->get()
-                ->each(fn (MpgsChargeAttempt $old) => $old->update(['status' => 'abandoned', 'session_id' => null]));
+                ->each(function (MpgsChargeAttempt $old) {
+                    $old->update(['status' => 'abandoned', 'session_id' => null]);
+                    RecordMpgsAttemptOutcome::dispatch($old->id)->delay(now()->addSeconds(30));
+                });
 
             $sequence = ((int) $payment->mpgsChargeAttempts()->max('sequence')) + 1;
             $orderId = "{$payment->id}-{$sequence}";

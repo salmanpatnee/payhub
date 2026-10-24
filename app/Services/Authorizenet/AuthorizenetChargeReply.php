@@ -27,10 +27,27 @@ final class AuthorizenetChargeReply
 
     private const DUPLICATE_CODE = '11';
 
+    /** Plain-language reasons for the error codes PayHub sees most. Operators only. */
+    private const REASONS = [
+        '2' => 'Card declined by the bank',
+        '6' => 'Card number is not valid',
+        '7' => 'Card expiry date is not valid',
+        '8' => 'Card has expired',
+        '11' => 'Duplicate charge blocked by the gateway',
+        '27' => 'Address (ZIP) did not match',
+        '44' => 'Card security code did not match',
+        '45' => 'Card security code and address did not match',
+        '65' => 'Card security code declined',
+    ];
+
+    /**
+     * @param  array{response_code?: ?string, error_text?: ?string, avs?: ?string, cvv?: ?string, cavv?: ?string}  $detail  what the gateway said, for the attempt record
+     */
     private function __construct(
         public readonly string $outcome,
         public readonly ?string $transactionId = null,
         public readonly ?string $gatewayCode = null,
+        public readonly array $detail = [],
     ) {}
 
     /**
@@ -58,19 +75,52 @@ final class AuthorizenetChargeReply
         $transactionId = (string) ($response['transId'] ?? '');
         $transactionId = $transactionId !== '' && $transactionId !== '0' ? $transactionId : null;
         $errorCode = isset($response['errors'][0]['errorCode']) ? (string) $response['errors'][0]['errorCode'] : null;
+        $detail = [
+            'response_code' => $responseCode !== '' ? $responseCode : null,
+            'error_text' => is_string($response['errors'][0]['errorText'] ?? null) ? $response['errors'][0]['errorText'] : null,
+            'avs' => self::letter($response['avsResultCode'] ?? null),
+            'cvv' => self::letter($response['cvvResultCode'] ?? null),
+            'cavv' => self::letter($response['cavvResultCode'] ?? null),
+        ];
 
         return match ($responseCode) {
-            '1' => new self($transactionId ? self::APPROVED : self::UNCLEAR, $transactionId, $errorCode),
-            '4' => new self($transactionId ? self::HELD : self::UNCLEAR, $transactionId, $errorCode),
-            '2' => new self(in_array($errorCode, self::CARD_DETAIL_CODES, true) ? self::CHECK_DETAILS : self::DECLINED, $transactionId, $errorCode),
+            '1' => new self($transactionId ? self::APPROVED : self::UNCLEAR, $transactionId, $errorCode, $detail),
+            '4' => new self($transactionId ? self::HELD : self::UNCLEAR, $transactionId, $errorCode, $detail),
+            '2' => new self(in_array($errorCode, self::CARD_DETAIL_CODES, true) ? self::CHECK_DETAILS : self::DECLINED, $transactionId, $errorCode, $detail),
             // Sandbox spike: a bad card number (6) or expired card (8) comes back as 3, not 2.
             '3' => new self(match (true) {
                 $errorCode === self::DUPLICATE_CODE => self::UNCLEAR,
                 in_array($errorCode, self::CARD_DETAIL_CODES, true) => self::CHECK_DETAILS,
                 default => self::ERROR,
-            }, $transactionId, $errorCode),
-            default => new self(self::UNCLEAR, $transactionId, $errorCode),
+            }, $transactionId, $errorCode, $detail),
+            default => new self(self::UNCLEAR, $transactionId, $errorCode, $detail),
         };
+    }
+
+    /**
+     * A short plain-language reason for the attempt record. Operators only, never shown
+     * to the client (the client sees the fixed messages below).
+     */
+    public function reason(): ?string
+    {
+        $code = $this->gatewayCode;
+        $text = $this->detail['error_text'] ?? null;
+
+        return match (true) {
+            $this->outcome === self::HELD => 'Held for fraud review',
+            $this->outcome === self::UNCLEAR => 'No clear answer from the gateway; PayHub checks again',
+            $code === '2' && ($this->detail['cvv'] ?? null) === 'N' => 'Card security code did not match',
+            $code === '2' && ($this->detail['avs'] ?? null) === 'N' => 'Address did not match',
+            $code !== null && isset(self::REASONS[$code]) => self::REASONS[$code],
+            is_string($text) && $text !== '' => mb_substr($text, 0, 255),
+            $code !== null => "Gateway error {$code}",
+            default => null,
+        };
+    }
+
+    private static function letter(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? mb_substr($value, 0, 8) : null;
     }
 
     /** A timeout, connection error or unreadable reply: PayHub cannot tell if the card was charged. */
@@ -81,13 +131,13 @@ final class AuthorizenetChargeReply
 
     public function withOutcome(string $outcome): self
     {
-        return new self($outcome, $this->transactionId, $this->gatewayCode);
+        return new self($outcome, $this->transactionId, $this->gatewayCode, $this->detail);
     }
 
     /** The reply said approved or held but the read back did not confirm it. */
     public function asUnclear(): self
     {
-        return new self(self::UNCLEAR, $this->transactionId, $this->gatewayCode);
+        return new self(self::UNCLEAR, $this->transactionId, $this->gatewayCode, $this->detail);
     }
 
     /** Fixed client strings (AC-10); the gateway's own text is never shown. */
