@@ -6,6 +6,7 @@ use App\Enums\PaymentProvider;
 use App\Http\Requests\ChargeAuthorizenetRequest;
 use App\Jobs\ResolveAuthorizenetCharge;
 use App\Models\AuthorizenetAccount;
+use App\Models\AuthorizenetChargeAttempt;
 use App\Models\Payment;
 use App\Services\Authorizenet\AuthorizenetChargeClassifier;
 use App\Services\Authorizenet\AuthorizenetChargeReply;
@@ -93,6 +94,9 @@ class AuthorizenetPaymentController extends Controller
             'authorizenet_last_attempt_at' => now(),
         ])->save();
 
+        // Written before the call so a timeout or crash still leaves a record.
+        $attempt = $this->startAttempt($payment);
+
         try {
             $reply = AuthorizenetChargeReply::fromResult($client->createTransaction([
                 'invoice' => AuthorizenetInvoice::for($payment),
@@ -117,11 +121,57 @@ class AuthorizenetPaymentController extends Controller
             $reply = $this->readBack($payment, $client, $reply);
         }
 
+        $this->recordAttempt($attempt, $reply);
+
         return match ($reply->outcome) {
             AuthorizenetChargeReply::UNCLEAR => $this->unclear($payment),
             AuthorizenetChargeReply::ERROR => $this->gatewayError($payment, $reply),
             default => $this->outcomeResponse($reply->outcome),
         };
+    }
+
+    /**
+     * The attempt row for this charge, or null when it could not be written. Diagnostic
+     * only: a failure here must never stop a payer from paying.
+     */
+    private function startAttempt(Payment $payment): ?AuthorizenetChargeAttempt
+    {
+        try {
+            return $payment->authorizenetChargeAttempts()->create([
+                'sequence' => ((int) $payment->authorizenetChargeAttempts()->max('sequence')) + 1,
+                'status' => 'sent',
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('Authorize.net attempt row could not be created', ['payment_id' => $payment->id, 'exception' => $e::class]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Saves what the gateway answered on this charge's attempt row. Diagnostic only: it
+     * never changes the payment, and a failure here must not turn a charge into an error.
+     */
+    private function recordAttempt(?AuthorizenetChargeAttempt $attempt, AuthorizenetChargeReply $reply): void
+    {
+        if ($attempt === null) {
+            return;
+        }
+
+        try {
+            $attempt->update([
+                'status' => $reply->outcome,
+                'response_code' => $reply->detail['response_code'] ?? null,
+                'error_code' => $reply->gatewayCode,
+                'reason' => $reply->reason(),
+                'transaction_id' => $reply->transactionId,
+                'avs_result' => $reply->detail['avs'] ?? null,
+                'cvv_result' => $reply->detail['cvv'] ?? null,
+                'cavv_result' => $reply->detail['cavv'] ?? null,
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('Authorize.net attempt record failed', ['attempt_id' => $attempt->id, 'exception' => $e::class]);
+        }
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Services\Mpgs;
 
+use App\Jobs\RecordMpgsAttemptOutcome;
 use App\Jobs\ResolveMpgsChargeAttempt;
 use App\Models\MpgsChargeAttempt;
 
@@ -44,9 +45,12 @@ class MpgsStaleAttemptSweep
         MpgsChargeAttempt::query()
             ->where('status', 'prepared')
             ->where('created_at', '<', now()->subMinutes($lifetime))
-            ->each(fn (MpgsChargeAttempt $attempt) => $attempt->update([
-                'status' => 'abandoned',
-                'session_id' => null,
-            ]));
+            ->each(function (MpgsChargeAttempt $attempt) {
+                $attempt->update([
+                    'status' => 'abandoned',
+                    'session_id' => null,
+                ]);
+                RecordMpgsAttemptOutcome::dispatch($attempt->id);
+            });
     }
 }

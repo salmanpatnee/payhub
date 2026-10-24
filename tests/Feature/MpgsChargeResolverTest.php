@@ -77,6 +77,32 @@ it('declining fails a pending payment and keeps the raw reason for operators', f
     expect($attempt->session_id)->toBeNull();
 });
 
+it('saves the bank code and 3DS result on a charge the bank declined', function () {
+    $attempt = mpgsPendingAttempt();
+
+    (new MpgsChargeResolver)->resolve($attempt, 'declined', [
+        'result' => 'FAILURE',
+        'response' => ['gatewayCode' => 'DECLINED', 'acquirerCode' => '83', 'acquirerMessage' => 'Fraud/Security (Mastercard use only)'],
+        'order' => ['authenticationStatus' => 'AUTHENTICATION_SUCCESSFUL'],
+    ]);
+
+    $attempt->refresh();
+    expect($attempt->auth_status)->toBe('AUTHENTICATION_SUCCESSFUL');
+    expect($attempt->gateway_code)->toBe('DECLINED');
+    expect($attempt->decline_reason)->toBe("Card's bank declined (code 83: Fraud/Security (Mastercard use only))");
+});
+
+it('records a missing card security code as the reason for a hard error', function () {
+    $attempt = mpgsPendingAttempt();
+
+    (new MpgsChargeResolver)->resolve($attempt, 'hard_error', [
+        'result' => 'ERROR',
+        'error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'Value missing', 'field' => 'sourceOfFunds.provided.card.securityCode'],
+    ]);
+
+    expect($attempt->fresh()->decline_reason)->toBe('Value missing (sourceOfFunds.provided.card.securityCode)');
+});
+
 it('a decline never overwrites a completed payment', function () {
     $attempt = mpgsPendingAttempt('completed');
 
@@ -98,6 +124,7 @@ it('a hard error leaves the payment untouched and logs without secrets', functio
     expect($attempt->payment->fresh()->status)->toBe('pending');
     expect($attempt->fresh()->status)->toBe('hard_error');
     expect($attempt->fresh()->session_id)->toBeNull();
+    expect($attempt->fresh()->decline_reason)->toBe('bad currency');
 
     Log::shouldHaveReceived('error')->withArgs(
         fn (string $message, array $context) => ! str_contains(json_encode($context), 'SESSION-SECRET')

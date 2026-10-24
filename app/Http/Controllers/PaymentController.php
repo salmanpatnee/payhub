@@ -496,6 +496,7 @@ class PaymentController extends Controller
         return Inertia::render('payments/Show', [
             'isAdmin' => $user->hasRole('admin'),
             'canViewStripeAccount' => $canViewStripeAccount,
+            'attempts' => $user->hasRole('admin') ? $this->attemptHistory($payment) : null,
             'payment' => [
                 'uuid' => $payment->uuid,
                 'reference_code' => $payment->formattedReferenceCode(),
@@ -527,5 +528,54 @@ class PaymentController extends Controller
                 'expires_at' => $payment->expires_at?->toISOString(),
             ],
         ]);
+    }
+
+    /**
+     * Attempt history for the admin-only "Payment attempts" card. MPGS and Authorize.net
+     * keep one row per attempt (`reference` is the order id or the transaction id).
+     * Authorize.net payments made before attempts were stored have no rows, so they also
+     * carry the first/latest attempt summary. Other providers have no attempt history.
+     *
+     * @return array{provider: string, rows: list<array<string, mixed>>, summary?: array<string, mixed>}|null
+     */
+    private function attemptHistory(Payment $payment): ?array
+    {
+        return match ($payment->provider) {
+            PaymentProvider::Mpgs => [
+                'provider' => 'mpgs',
+                'rows' => $payment->mpgsChargeAttempts()
+                    ->orderByDesc('sequence')
+                    ->get()
+                    ->map(fn ($attempt) => [
+                        'sequence' => $attempt->sequence,
+                        'reference' => $attempt->order_id,
+                        'status' => $attempt->status,
+                        'reason' => $attempt->decline_reason,
+                        'started_at' => $attempt->created_at->toISOString(),
+                    ])
+                    ->all(),
+            ],
+            PaymentProvider::Authorizenet => [
+                'provider' => 'authorizenet',
+                'rows' => $payment->authorizenetChargeAttempts()
+                    ->orderByDesc('sequence')
+                    ->get()
+                    ->map(fn ($attempt) => [
+                        'sequence' => $attempt->sequence,
+                        'reference' => $attempt->transaction_id,
+                        'status' => $attempt->status,
+                        'reason' => $attempt->reason,
+                        'started_at' => $attempt->created_at->toISOString(),
+                    ])
+                    ->all(),
+                'summary' => [
+                    'first_attempt_at' => $payment->authorizenet_first_attempt_at?->toISOString(),
+                    'last_attempt_at' => $payment->authorizenet_last_attempt_at?->toISOString(),
+                    'transaction_id' => $payment->authorizenet_transaction_id,
+                    'status' => $payment->status,
+                ],
+            ],
+            default => null,
+        };
     }
 }
