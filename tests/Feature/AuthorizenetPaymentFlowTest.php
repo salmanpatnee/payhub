@@ -385,6 +385,7 @@ it('lets a retry after a decline approve with the same invoice', function () {
 });
 
 it('limits charges to 5 per payment an hour, with no gateway call', function () {
+    config(['services.card_lock.max_attempts' => 100]); // the card lock would otherwise stop these declines first
     fakeAnet([], [], chargeReply('2', '0', '2'));
     $payment = anetPayment();
 

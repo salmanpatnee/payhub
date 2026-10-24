@@ -8,6 +8,7 @@ use App\Jobs\ResolveMpgsChargeAttempt;
 use App\Models\MpgsAccount;
 use App\Models\MpgsChargeAttempt;
 use App\Models\Payment;
+use App\Services\CardLock\CardLockGuard;
 use App\Services\Mpgs\MpgsChargeClassifier;
 use App\Services\Mpgs\MpgsChargeResolver;
 use App\Services\Mpgs\MpgsClient;
@@ -40,6 +41,10 @@ class MpgsPaymentController extends Controller
 
         if (! $account) {
             return response()->json(['error' => 'This payment cannot be processed.'], 422);
+        }
+
+        if ($payment->isCardLocked()) {
+            return app(CardLockGuard::class)->lockedResponse($payment);
         }
 
         $lock = Cache::lock("mpgs-attempt:{$payment->id}", 60);
@@ -116,6 +121,10 @@ class MpgsPaymentController extends Controller
             return response()->json(['error' => 'This payment cannot be processed.'], 422);
         }
 
+        if ($payment->isCardLocked()) {
+            return app(CardLockGuard::class)->lockedResponse($payment);
+        }
+
         $validated = $request->validate([
             'attempt_id' => ['required', 'integer'],
         ]);
@@ -179,6 +188,10 @@ class MpgsPaymentController extends Controller
 
         if ($classification === 'unknown') {
             ResolveMpgsChargeAttempt::dispatch($attempt->id)->delay(now()->addSeconds(15));
+        }
+
+        if ($classification === 'declined' && $payment->refresh()->isCardLocked()) {
+            return app(CardLockGuard::class)->lockedResponse($payment);
         }
 
         if ($classification === 'hard_error') {

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\PaymentProvider;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,6 +26,7 @@ class Payment extends Model
         'viva_transaction_id', 'viva_order_code', 'expires_at', 'paid_at',
         'clover_payment_id', 'mpgs_order_id', 'authorizenet_transaction_id',
         'authorizenet_first_attempt_at', 'authorizenet_last_attempt_at',
+        'card_locked_until', 'card_attempts_since',
     ];
 
     protected static function boot(): void
@@ -65,7 +67,22 @@ class Payment extends Model
             'paid_at' => 'datetime',
             'authorizenet_first_attempt_at' => 'datetime',
             'authorizenet_last_attempt_at' => 'datetime',
+            'card_locked_until' => 'datetime',
+            'card_attempts_since' => 'datetime',
         ];
+    }
+
+    public function isCardLocked(): bool
+    {
+        return $this->card_locked_until?->isFuture() ?? false;
+    }
+
+    /**
+     * @param  Builder<Payment>  $query
+     */
+    public function scopeCardLocked(Builder $query): void
+    {
+        $query->where('card_locked_until', '>', now());
     }
 
     public function brand(): BelongsTo

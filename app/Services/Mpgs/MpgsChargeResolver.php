@@ -5,6 +5,7 @@ namespace App\Services\Mpgs;
 use App\Jobs\SendPaymentNotification;
 use App\Models\MpgsChargeAttempt;
 use App\Models\Payment;
+use App\Services\CardLock\CardLockGuard;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -83,6 +84,10 @@ class MpgsChargeResolver
             'decline_reason' => $this->declineReason($body),
             'last_checked_at' => now(),
         ]);
+
+        if ($payment = Payment::find($attempt->payment_id)) {
+            app(CardLockGuard::class)->recordFailure($payment);
+        }
     }
 
     /**

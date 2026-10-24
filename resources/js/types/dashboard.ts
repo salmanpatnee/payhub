@@ -49,6 +49,11 @@ export interface WorklistRow {
     created_at: string | null;
 }
 
+export interface LockedPaymentRow extends WorklistRow {
+    provider: string;
+    locked_until: string;
+}
+
 export interface AccountTodayRow {
     id: number;
     provider: string;
@@ -83,6 +88,8 @@ export interface DashboardData {
     accountsToday: AccountTodayRow[];
     worklist: { stalePending: WorklistRow[]; highValue: WorklistRow[] };
     insights: string[];
+    /** Admin only: payments whose pay page is paused by the card attempt lock. */
+    lockedPayments?: LockedPaymentRow[];
     filters: DashboardFilterValues;
     filterOptions: DashboardFilterOptions;
 }

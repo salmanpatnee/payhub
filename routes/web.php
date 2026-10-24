@@ -74,6 +74,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('throttle:30,1');
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])
         ->name('payments.destroy');
+    Route::patch('payments/{payment}/reset-lock', [PaymentController::class, 'resetLock'])
+        ->name('payments.reset-lock')
+        ->middleware('throttle:30,1');
 
     // Must be registered before the resource route — otherwise `bank-accounts/activity-log`
     // is captured by the `bank-accounts/{bank_account}/edit` show/edit routes.

@@ -14,6 +14,7 @@ use App\Services\Authorizenet\AuthorizenetChargeResolver;
 use App\Services\Authorizenet\AuthorizenetClient;
 use App\Services\Authorizenet\AuthorizenetInvoice;
 use App\Services\Authorizenet\AuthorizenetInvoiceLookup;
+use App\Services\CardLock\CardLockGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -38,6 +39,10 @@ class AuthorizenetPaymentController extends Controller
 
         if ($account === null) {
             return $this->notPayable();
+        }
+
+        if (app(CardLockGuard::class)->isLocked($payment)) {
+            return app(CardLockGuard::class)->lockedResponse($payment);
         }
 
         if (Cache::has($this->pauseKey($payment))) {
@@ -122,6 +127,15 @@ class AuthorizenetPaymentController extends Controller
         }
 
         $this->recordAttempt($attempt, $reply);
+
+        if (in_array($reply->outcome, [AuthorizenetChargeReply::DECLINED, AuthorizenetChargeReply::CHECK_DETAILS], true)) {
+            $guard = app(CardLockGuard::class);
+            $guard->recordFailure($payment);
+
+            if ($guard->isLocked($payment)) {
+                return $guard->lockedResponse($payment);
+            }
+        }
 
         return match ($reply->outcome) {
             AuthorizenetChargeReply::UNCLEAR => $this->unclear($payment),

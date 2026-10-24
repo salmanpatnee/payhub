@@ -24,6 +24,12 @@ class DashboardController extends Controller
             'currency' => ['nullable', 'in:usd,gbp,pkr'],
         ]);
 
-        return Inertia::render('Dashboard', DashboardMetrics::for($filters));
+        $props = DashboardMetrics::for($filters);
+
+        if ($request->user()->hasRole('admin')) {
+            $props['lockedPayments'] = DashboardMetrics::lockedPayments();
+        }
+
+        return Inertia::render('Dashboard', $props);
     }
 }
