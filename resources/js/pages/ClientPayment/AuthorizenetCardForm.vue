@@ -143,7 +143,7 @@ async function submit(): Promise<void> {
         }
 
         if (response.status === 429) {
-            message.value = 'Too many attempts. Please try again later.'
+            message.value = 'Too many attempts. Please wait a while, or contact your representative for help.'
 
             return
         }
