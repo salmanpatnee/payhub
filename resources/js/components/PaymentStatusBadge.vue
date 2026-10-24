@@ -3,7 +3,7 @@ import { Ban, CircleCheck, CircleX, Clock } from 'lucide-vue-next';
 import { computed } from 'vue';
 import type { Component } from 'vue';
 
-const props = defineProps<{ status: string; iconOnly?: boolean }>();
+const props = defineProps<{ status: string; iconOnly?: boolean; label?: string }>();
 
 const config: Record<string, { dot: string; wrap: string; pulse: boolean; icon: Component; text: string }> = {
     completed: {
@@ -54,6 +54,6 @@ const c = computed(() => config[props.status] ?? config.cancelled);
         <span
             :class="['size-1.5 rounded-full flex-shrink-0', c.dot, c.pulse ? 'animate-pulse' : '']"
         />
-        {{ status }}
+        {{ label ?? status }}
     </span>
 </template>

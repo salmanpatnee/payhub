@@ -47,6 +47,7 @@ class MpgsChargeResolver
         $attempt->update([
             'status' => 'approved',
             'session_id' => null,
+            'auth_status' => $this->authStatus($body),
             'gateway_code' => $this->gatewayCode($body),
             'receipt' => $this->receipt($body),
             'last_checked_at' => now(),
@@ -76,6 +77,7 @@ class MpgsChargeResolver
         $attempt->update([
             'status' => 'declined',
             'session_id' => null,
+            'auth_status' => $this->authStatus($body),
             'gateway_code' => $this->gatewayCode($body),
             // Operators only, never sent to the client.
             'decline_reason' => $this->declineReason($body),
@@ -101,6 +103,9 @@ class MpgsChargeResolver
             'status' => 'hard_error',
             'session_id' => null,
             'gateway_code' => $this->gatewayCode($body),
+            // The gateway rejected the request itself (for example a missing card security
+            // code); the order holds no trace of it, so this reply is the only record.
+            'decline_reason' => $this->errorReason($body),
             'last_checked_at' => now(),
         ]);
     }
@@ -138,11 +143,42 @@ class MpgsChargeResolver
      */
     private function declineReason(array $body): ?string
     {
-        $reason = $body['response']['acquirerMessage']
+        $reason = MpgsAttemptOutcome::chargeReason($body, $body['order'] ?? [], $this->authStatus($body))
+            ?? $body['response']['acquirerMessage']
             ?? $body['response']['gatewayCode']
             ?? $body['error']['explanation']
             ?? null;
 
         return is_string($reason) ? mb_substr($reason, 0, 255) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $body
+     */
+    private function authStatus(array $body): ?string
+    {
+        $status = $body['order']['authenticationStatus'] ?? $body['authenticationStatus'] ?? null;
+
+        return is_string($status) ? $status : null;
+    }
+
+    /**
+     * The gateway's own words for why it refused the request, naming the field it
+     * objected to. No card data: the error block carries cause, explanation and field.
+     *
+     * @param  array<string, mixed>  $body
+     */
+    private function errorReason(array $body): ?string
+    {
+        $explanation = $body['error']['explanation'] ?? null;
+        $field = $body['error']['field'] ?? null;
+
+        if (! is_string($explanation) || $explanation === '') {
+            return null;
+        }
+
+        $reason = is_string($field) && $field !== '' ? "{$explanation} ({$field})" : $explanation;
+
+        return mb_substr($reason, 0, 255);
     }
 }

@@ -38,7 +38,32 @@ type PaymentDetail = {
     expires_at: string | null;
 };
 
-const props = defineProps<{ payment: PaymentDetail; isAdmin: boolean; canViewStripeAccount: boolean }>();
+type AttemptHistory =
+    | {
+        provider: 'mpgs';
+        rows: { sequence: number; order_id: string; status: string; reason: string | null; started_at: string }[];
+    }
+    | {
+        provider: 'authorizenet';
+        summary: { first_attempt_at: string | null; last_attempt_at: string | null; transaction_id: string | null; status: string };
+    };
+
+const props = defineProps<{
+    payment: PaymentDetail;
+    isAdmin: boolean;
+    canViewStripeAccount: boolean;
+    attempts: AttemptHistory | null;
+}>();
+
+// Attempt statuses reuse the payment badge tones.
+const attemptTone: Record<string, string> = {
+    approved: 'completed',
+    declined: 'failed',
+    hard_error: 'failed',
+    prepared: 'pending',
+    pending: 'pending',
+    abandoned: 'cancelled',
+};
 
 const deleteOpen = ref(false);
 const deleteForm = useForm({});
@@ -353,6 +378,74 @@ const timeline = computed<TimelineStep[]>(() => {
                 </CardContent>
             </Card>
         </div>
+
+        <!-- Attempt history (admins only; the server sends null for everyone else) -->
+        <Card v-if="attempts">
+            <CardHeader>
+                <CardTitle class="text-base">Payment attempts</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div v-if="attempts.provider === 'mpgs'" class="overflow-x-auto">
+                    <table
+                        v-if="attempts.rows.length"
+                        class="w-full text-sm max-sm:block [&_tbody]:max-sm:block [&_tr]:max-sm:block"
+                    >
+                        <thead class="max-sm:hidden">
+                            <tr class="border-b border-border text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                <th class="px-2.5 py-2">#</th>
+                                <th class="px-2.5 py-2">Started</th>
+                                <th class="px-2.5 py-2">Order ID</th>
+                                <th class="px-2.5 py-2">Status</th>
+                                <th class="px-2.5 py-2">Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr
+                                v-for="row in attempts.rows"
+                                :key="row.order_id"
+                                class="border-b border-border last:border-0 max-sm:mb-2 max-sm:flex max-sm:flex-col max-sm:gap-1 max-sm:rounded-lg max-sm:border max-sm:p-2.5"
+                            >
+                                <td class="px-2.5 py-2.5 align-top tabular-nums">{{ row.sequence }}</td>
+                                <td class="px-2.5 py-2.5 align-top tabular-nums whitespace-nowrap">{{ formatDateTime(row.started_at) }}</td>
+                                <td class="px-2.5 py-2.5 align-top font-mono text-xs">{{ row.order_id }}</td>
+                                <td class="px-2.5 py-2.5 align-top">
+                                    <PaymentStatusBadge
+                                        :status="attemptTone[row.status] ?? 'cancelled'"
+                                        :label="row.status.replace('_', ' ')"
+                                    />
+                                </td>
+                                <td class="px-2.5 py-2.5 align-top sm:max-w-[34ch]">{{ row.reason ?? '—' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p v-else class="text-sm text-muted-foreground">No attempts yet. The client has not opened the payment link.</p>
+                </div>
+
+                <div v-else class="space-y-3">
+                    <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
+                        <div>
+                            <dt class="text-xs font-medium uppercase tracking-wide text-foreground/60">First attempt</dt>
+                            <dd class="tabular-nums">{{ attempts.summary.first_attempt_at ? formatDateTime(attempts.summary.first_attempt_at) : '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-medium uppercase tracking-wide text-foreground/60">Latest attempt</dt>
+                            <dd class="tabular-nums">{{ attempts.summary.last_attempt_at ? formatDateTime(attempts.summary.last_attempt_at) : '—' }}</dd>
+                        </div>
+                        <div class="min-w-0">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-foreground/60">Transaction ID</dt>
+                            <dd class="truncate font-mono text-xs">{{ attempts.summary.transaction_id ?? '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-medium uppercase tracking-wide text-foreground/60">Status</dt>
+                            <dd><PaymentStatusBadge :status="attempts.summary.status" /></dd>
+                        </div>
+                    </dl>
+                    <p class="text-xs text-muted-foreground">
+                        Authorize.net does not store each attempt separately, only the first and latest attempt times.
+                    </p>
+                </div>
+            </CardContent>
+        </Card>
     </div>
 
     <ConfirmDeleteDialog
