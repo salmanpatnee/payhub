@@ -3,8 +3,8 @@ _Steps come from the spec 0008 acceptance criteria and its Value sourcing table.
 
 ## UI / manual
 - [ ] Call the endpoint on a deployment with `curl` and compare `today` and `this_month` with the PayHub dashboard for the same dates → the link counts and money match (remember links use created date, money uses paid date) → AC-1, AC-5, AC-6
-- [ ] Pay a test link just before and just after midnight Karachi time, then call the endpoint → the payment shows in the right day of `money.completed` → AC-7
-- [ ] Soft delete a payment in PayHub, wait 60 seconds, call again → the counts drop by one → AC-5
+- [x] Pay a test link just before and just after midnight Karachi time, then call the endpoint → the payment shows in the right day of `money.completed` → AC-7
+- [x] Soft delete a payment in PayHub, wait 60 seconds, call again → the counts drop by one → AC-5
 - [x] Read the whole reply by eye → no client names, emails, reference codes, account names or brand names → AC-8
 - [x] Open `storage/logs/central-audit-<date>.log` after a good call and a bad call → one line each, with result, slot, IP and duration, and no token → AC-10
 
@@ -33,7 +33,7 @@ _Steps come from the spec 0008 acceptance criteria and its Value sourcing table.
 - [ ] `last_30_days.from` is 29 days before today's start; `this_month.to` is the 1st of next month
 - [ ] A link created yesterday and paid today → counts in yesterday's `links` and in today's `money.completed`
 - [ ] A pending link past its `expires_at` → counted in `links.expired` and still inside `links.pending`
-- [ ] A completed PKR payment on an MPGS account → appears under `pkr`; a currency with no payments shows 0 (`usd`, `gbp`, `pkr` always present)
+- [x] A completed PKR payment on an MPGS account → appears under `pkr`; a currency with no payments shows 0 (`usd`, `gbp`, `pkr` always present)
 - [ ] Change the stored hash while a cached copy exists → the old token still works until the cache expires; after that it is rejected (token hash comes from env only)
 
 ## Acceptance-criteria coverage
