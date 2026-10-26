@@ -1,7 +1,7 @@
 # 0008. Central dashboard summary endpoint
 
 **Date**: 2026-10-26
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
@@ -107,14 +107,14 @@ Reasoning and options: see `rationale.md`.
 
 Build approach: the project has none recorded, so this plan uses end to end thin slices (Tracer Bullet): get one authenticated call returning real numbers first, then add each protection and window.
 
-1. Add `config/central.php` and the new env keys to `.env.example`. Register API routing in `bootstrap/app.php` and create `routes/api.php` with the versioned route group, satisfies **AC-1**
-2. Thin thread: the `central.token` middleware (hash check, two slots, 404 when off), an invokable `CentralSummaryController`, and the `all_time` window with link counts only, satisfies **AC-1**, **AC-2**, **AC-5**
-3. Add the `CentralSummary` service with all four windows, the money blocks and `expired`, with edges cut in `CENTRAL_TIMEZONE`, satisfies **AC-5**, **AC-6**, **AC-7**, **AC-8**
-4. Add the two rate limiters (per IP before auth, per token after) and the HTTPS rule, satisfies **AC-3**, **AC-4**
-5. Add the 60 second cache, the 503 error answer, and the `central_audit` log channel and writes, satisfies **AC-9**, **AC-10**, **AC-11**
-6. Add `php artisan central:make-token`, satisfies **AC-13**
-7. Add `docs/integrations/central-dashboard-api.md` and the sample JSON (written with this spec), and the Pest tests including the drift test, satisfies **AC-12** and every scenario above
-8. Roll out: set the env keys on payhub1.com, pull and reset opcache by hand, call the endpoint with `curl` and compare against the PayHub dashboard for the same dates, then repeat on payhub2.com, satisfies **AC-1**
+- [x] 1. Add `config/central.php` and the new env keys to `.env.example`. Register API routing in `bootstrap/app.php` and create `routes/api.php` with the versioned route group, satisfies **AC-1**
+- [x] 2. Thin thread: the `central.token` middleware (hash check, two slots, 404 when off), an invokable `CentralSummaryController`, and the `all_time` window with link counts only, satisfies **AC-1**, **AC-2**, **AC-5**
+- [x] 3. Add the `CentralSummary` service with all four windows, the money blocks and `expired`, with edges cut in `CENTRAL_TIMEZONE`, satisfies **AC-5**, **AC-6**, **AC-7**, **AC-8**
+- [x] 4. Add the two rate limiters (per IP before auth, per token after) and the HTTPS rule, satisfies **AC-3**, **AC-4**
+- [x] 5. Add the 60 second cache, the 503 error answer, and the `central_audit` log channel and writes, satisfies **AC-9**, **AC-10**, **AC-11**
+- [x] 6. Add `php artisan central:make-token`, satisfies **AC-13**
+- [x] 7. Add `docs/integrations/central-dashboard-api.md` and the sample JSON (written with this spec), and the Pest tests including the drift test, satisfies **AC-12** and every scenario above
+- [ ] 8. Roll out: set the env keys on payhub1.com, pull and reset opcache by hand, call the endpoint with `curl` and compare against the PayHub dashboard for the same dates, then repeat on payhub2.com, satisfies **AC-1**
 
 ## Consequences
 
