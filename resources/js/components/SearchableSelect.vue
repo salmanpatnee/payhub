@@ -29,6 +29,7 @@ const props = withDefaults(
         id?: string;
         allLabel?: string;
         allValue?: string;
+        clearLabel?: string;
     }>(),
     {
         placeholder: 'Select…',
@@ -38,6 +39,7 @@ const props = withDefaults(
         id: undefined,
         allLabel: undefined,
         allValue: '__all',
+        clearLabel: undefined,
     },
 );
 
@@ -106,6 +108,16 @@ function select(value: string): void {
                                 :class="cn('mr-2 size-4', model === allValue ? 'opacity-100' : 'opacity-0')"
                             />
                             {{ allLabel }}
+                        </CommandItem>
+                        <CommandItem
+                            v-if="clearLabel"
+                            :value="clearLabel"
+                            @select="select('')"
+                        >
+                            <Check
+                                :class="cn('mr-2 size-4', model === '' ? 'opacity-100' : 'opacity-0')"
+                            />
+                            {{ clearLabel }}
                         </CommandItem>
                         <CommandItem
                             v-for="option in options"

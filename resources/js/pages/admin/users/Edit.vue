@@ -217,6 +217,7 @@ function executeDelete() {
                             v-model="usdAccountValue"
                             :options="usdOptions"
                             placeholder="No USD account"
+                            clear-label="No USD account"
                             search-placeholder="Search accounts…"
                             empty-text="No active USD-capable accounts."
                         />
@@ -230,6 +231,7 @@ function executeDelete() {
                             v-model="gbpAccountValue"
                             :options="gbpOptions"
                             placeholder="No GBP account"
+                            clear-label="No GBP account"
                             search-placeholder="Search accounts…"
                             empty-text="No active GBP-capable accounts."
                         />
@@ -243,6 +245,7 @@ function executeDelete() {
                             v-model="pkrAccountValue"
                             :options="pkrOptions"
                             placeholder="No PKR account (agent cannot take PKR)"
+                            clear-label="No PKR account (agent cannot take PKR)"
                             search-placeholder="Search accounts…"
                             empty-text="No active MPGS accounts with PKR enabled."
                         />
