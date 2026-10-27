@@ -225,6 +225,8 @@ After 3 failed card attempts (`CARD_LOCK_MAX_ATTEMPTS`) the pay page is paused f
 
 ## Serving PayHub from a folder (e.g. `https://example.com/payhub/`)
 
+> Full step by step deployment guide for both layouts (subdomain and folder): [`docs/deployment.md`](./deployment.md).
+
 PayHub works at the top of a domain and from a folder. One build serves both: the root view (`resources/views/app.blade.php`) writes the folder into `<meta name="app-base">` from `request()->getBasePath()`, and `resources/js/lib/basePath.ts` reads it. At the top of a domain the value is empty and nothing changes.
 
 What the front end does when the value is set (e.g. `/payhub`):
