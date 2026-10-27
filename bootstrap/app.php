@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\AuthenticateCentralToken;
+use App\Http\Middleware\EnsureCentralApiEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
@@ -19,6 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -45,6 +48,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
+            'central.enabled' => EnsureCentralApiEnabled::class,
+            'central.token' => AuthenticateCentralToken::class,
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
@@ -53,9 +58,17 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         Integration::handles($exceptions);
 
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request) => $request->is('api/*') || $request->expectsJson()
+        );
+
         $exceptions->respond(function (Response $response, Throwable $e, Request $request) {
             if ($e instanceof TokenMismatchException) {
                 return back()->with(['message' => 'The page expired, please try again.']);
+            }
+
+            if ($request->is('api/*')) {
+                return $response;
             }
 
             if (in_array($response->getStatusCode(), [403, 404, 500, 503], true)

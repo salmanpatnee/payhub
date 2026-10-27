@@ -89,5 +89,9 @@ class AppServiceProvider extends ServiceProvider
         );
 
         Password::defaults(fn (): Password => Password::min(6));
+
+        // Central dashboard summary (spec 0008, AC-4): IP limit runs before the token check,
+        // so token guessing is slowed; the 6 per minute token limit lives in AuthenticateCentralToken
+        RateLimiter::for('central-ip', fn (Request $request): Limit => Limit::perMinute(30)->by('central-ip:'.$request->ip()));
     }
 }

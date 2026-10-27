@@ -1,0 +1,52 @@
+{
+    "contract_version": "v1",
+    "deployment": {
+        "key": "payhub1",
+        "name": "PayHub 1",
+        "app_release": "1fde13c"
+    },
+    "generated_at": "2026-10-26T14:05:00+05:00",
+    "timezone": "Asia/Karachi",
+    "windows": {
+        "all_time": {
+            "from": null,
+            "to": null,
+            "links": { "total": 412, "pending": 63, "completed": 301, "failed": 22, "cancelled": 26, "expired": 14 },
+            "money": {
+                "completed": { "usd": 18452000, "gbp": 3120500, "pkr": 0 },
+                "paid_count": 301,
+                "pending": { "usd": 2310000, "gbp": 450000, "pkr": 0 }
+            }
+        },
+        "today": {
+            "from": "2026-10-26T00:00:00+05:00",
+            "to": "2026-10-27T00:00:00+05:00",
+            "links": { "total": 9, "pending": 4, "completed": 4, "failed": 1, "cancelled": 0, "expired": 0 },
+            "money": {
+                "completed": { "usd": 640000, "gbp": 0, "pkr": 0 },
+                "paid_count": 5,
+                "pending": { "usd": 180000, "gbp": 0, "pkr": 0 }
+            }
+        },
+        "this_month": {
+            "from": "2026-10-01T00:00:00+05:00",
+            "to": "2026-11-01T00:00:00+05:00",
+            "links": { "total": 96, "pending": 17, "completed": 71, "failed": 4, "cancelled": 4, "expired": 3 },
+            "money": {
+                "completed": { "usd": 4120000, "gbp": 610000, "pkr": 0 },
+                "paid_count": 74,
+                "pending": { "usd": 760000, "gbp": 90000, "pkr": 0 }
+            }
+        },
+        "last_30_days": {
+            "from": "2026-09-27T00:00:00+05:00",
+            "to": "2026-10-27T00:00:00+05:00",
+            "links": { "total": 118, "pending": 20, "completed": 88, "failed": 5, "cancelled": 5, "expired": 4 },
+            "money": {
+                "completed": { "usd": 5230000, "gbp": 780000, "pkr": 0 },
+                "paid_count": 90,
+                "pending": { "usd": 910000, "gbp": 90000, "pkr": 0 }
+            }
+        }
+    }
+}
