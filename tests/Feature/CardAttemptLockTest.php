@@ -51,7 +51,6 @@ function lockChargeBody(): array
     return [
         'data_descriptor' => 'COMMON.ACCEPT.INAPP.PAYMENT',
         'data_value' => 'opaque-code-from-acceptjs',
-        'postal_code' => '90210',
     ];
 }
 

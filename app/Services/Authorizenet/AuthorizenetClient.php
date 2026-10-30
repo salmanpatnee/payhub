@@ -48,7 +48,7 @@ class AuthorizenetClient
      * value, and this request body, must never be stored or logged by the caller.
      * Does not ->throw(): the caller maps the reply; a transport failure still throws.
      *
-     * @param  array<string, mixed>  $order  {invoice, description, amount (decimal string), data_descriptor, data_value, email, first_name, last_name, zip, ip, duplicate_window}
+     * @param  array<string, mixed>  $order  {invoice, description, amount (decimal string), data_descriptor, data_value, email, first_name, last_name, ip, duplicate_window}
      * @return array{status: int, body: array<string, mixed>}
      */
     public function createTransaction(array $order): array
@@ -63,7 +63,7 @@ class AuthorizenetClient
             ]],
             'order' => ['invoiceNumber' => $order['invoice'], 'description' => $order['description']],
             'customer' => ['email' => $order['email']],
-            'billTo' => ['firstName' => $order['first_name'], 'lastName' => $order['last_name'], 'zip' => $order['zip']],
+            'billTo' => ['firstName' => $order['first_name'], 'lastName' => $order['last_name']],
             'customerIP' => $order['ip'],
             'transactionSettings' => ['setting' => [
                 ['settingName' => 'duplicateWindow', 'settingValue' => (string) $order['duplicate_window']],

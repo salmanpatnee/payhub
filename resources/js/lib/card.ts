@@ -82,21 +82,15 @@ export function isCvvValid(value: string): boolean {
     return /^\d{3,4}$/.test(value)
 }
 
-/** 3 to 10 letters, digits, spaces or hyphens (matches the server rule). */
-export function isZipValid(value: string): boolean {
-    return /^[A-Za-z0-9 -]{3,10}$/.test(value)
-}
-
 export type CardFieldErrors = {
     number?: string
     expiry?: string
     cvv?: string
-    zip?: string
 }
 
 /** Browser side checks that run before anything is sent to Accept.js. */
 export function validateCard(
-    card: { number: string; expiry: string; cvv: string; zip: string },
+    card: { number: string; expiry: string; cvv: string },
     now: Date = new Date(),
 ): CardFieldErrors {
     const errors: CardFieldErrors = {}
@@ -111,10 +105,6 @@ export function validateCard(
 
     if (!isCvvValid(card.cvv)) {
         errors.cvv = 'Enter the 3 or 4 digit security code.'
-    }
-
-    if (!isZipValid(card.zip)) {
-        errors.zip = 'Enter a valid ZIP or postal code.'
     }
 
     return errors

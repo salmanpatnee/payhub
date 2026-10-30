@@ -112,7 +112,6 @@ class AuthorizenetPaymentController extends Controller
                 'email' => Str::limit((string) $payment->client_email, 255, ''),
                 'first_name' => $first,
                 'last_name' => $last,
-                'zip' => $request->validated('postal_code'),
                 'ip' => (string) $request->ip(),
                 'duplicate_window' => config('services.authorizenet.duplicate_window_seconds'),
             ]));

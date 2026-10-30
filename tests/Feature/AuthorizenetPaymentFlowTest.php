@@ -190,7 +190,6 @@ function chargeBody(array $overrides = []): array
     return array_merge([
         'data_descriptor' => 'COMMON.ACCEPT.INAPP.PAYMENT',
         'data_value' => 'opaque-code-from-acceptjs',
-        'postal_code' => '90210',
     ], $overrides);
 }
 
@@ -211,7 +210,7 @@ it('charges the one time code with the amount from the record and completes afte
             && $body['refId'] === AuthorizenetInvoice::for($payment)
             && $body['transactionRequest']['order']['invoiceNumber'] === AuthorizenetInvoice::for($payment)
             && $body['transactionRequest']['payment']['opaqueData']['dataValue'] === 'opaque-code-from-acceptjs'
-            && $body['transactionRequest']['billTo'] === ['firstName' => 'Jane', 'lastName' => 'Jane', 'zip' => '90210']
+            && $body['transactionRequest']['billTo'] === ['firstName' => 'Jane', 'lastName' => 'Jane']
             && ! empty($body['transactionRequest']['customerIP'])
             && $body['transactionRequest']['transactionSettings']['setting'][0] === ['settingName' => 'duplicateWindow', 'settingValue' => '300'];
     });
@@ -261,9 +260,22 @@ it('rejects bad charge input with no gateway call', function (array $overrides) 
     'wrong descriptor' => [['data_descriptor' => 'COMMON.OTHER']],
     'no data value' => [['data_value' => '']],
     'huge data value' => [['data_value' => str_repeat('a', 2049)]],
-    'bad zip' => [['postal_code' => '<script>']],
-    'short zip' => [['postal_code' => '12']],
 ]);
+
+it('ignores a ZIP sent with the charge and sends no ZIP to the gateway', function () {
+    $payment = anetPayment(['client_name' => 'Jane']);
+    fakeAnet([], ['60000001' => anetTx($payment)], chargeReply('1'));
+
+    $this->postJson(route('pay.authorizenet.charge', $payment), chargeBody(['postal_code' => '90210']))
+        ->assertOk()
+        ->assertJson(['outcome' => 'approved']);
+
+    Http::assertSent(function (Request $request) {
+        $billTo = $request->data()['createTransactionRequest']['transactionRequest']['billTo'] ?? null;
+
+        return $billTo === ['firstName' => 'Jane', 'lastName' => 'Jane'];
+    });
+});
 
 it('maps each charge reply to an outcome', function (string|array $charge, string $outcome, int $status) {
     $payment = anetPayment();

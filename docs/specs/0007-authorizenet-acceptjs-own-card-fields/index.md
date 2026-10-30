@@ -243,3 +243,4 @@ No build approach is recorded in `AGENTS.md` or a scope header, so this plan def
 - [x] `AGENTS.md` and `docs/agent.md` updated (seventh provider, scoped exception, PCI note, Accept.js flow, upgrade path). Done 2026-10-21.
 - [ ] The `provider-parity-reviewer` agent and `provider-parity-check` skill text still say four providers; refresh them to cover all seven.
 - [ ] Refunds and voids stay out of scope; revisit only if PayHub adds a refund feature for any provider.
+- [x] ZIP field removed from the card form, the charge request and `billTo` (2026-10-30, branch `fix/authorizenet-remove-zip`). Accept.js and `createTransaction` both treat ZIP as optional; a charge with no address returns AVS code `B`. Each merchant account must set AVS response **B** to Allow (Merchant Interface → Account → Settings → Security Settings → Fraud Settings → AVS), or every charge is declined. Supersedes the ZIP parts of AC-4 and AC-6.
