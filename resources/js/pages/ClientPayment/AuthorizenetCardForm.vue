@@ -41,7 +41,6 @@ const emit = defineEmits<{
 const number = ref('')
 const expiry = ref('')
 const cvv = ref('')
-const zip = ref('')
 
 const ready = ref(false)
 const processing = ref(false)
@@ -94,7 +93,7 @@ async function submit(): Promise<void> {
     }
 
     message.value = null
-    fieldErrors.value = validateCard({ number: number.value, expiry: expiry.value, cvv: cvv.value, zip: zip.value })
+    fieldErrors.value = validateCard({ number: number.value, expiry: expiry.value, cvv: cvv.value })
 
     if (Object.keys(fieldErrors.value).length > 0) {
         return
@@ -110,7 +109,7 @@ async function submit(): Promise<void> {
         const parsed = parseExpiry(expiry.value)!
         const opaque = await tokenizeCard(
             { apiLoginId: props.authorizenetAccount.api_login_id, clientKey: props.authorizenetAccount.public_client_key },
-            { number: number.value.replace(/\D/g, ''), month: parsed.month, year: parsed.year, cvv: cvv.value, zip: zip.value },
+            { number: number.value.replace(/\D/g, ''), month: parsed.month, year: parsed.year, cvv: cvv.value },
         )
 
         // The card number and security code are no longer needed once tokenizing returns.
@@ -129,7 +128,6 @@ async function submit(): Promise<void> {
             body: JSON.stringify({
                 data_descriptor: opaque.dataDescriptor,
                 data_value: opaque.dataValue,
-                postal_code: zip.value,
             }),
         })
 
@@ -185,8 +183,8 @@ async function submit(): Promise<void> {
             <div class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3">
                 <div class="an-skeleton-bar h-2.5 rounded-full" style="width: 38%"></div>
             </div>
-            <div class="grid grid-cols-3 gap-3">
-                <div v-for="n in 3" :key="n" class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3">
+            <div class="grid grid-cols-2 gap-3">
+                <div v-for="n in 2" :key="n" class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3">
                     <div class="an-skeleton-bar h-2.5 rounded-full" style="width: 50%"></div>
                 </div>
             </div>
@@ -219,7 +217,7 @@ async function submit(): Promise<void> {
                 <p v-if="fieldErrors.number" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.number }}</p>
             </div>
 
-            <div class="grid grid-cols-3 gap-3">
+            <div class="grid grid-cols-2 gap-3">
                 <div>
                     <div class="an-field-wrap rounded-xl border bg-white px-3 transition-colors duration-150" :class="wrapClass(fieldErrors.expiry)">
                         <input
@@ -255,23 +253,6 @@ async function submit(): Promise<void> {
                         >
                     </div>
                     <p v-if="fieldErrors.cvv" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.cvv }}</p>
-                </div>
-                <div>
-                    <div class="an-field-wrap rounded-xl border bg-white px-3 transition-colors duration-150" :class="wrapClass(fieldErrors.zip)">
-                        <input
-                            id="an-card-zip"
-                            v-model="zip"
-                            class="an-field"
-                            type="text"
-                            autocomplete="postal-code"
-                            placeholder="ZIP"
-                            aria-label="ZIP code"
-                            maxlength="10"
-                            :aria-invalid="!!fieldErrors.zip"
-                            @input="clearError('zip')"
-                        >
-                    </div>
-                    <p v-if="fieldErrors.zip" class="mt-1.5 text-xs text-red-600">{{ fieldErrors.zip }}</p>
                 </div>
             </div>
 
