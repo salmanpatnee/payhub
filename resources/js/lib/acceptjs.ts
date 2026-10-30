@@ -47,7 +47,7 @@ export function loadAcceptJs(scriptUrl: string): Promise<void> {
  */
 export function tokenizeCard(
     auth: { apiLoginId: string; clientKey: string },
-    card: { number: string; month: string; year: string; cvv: string; zip: string },
+    card: { number: string; month: string; year: string; cvv: string },
 ): Promise<OpaqueData | null> {
     return new Promise((resolve) => {
         if (!window.Accept) {
@@ -64,7 +64,6 @@ export function tokenizeCard(
                     month: card.month,
                     year: card.year,
                     cardCode: card.cvv,
-                    zip: card.zip,
                 },
             },
             (response) => {

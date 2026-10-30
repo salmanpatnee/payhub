@@ -5,7 +5,8 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Accept.js output plus ZIP (spec 0007, AC-6). Never carries an amount, currency or account.
+ * Accept.js output only (spec 0007, AC-6). No ZIP is collected: the merchant AVS setting for
+ * "no address" (B) must allow the charge. Never carries an amount, currency or account.
  */
 class ChargeAuthorizenetRequest extends FormRequest
 {
@@ -21,7 +22,6 @@ class ChargeAuthorizenetRequest extends FormRequest
         return [
             'data_descriptor' => ['required', 'string', 'in:'.self::DATA_DESCRIPTOR],
             'data_value' => ['required', 'string', 'max:2048'],
-            'postal_code' => ['required', 'string', 'regex:/^[A-Za-z0-9 -]{3,10}$/'],
         ];
     }
 }
