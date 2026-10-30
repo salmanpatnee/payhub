@@ -6,16 +6,18 @@ Centralized multi-brand payment hub for an agency. Laravel 13 + Inertia.js v3 + 
 
 See `.planning/PROJECT.md` for full context. See `docs/agent.md` for RBAC rules, nav access matrix, and E2E testing runbook.
 
+Read only central dashboard API: `GET /api/central/v1/summary` (`App\Services\CentralSummary`), token protected; contract in `docs/integrations/central-dashboard-api.md` (spec 0008). Deploy guide: `docs/deployment.md`.
+
 ## GSD Workflow
 
-This project uses the Get-Shit-Done (GSD) planning workflow.
+The original build used the Get-Shit-Done (GSD) planning workflow. All 10 phases are complete (`.planning/STATE.md`); `.planning/` is kept as history only.
 
-- **Roadmap**: `.planning/ROADMAP.md` — 7 phases, execute in order
-- **Requirements**: `.planning/REQUIREMENTS.md` — 40 REQ-IDs, all mapped to phases
-- **State**: `.planning/STATE.md` — current phase and progress
+- **Roadmap**: `.planning/ROADMAP.md`
+- **Requirements**: `.planning/REQUIREMENTS.md`
+- **State**: `.planning/STATE.md`
 - **Research**: `.planning/research/` — stack, features, architecture, pitfalls, summary
 
-Phase 1 is next. Run `/gsd-discuss-phase 1` or `/gsd-plan-phase 1` to start. See `.planning/ROADMAP.md` for phase order.
+New work is planned as a spec under `docs/specs/` (see `## Specs`), not as a GSD phase.
 
 ## Stack
 
@@ -23,10 +25,11 @@ Phase 1 is next. Run `/gsd-discuss-phase 1` or `/gsd-plan-phase 1` to start. See
 - **Frontend**: Vue 3 (Composition API + `<script setup>`), Inertia.js v3
 - **Styling**: Tailwind CSS 4, shadcn-vue 2.6 (Reka UI primitives)
 - **Auth**: Laravel Fortify — invite-only, no public registration
-- **RBAC**: spatie/laravel-permission v7 (Admin / Agent roles)
+- **RBAC**: spatie/laravel-permission v7 (Admin / Agent / Account roles)
 - **Payments**: Stripe Elements (stripe/stripe-php v20, vue-stripe-js v2) + Revolut Merchant API (@revolut/checkout Web SDK) + Square (square/square PHP SDK, Web Payments SDK) + Authorize.net (Accept.js) — seven parallel providers (Viva, Clover, MPGS and Authorize.net are documented in `docs/agent.md` and their specs)
 - **Webhooks**: spatie/laravel-stripe-webhooks v3.11
 - **Queues**: Laravel Queues (database driver for dev, Redis for prod)
+- **Other**: Laravel Wayfinder (typed route helpers in `resources/js/actions` and `resources/js/routes`), Sentry (`sentry/sentry-laravel`, `@sentry/vue`), maatwebsite/excel (CSV export)
 
 ## Payment providers
 
@@ -42,8 +45,8 @@ PayHub supports seven parallel providers behind the `PaymentProvider` enum (`str
 
 ## Git workflow
 
-- **Always** create a new branch before starting a new phase: `git checkout -b phase-{N}-{short-description}`
-- Merge to `master` only after phase is complete and tests pass
+- Branch from `staging` for each change: `feature/<name>`, `fix/<name>` or `chore/<name>`
+- Merge the branch into `staging`, then `staging` into `master`, only after tests pass. Production runs `master`
 
 ## RBAC
 
@@ -63,7 +66,7 @@ Separate from the payment providers and from Bank Accounts. Same roles/assignmen
 - **Never** trust client-side confirmation (`confirmPayment()` / Revolut Card Field `onSuccess` / Square Web Payments SDK tokenize callback) for DB writes — all payment status comes from webhooks only
 - **Never** accept amount from client request — always read from the server-side `Payment` record
 - Provider `secret_key`/`access_token` and `webhook_secret`/`webhook_signature_key` columns must use Laravel `encrypted` cast (TEXT columns, no SQL WHERE). On `RevolutAccount` and `SquareAccount` these two are NOT mass-assignable — assign explicitly
-- Webhook routes (`webhook/stripe/*`, `webhook/revolut/*`, `webhook/square/*`) excluded from CSRF middleware; raw body preserved for signature verification
+- Webhook routes (`webhook/stripe/*`, `webhook/revolut/*`, `webhook/square/*`, `webhook/viva/*`, `webhook/mpgs/*`, `webhook/authorizenet/*`) excluded from CSRF middleware; raw body preserved for signature verification. Also excluded: `pay/*/square`, `pay/*/clover/charge`, `pay/*/mpgs/3ds-return` (list in `bootstrap/app.php`)
 - Revolut webhooks carry no event id: idempotency keys on `order_id:event_type` (`ProcessedRevolutEvent`); signature is HMAC-SHA256 of `v1.{timestamp}.{rawBody}` with 300s replay tolerance
 - Square webhooks verified via `x-square-hmacsha256-signature` header against `webhook_signature_key` (Square SDK's `WebhooksHelper`); idempotency tracked in `ProcessedSquareEvent`
 - Secrets exposed to the page (Stripe `client_secret` / Revolut `orderToken`) never logged, stored in URLs, or exposed beyond the page load response. (Square's `application_id`/`location_id` are public SDK identifiers, not secrets — safe to expose, unlike `access_token`)
@@ -77,9 +80,22 @@ php artisan serve          # Start Laravel dev server
 npm run dev                # Start Vite dev server
 php artisan migrate:fresh --seed   # Reset DB with seed data
 php artisan test           # Run Pest test suite
+composer dev               # server, queue worker, logs and Vite together
+php artisan test --parallel  # faster way to run the Pest suite
+npm run types:check && npm run lint:check && npm run format:check  # front end checks
+composer lint              # Pint (PHP formatting)
+npm run build              # compiled assets in public/build are committed
 stripe listen --forward-to localhost:8000/webhook/stripe/{accountId}  # Test Stripe webhooks
 php artisan revolut:register-webhook {account?} --url=https://...    # Register Revolut webhook, store signing secret
 ```
+
+## Specs
+
+Stored in `docs/specs/NNNN-title/` (one folder per feature: `index.md`, `rationale.md`, sometimes `verify.md`).
+
+## Context files
+
+- [resources/js/pages/ClientPayment/AGENTS.md](resources/js/pages/ClientPayment/AGENTS.md) (client pay pages: consent gate, card value handling, fixed messages, polling, card lock notice)
 
 ## General conventions
 
