@@ -2,10 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Brand;
-use App\Models\Payment;
-use App\Models\RelationshipManager;
-use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -19,7 +15,6 @@ class DatabaseSeeder extends Seeder
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'account', 'guard_name' => 'web']);
-
 
         $admin = User::firstOrCreate(
             ['username' => 'admin'],
