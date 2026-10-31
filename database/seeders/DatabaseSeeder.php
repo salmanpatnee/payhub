@@ -2,10 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Brand;
-use App\Models\Payment;
-use App\Models\RelationshipManager;
-use App\Models\StripeAccount;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -20,26 +16,6 @@ class DatabaseSeeder extends Seeder
         Role::firstOrCreate(['name' => 'agent', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'account', 'guard_name' => 'web']);
 
-        $brand = Brand::firstOrCreate(
-            ['slug' => 'demo-brand'],
-            [
-                'name' => 'Demo Brand',
-                'logo_path' => null,
-                'primary_color' => '#3B82F6',
-                'secondary_color' => '#EFF6FF',
-            ]
-        );
-
-        $stripeAccount = StripeAccount::firstOrCreate(
-            ['account_name' => 'Leo\'s Stripe Account'],
-            [
-                'publishable_key' => env('STRIPE_PUBLISHABLE_KEY', 'pk_test_replace_me'),
-                'secret_key' => env('STRIPE_SECRET_KEY', 'sk_test_replace_me'),
-                'webhook_secret' => 'whsec_placeholder_for_dev_only',
-                'is_active' => true,
-            ]
-        );
-
         $admin = User::firstOrCreate(
             ['username' => 'admin'],
             [
@@ -51,48 +27,5 @@ class DatabaseSeeder extends Seeder
 
         $admin->syncRoles(['admin']);
 
-        $user = User::firstOrCreate(
-            ['username' => 'agent'],
-            [
-                'name' => 'Agent User',
-                'email' => 'agent@payhub.test',
-                'password' => Hash::make('password'),
-            ]
-        );
-        $user->paymentAccounts()->updateOrCreate(
-            ['currency' => 'usd'],
-            ['provider' => 'stripe', 'account_id' => $stripeAccount->id]
-        );
-        $user->syncRoles(['agent']);
-
-        $account = User::firstOrCreate(
-            ['username' => 'account'],
-            [
-                'name' => 'Account User',
-                'email' => 'account@payhub.test',
-                'password' => Hash::make('password'),
-            ]
-        );
-        $account->syncRoles(['account']);
-
-        $relationshipManager = RelationshipManager::firstOrCreate(['name' => 'Demo RM']);
-
-        $user->brands()->sync([$brand->id]);
-        $user->relationshipManagers()->sync([$relationshipManager->id]);
-
-        Payment::create([
-            'brand_id' => $brand->id,
-            'stripe_account_id' => $stripeAccount->id,
-            'user_id' => $admin->id,
-            'amount' => 2500,
-            'currency' => 'usd',
-            'client_name' => 'Alice Smith',
-            'client_email' => 'alice@example.com',
-            'service' => 'Web Design',
-            'package' => 'standard',
-            'note' => 'Demo payment for dev testing',
-            'status' => 'pending',
-            'expires_at' => null,
-        ]);
     }
 }
