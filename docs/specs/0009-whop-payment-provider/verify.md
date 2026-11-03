@@ -30,3 +30,27 @@ _Steps derived from spec 0009 acceptance criteria. Covers build plan steps 1 to 
 ## Acceptance-criteria coverage
 - AC-1 covered by steps 1 to 3, 7 · AC-2 by steps 4, 6 · AC-3 by step 8 (partial, parity sweep is build plan step 7) · AC-4 by steps 5, 6 (email rule only) · AC-6 by the last command step (edit lock only) · AC-9 by the signature steps · AC-10 by the completion steps · AC-11 by the other events step · AC-12 by the two register steps · AC-13 by the register step and the price field step
 - Not covered yet: AC-5, AC-7, AC-8, AC-14 and the rest of AC-4, AC-6
+
+## Checkout and pay page (build plan steps 5 to 10, added 2026-11-03)
+
+### UI / manual
+- [ ] Edit a Whop account, switch checkout mode between Embed and Redirect, save → value persists; invalid value is rejected → AC-1
+- [ ] Open a Whop pay link in `redirect` mode, tick consent, press Pay now → browser goes to Whop's hosted checkout; pay with `4242 4242 4242 4242` → returns to the pay page, shows "We are confirming your payment. Please do not pay again.", then Success once the webhook lands → AC-4, AC-7, AC-8
+- [ ] Return with a failed card (`4000 0000 0000 0002`) → page shows Pay now again, status stays `pending` → AC-7, AC-11
+- [ ] Reload during the confirming state → still shows confirming, not Pay now; address bar has no `payment` or `status` → AC-7, AC-8
+- [ ] Leave the tab confirming for 10 visible minutes → "Still confirming, you will get a receipt by email" → AC-8
+- [ ] In `embed` mode (production only, Elements has no sandbox): Pay now mounts Whop's checkout inside the page, cards only, no CSP errors in the console → AC-4, AC-14
+- [ ] Deactivate the account → pay link shows Unavailable; a webhook for a mid flight payment still completes it → AC-4, AC-9
+- [ ] After Pay now, try to change amount, currency, account, brand, or delete the payment in admin → all refused → AC-6
+
+### Commands
+- [ ] `php artisan test --filter=Whop` → all pass → AC-1 to AC-12, AC-14
+- [ ] `curl -X POST https://<host>/pay/<uuid>/whop/checkout` 11 times in an hour → the 11th returns 429 with no Whop call → AC-6
+- [ ] Open the pay page of a Whop `redirect` account and a Stripe payment, read the `Content-Security-Policy` header → no `whop.com` host in either; embed account adds `https://cdn.whop.com` and the API origin → AC-14
+- [ ] Export CSV, filter the dashboard by Whop, check "Accounts Today" → Whop payment appears with the Whop payment id → AC-3
+
+### Value sourcing
+- [ ] Create a GBP payment with 12.34 → Whop checkout shows 12.34 GBP; 0.10 shows 0.10 → AC-5
+- [ ] Flip the account mode between page load and Pay now → the endpoint reply's mode wins → AC-4
+- [ ] Pay with a Whop tax or fee in play → webhook `subtotal` still equals the payment amount, otherwise fix `WhopWebhookPayload::PRICE_FIELD` → AC-10, AC-13
+- [ ] Trigger a Whop retry of a webhook and check its `webhook-timestamp` is fresh (Open question 6, merge blocker) → AC-9

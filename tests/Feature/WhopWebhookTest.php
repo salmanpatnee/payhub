@@ -275,3 +275,44 @@ it('converts amounts exactly in both directions', function () {
         ->and(WhopAmount::decimalToCents('1e2'))->toBeNull()
         ->and(WhopAmount::decimalToCents(''))->toBeNull();
 });
+
+// Whop sends money as an object, not a plain number (seen on the sandbox payments API).
+it('completes a payment when the price is Whop money object', function () {
+    Queue::fake();
+    [$account, $payment] = whopPayment(['amount' => 11100, 'currency' => 'usd']);
+
+    $payload = json_encode([
+        'type' => 'payment.succeeded',
+        'data' => [
+            'id' => 'pay_BXOMt9Uk3AZ8N2',
+            'currency' => 'usd',
+            'subtotal' => ['currency' => 'usd', 'amount' => '111.00', 'decimals' => 2, 'display_decimals' => 2],
+            'total' => ['currency' => 'usd', 'amount' => '111.00', 'decimals' => 2, 'display_decimals' => 2],
+            'tax_amount' => ['currency' => 'usd', 'amount' => '0.00', 'decimals' => 2, 'display_decimals' => 2],
+            'paid_at' => '2026-11-03T08:28:01.105Z',
+            'metadata' => ['payment_id' => $payment->uuid, 'reference' => 'WHOP-001008'],
+        ],
+    ]);
+
+    runWhopJob($account, $payload);
+
+    $payment->refresh();
+    expect($payment->status)->toBe('completed')
+        ->and($payment->whop_payment_id)->toBe('pay_BXOMt9Uk3AZ8N2');
+    Queue::assertPushed(SendPaymentNotification::class);
+});
+
+it('refuses a money object whose amount does not match', function () {
+    Queue::fake();
+    [$account, $payment] = whopPayment(['amount' => 11100, 'currency' => 'usd']);
+
+    $payload = json_encode(['type' => 'payment.succeeded', 'data' => [
+        'id' => 'pay_x', 'currency' => 'usd',
+        'subtotal' => ['currency' => 'usd', 'amount' => '110.99'],
+        'metadata' => ['payment_id' => $payment->uuid],
+    ]]);
+
+    runWhopJob($account, $payload);
+
+    expect($payment->refresh()->status)->toBe('pending');
+});

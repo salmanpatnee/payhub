@@ -61,6 +61,7 @@ class WhopAccountController extends Controller
                 'prefix' => $whopAccount->prefix,
                 'company_id' => $whopAccount->company_id,
                 'environment' => $whopAccount->environment,
+                'checkout_mode' => $whopAccount->checkout_mode,
                 'is_active' => $whopAccount->is_active,
                 'has_api_key' => ! empty($whopAccount->api_key),
                 'has_webhook_secret' => ! empty($whopAccount->webhook_secret),

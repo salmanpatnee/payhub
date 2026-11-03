@@ -23,6 +23,7 @@ class StoreWhopAccountRequest extends FormRequest
                 Rule::unique('whop_accounts', 'company_id')->where('is_active', true),
             ],
             'environment' => ['required', Rule::in(['sandbox', 'production'])],
+            'checkout_mode' => ['sometimes', Rule::in(['embed', 'redirect'])],
             'api_key' => ['required', 'string', 'max:512'],
             // Optional on save: whop:register-webhook sets it (AC-12).
             'webhook_secret' => ['nullable', 'string', 'max:512'],

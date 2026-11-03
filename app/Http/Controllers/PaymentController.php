@@ -487,6 +487,13 @@ class PaymentController extends Controller
     {
         Gate::authorize('delete', $payment);
 
+        // An open Whop checkout would stay payable, so a payment with one cannot be removed (spec 0009, AC-6).
+        if ($payment->provider === PaymentProvider::Whop && $payment->whop_checkout_configuration_id !== null) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => 'This payment has an open Whop checkout and cannot be deleted.']);
+
+            return redirect()->back();
+        }
+
         $payment->delete();
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Payment deleted.']);

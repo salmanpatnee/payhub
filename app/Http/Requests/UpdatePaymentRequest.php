@@ -132,14 +132,17 @@ class UpdatePaymentRequest extends FormRequest
                 return;
             }
 
-            $changed = (int) round(((float) $this->input('amount')) * 100) !== $payment->amount
+            $brandChanged = $provider === 'whop' && $this->input('brand_id') !== null
+                && (int) $this->input('brand_id') !== $payment->brand_id;
+
+            $changed = $brandChanged || (int) round(((float) $this->input('amount')) * 100) !== $payment->amount
                 || $this->input('currency') !== $payment->currency
                 || ($this->input('account_id') !== null
                     && (int) $this->input('account_id') !== $payment->{$accountColumn})
                 || ($this->input('provider') !== null && $this->input('provider') !== $provider);
 
             if ($changed) {
-                $validator->errors()->add('amount', 'This payment link was already opened by the client, so the amount, currency and account can no longer be changed.');
+                $validator->errors()->add('amount', 'This payment link was already opened by the client, so the amount, currency, account and brand can no longer be changed.');
             }
         }];
     }

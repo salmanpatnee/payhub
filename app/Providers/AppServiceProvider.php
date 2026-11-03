@@ -67,6 +67,16 @@ class AppServiceProvider extends ServiceProvider
         // and 20 per IP per hour (starting defaults); the first limit hit answers 429 with no gateway call.
         // The per payment limit sits above the card attempt lock (3 failed cards), so an admin release
         // still gives the payer a full set of tries.
+        // Whop (spec 0009, AC-6): 10 checkout calls per payment and 30 per IP per hour. Reuse calls count.
+        RateLimiter::for('whop-checkout', function (Request $request): array {
+            $tooMany = fn () => response()->json(['message' => 'Too many attempts. Please try again later.'], 429);
+
+            return [
+                Limit::perHour(10)->by('whop-payment:'.($request->route('payment') ?? $request->ip()))->response($tooMany),
+                Limit::perHour(30)->by('whop-ip:'.$request->ip())->response($tooMany),
+            ];
+        });
+
         RateLimiter::for('authorizenet-charge', function (Request $request): array {
             $tooMany = fn () => response()->json(['message' => 'Too many attempts. Please try again later.'], 429);
 

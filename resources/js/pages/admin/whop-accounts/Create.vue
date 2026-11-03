@@ -35,6 +35,7 @@ const form = useForm({
     account_name: '',
     company_id: '',
     environment: 'sandbox',
+    checkout_mode: 'embed',
     webhook_secret: '',
     api_key: '',
     prefix: '',
@@ -157,6 +158,23 @@ function submit() {
                             </option>
                         </select>
                         <InputError :message="form.errors.environment" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="checkout_mode">Checkout mode</Label>
+                        <select
+                            id="checkout_mode"
+                            v-model="form.checkout_mode"
+                            class="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs"
+                        >
+                            <option value="embed">
+                                Embed (Whop checkout inside the pay page)
+                            </option>
+                            <option value="redirect">
+                                Redirect (send the client to Whop)
+                            </option>
+                        </select>
+                        <InputError :message="form.errors.checkout_mode" />
                     </div>
 
                     <div class="grid gap-2">

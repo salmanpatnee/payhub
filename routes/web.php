@@ -25,6 +25,7 @@ use App\Http\Controllers\SquareWebhookController;
 use App\Http\Controllers\StripeHealthController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\VivaWebhookController;
+use App\Http\Controllers\WhopPaymentController;
 use App\Http\Controllers\WhopWebhookController;
 use App\Http\Controllers\ZelleAccountController;
 use App\Support\Navigation;
@@ -372,6 +373,15 @@ Route::post('/pay/{payment}/authorizenet/charge', [AuthorizenetPaymentController
     ->middleware('throttle:authorizenet-charge');
 Route::get('/pay/{payment}/authorizenet/status', [AuthorizenetPaymentController::class, 'status'])
     ->name('pay.authorizenet.status');
+
+// Whop Checkout pay thread (spec 0009), public (scoped by the payment UUID). The limiter keys use the
+// raw route string because throttle runs before route model binding.
+Route::post('/pay/{payment}/whop/checkout', [WhopPaymentController::class, 'checkout'])
+    ->name('pay.whop.checkout')
+    ->middleware('throttle:whop-checkout');
+Route::get('/pay/{payment}/whop/status', [WhopPaymentController::class, 'status'])
+    ->name('pay.whop.status')
+    ->middleware('throttle:60,1');
 
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)

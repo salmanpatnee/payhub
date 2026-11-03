@@ -35,9 +35,14 @@ use Stripe\StripeClient;
 
 class ClientPaymentController extends Controller
 {
-    public function show(Payment $payment, ?string $ref = null): Response|RedirectResponse
+    public function show(Request $request, Payment $payment, ?string $ref = null): Response|RedirectResponse
     {
         $payment->loadMissing('brand');
+
+        // Whop: a webhook that lands before the client returns sends them to Success, ahead of the guard below.
+        if ($payment->provider === PaymentProvider::Whop && $payment->status === 'completed') {
+            return redirect()->route('pay.success', $payment);
+        }
 
         // D-03 + D-12: Guard check BEFORE any provider call.
         // failed is allowed through so a declined card can be retried — the per-provider
@@ -62,6 +67,7 @@ class ClientPaymentController extends Controller
             PaymentProvider::Clover => $this->showClover($payment),
             PaymentProvider::Mpgs => $this->showMpgs($payment),
             PaymentProvider::Authorizenet => $this->showAuthorizenet($payment),
+            PaymentProvider::Whop => $this->showWhop($request, $payment),
             default => $this->showStripe($payment),
         };
     }
@@ -124,6 +130,50 @@ class ClientPaymentController extends Controller
             'lockedUntil' => $payment->isCardLocked() ? $payment->card_locked_until->toIso8601String() : null,
             'policies' => $this->policyProps(),
         ]);
+    }
+
+    /**
+     * Whop Checkout (spec 0009). Card values never touch PayHub. The checkout id, purchase URL,
+     * API key and webhook secret are NOT in these props: the browser gets them from
+     * WhopPaymentController::checkout() after consent and a click on Pay now.
+     */
+    private function showWhop(Request $request, Payment $payment): Response
+    {
+        $payment->loadMissing('whopAccount');
+
+        $account = $payment->whopAccount;
+
+        // An inactive account is unavailable (an already open Whop checkout can still be paid by webhook).
+        if ($account === null || ! $account->is_active) {
+            return Inertia::render('ClientPayment/Unavailable', [
+                'status' => $payment->status,
+                'payment' => $this->paymentProps($payment),
+                'brand' => $this->brandProps($payment->brand),
+                'provider' => $payment->provider->value,
+            ]);
+        }
+
+        $embed = $account->checkout_mode === 'embed';
+
+        return Inertia::render('ClientPayment/PayWhop', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'policies' => $this->policyProps(),
+            'mode' => $account->checkout_mode,
+            'environment' => $account->environment,
+            'hasCheckout' => $payment->whop_checkout_configuration_id !== null,
+            'hasConsent' => $payment->consents()->exists(),
+            // Display only: the page never reads window.location, and this never changes status.
+            'returnStatus' => $this->whopReturnStatus($request),
+            'scriptHost' => $embed ? config("services.whop.hosts.{$account->environment}.script") : null,
+        ]);
+    }
+
+    private function whopReturnStatus(Request $request): ?string
+    {
+        $status = $request->query('status');
+
+        return is_string($status) && preg_match('/^[a-z_]{1,32}$/', $status) ? $status : null;
     }
 
     private function showStripe(Payment $payment): Response
@@ -694,7 +744,7 @@ class ClientPaymentController extends Controller
         // The status === 'cancelled' guard below still applies regardless, and
         // the authoritative status write remains webhook-only either way.
 
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount']);
 
         // CR-02 fix: block cancelled payments from showing success via crafted URLs.
         // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,

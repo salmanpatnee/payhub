@@ -11,7 +11,7 @@ class WhopAccount extends Model
     use HasFactory;
 
     protected $fillable = [
-        'account_name', 'prefix', 'company_id', 'environment', 'is_active',
+        'account_name', 'prefix', 'company_id', 'environment', 'checkout_mode', 'is_active',
         // api_key and webhook_secret are NOT mass-assignable, assign explicitly only
     ];
 

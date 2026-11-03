@@ -24,6 +24,7 @@ class UpdateWhopAccountRequest extends FormRequest
                 Rule::unique('whop_accounts', 'company_id')->where('is_active', true)->ignore($account),
             ],
             'environment' => ['required', Rule::in(['sandbox', 'production'])],
+            'checkout_mode' => ['sometimes', Rule::in(['embed', 'redirect'])],
             // Blank = keep the stored value.
             'api_key' => ['nullable', 'string', 'max:512'],
             'webhook_secret' => ['nullable', 'string', 'max:512'],

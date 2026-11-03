@@ -28,6 +28,7 @@ type WhopAccountProp = {
     account_name: string;
     company_id: string;
     environment: string;
+    checkout_mode: string;
     has_api_key: boolean;
     is_active: boolean;
     prefix: string | null;
@@ -51,6 +52,7 @@ const form = useForm({
     account_name: props.whopAccount.account_name,
     company_id: props.whopAccount.company_id,
     environment: props.whopAccount.environment,
+    checkout_mode: props.whopAccount.checkout_mode,
     api_key: '',
     webhook_secret: '', // blank = preserve existing
     prefix: props.whopAccount.prefix ?? '',
@@ -196,6 +198,23 @@ function submit() {
                             </option>
                         </select>
                         <InputError :message="form.errors.environment" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="checkout_mode">Checkout mode</Label>
+                        <select
+                            id="checkout_mode"
+                            v-model="form.checkout_mode"
+                            class="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs"
+                        >
+                            <option value="embed">
+                                Embed (Whop checkout inside the pay page)
+                            </option>
+                            <option value="redirect">
+                                Redirect (send the client to Whop)
+                            </option>
+                        </select>
+                        <InputError :message="form.errors.checkout_mode" />
                     </div>
 
                     <div class="grid gap-2">

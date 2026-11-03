@@ -8,8 +8,8 @@ use Carbon\CarbonImmutable;
  * Reads a decoded Whop webhook body. Together with WhopClient this is the only
  * place that knows Whop field names (spec 0009, AC-13).
  *
- * UNVERIFIED until the step 0 sandbox check: the field names below follow
- * Whop's public docs and must be confirmed (Open questions 4 and 11). A field
+ * Money shape and field names confirmed against the sandbox payments API on 2026-11-03;
+ * the webhook body itself is still unseen (Open question 4). A field
  * that is missing returns null, so the job fails closed and never completes a payment.
  */
 class WhopWebhookPayload
@@ -60,9 +60,17 @@ class WhopWebhookPayload
         return is_string($uuid) && $uuid !== '' ? $uuid : null;
     }
 
+    /**
+     * Whop sends money as an object: {"currency":"usd","amount":"111.00","decimals":2,...}
+     * (confirmed against the sandbox payments API). A plain number or string is accepted too.
+     */
     public function priceCents(): ?int
     {
         $value = $this->data()[self::PRICE_FIELD] ?? null;
+
+        if (is_array($value)) {
+            $value = $value['amount'] ?? null;
+        }
 
         return is_string($value) || is_int($value) || is_float($value)
             ? WhopAmount::decimalToCents($value)
@@ -72,6 +80,12 @@ class WhopWebhookPayload
     public function currency(): ?string
     {
         $currency = $this->data()['currency'] ?? null;
+
+        // Fall back to the currency inside the money object.
+        if (! is_string($currency) || $currency === '') {
+            $price = $this->data()[self::PRICE_FIELD] ?? null;
+            $currency = is_array($price) ? ($price['currency'] ?? null) : null;
+        }
 
         return is_string($currency) && $currency !== '' ? strtolower($currency) : null;
     }

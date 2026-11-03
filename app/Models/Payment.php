@@ -24,7 +24,7 @@ class Payment extends Model
         'service', 'package', 'note',
         'stripe_payment_intent_id', 'revolut_order_id', 'square_payment_id',
         'viva_transaction_id', 'viva_order_code', 'expires_at', 'paid_at',
-        'clover_payment_id', 'mpgs_order_id', 'authorizenet_transaction_id', 'whop_payment_id', 'whop_charge_started_at',
+        'clover_payment_id', 'mpgs_order_id', 'authorizenet_transaction_id', 'whop_payment_id', 'whop_charge_started_at', 'whop_checkout_configuration_id', 'whop_purchase_url',
         'authorizenet_first_attempt_at', 'authorizenet_last_attempt_at',
         'card_locked_until', 'card_attempts_since',
     ];

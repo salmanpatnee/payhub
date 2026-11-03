@@ -73,11 +73,23 @@ class SecurityHeaders
         $authorizenetScript = $authorizenetEnv ? ' '.config("services.authorizenet.hosts.{$authorizenetEnv}.script") : '';
         $authorizenetConnect = $authorizenetEnv ? ' '.config("services.authorizenet.hosts.{$authorizenetEnv}.connect") : '';
 
+        // Whop Checkout embed (spec 0009, AC-14): only the pay page of a Whop payment whose account is in
+        // embed mode gets the Whop hosts. Redirect mode adds none. No unsafe-inline or unsafe-eval.
+        $isWhopPayPage = in_array($route?->getName(), ['pay.show', 'pay.show.ref'], true)
+            && $routePayment instanceof Payment
+            && $routePayment->provider === PaymentProvider::Whop;
+        $whopAccount = $isWhopPayPage ? $routePayment->loadMissing('whopAccount')->whopAccount : null;
+        $whopScript = $whopConnect = '';
+        if ($whopAccount?->checkout_mode === 'embed') {
+            $whopScript = ' '.config("services.whop.hosts.{$whopAccount->environment}.script");
+            $whopConnect = ' '.config("services.whop.hosts.{$whopAccount->environment}.connect");
+        }
+
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
-            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$authorizenetScript}{$vite}{$scriptInline}; ".
-            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}; ".
-            "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$authorizenetConnect}{$vite}{$viteWs}; ".
+            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$authorizenetScript}{$whopScript}{$vite}{$scriptInline}; ".
+            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}{$whopScript}; ".
+            "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$authorizenetConnect}{$whopConnect}{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$square}{$vite}; ".
             "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$vite};"
