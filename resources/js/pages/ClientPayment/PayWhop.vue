@@ -35,6 +35,7 @@ const props = defineProps<{
     environment: 'sandbox' | 'production'
     hasCheckout: boolean
     hasConsent: boolean
+    clientEmail: string | null
     returnStatus: string | null
     scriptHost: string | null
 }>()
@@ -248,13 +249,16 @@ async function mountEmbed(checkoutConfigurationId: string): Promise<void> {
         checkoutConfiguration: checkoutConfigurationId,
         returnUrl: `${window.location.origin}/pay/${props.payment.uuid}`,
         // The page above already shows the brand and amount, so hide Whop's seller and price summary.
-        appearance: { classes: { 'whop-CheckoutSummary': { display: 'none' } } },
+        appearance: { classes: { 'whop-CheckoutSummary': { display: 'none' }, 'whop-Email': { display: 'none' } } },
         // Display only. Status changes only from the signed webhook.
         onComplete: () => startWaiting(),
     })
 
     checkoutHandle = group
-    group.create('checkout').mount(container.value as HTMLElement)
+    // The email was set when the payment was created: prefill and lock it (the field itself is hidden above).
+    group
+        .create('checkout', props.clientEmail ? { buyerEmail: props.clientEmail, lockBuyerEmail: true } : {})
+        .mount(container.value as HTMLElement)
 }
 
 async function payNow(): Promise<void> {

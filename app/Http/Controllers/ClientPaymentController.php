@@ -163,6 +163,8 @@ class ClientPaymentController extends Controller
             'environment' => $account->environment,
             'hasCheckout' => $payment->whop_checkout_configuration_id !== null,
             'hasConsent' => $payment->consents()->exists(),
+            // Prefills Whop's email field (embed only); required on every Whop payment.
+            'clientEmail' => $embed ? $payment->client_email : null,
             // Display only: the page never reads window.location, and this never changes status.
             'returnStatus' => $this->whopReturnStatus($request),
             'scriptHost' => $embed ? config("services.whop.hosts.{$account->environment}.script") : null,
