@@ -17,14 +17,14 @@ class Payment extends Model
 
     protected $fillable = [
         'uuid', 'reference_code', 'provider', 'brand_id',
-        'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id', 'mpgs_account_id', 'authorizenet_account_id',
+        'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id', 'mpgs_account_id', 'authorizenet_account_id', 'whop_account_id',
         'user_id', 'relationship_manager_id',
         'amount', 'currency', 'status',
         'client_email', 'client_name',
         'service', 'package', 'note',
         'stripe_payment_intent_id', 'revolut_order_id', 'square_payment_id',
         'viva_transaction_id', 'viva_order_code', 'expires_at', 'paid_at',
-        'clover_payment_id', 'mpgs_order_id', 'authorizenet_transaction_id',
+        'clover_payment_id', 'mpgs_order_id', 'authorizenet_transaction_id', 'whop_payment_id', 'whop_charge_started_at', 'whop_checkout_configuration_id', 'whop_purchase_url',
         'authorizenet_first_attempt_at', 'authorizenet_last_attempt_at',
         'card_locked_until', 'card_attempts_since',
     ];
@@ -65,6 +65,7 @@ class Payment extends Model
             'amount' => 'integer',
             'expires_at' => 'datetime',
             'paid_at' => 'datetime',
+            'whop_charge_started_at' => 'datetime',
             'authorizenet_first_attempt_at' => 'datetime',
             'authorizenet_last_attempt_at' => 'datetime',
             'card_locked_until' => 'datetime',
@@ -125,6 +126,11 @@ class Payment extends Model
         return $this->belongsTo(AuthorizenetAccount::class);
     }
 
+    public function whopAccount(): BelongsTo
+    {
+        return $this->belongsTo(WhopAccount::class);
+    }
+
     public function mpgsChargeAttempts(): HasMany
     {
         return $this->hasMany(MpgsChargeAttempt::class);
@@ -159,6 +165,7 @@ class Payment extends Model
             PaymentProvider::Clover => $this->cloverAccount?->prefix,
             PaymentProvider::Mpgs => $this->mpgsAccount?->prefix,
             PaymentProvider::Authorizenet => $this->authorizenetAccount?->prefix,
+            PaymentProvider::Whop => $this->whopAccount?->prefix,
         };
         $number = str_pad((string) ($this->reference_code ?? 0), 6, '0', STR_PAD_LEFT);
 
@@ -195,6 +202,7 @@ class Payment extends Model
             PaymentProvider::Clover => $this->cloverAccount?->account_name,
             PaymentProvider::Mpgs => $this->mpgsAccount?->account_name,
             PaymentProvider::Authorizenet => $this->authorizenetAccount?->account_name,
+            PaymentProvider::Whop => $this->whopAccount?->account_name,
         };
     }
 

@@ -1,0 +1,322 @@
+<script setup lang="ts">
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import {
+    CheckCircle2,
+    Pencil,
+    Plus,
+    Power,
+    PowerOff,
+    Trash2,
+    XCircle,
+} from 'lucide-vue-next';
+import { ref } from 'vue';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+
+type WhopAccountRow = {
+    id: number;
+    account_name: string;
+    prefix: string | null;
+    company_id: string;
+    environment: string;
+    is_active: boolean;
+};
+
+defineProps<{ whopAccounts: WhopAccountRow[] }>();
+
+defineOptions({
+    layout: {
+        breadcrumbs: [{ title: 'Whop Accounts', href: '/admin/whop-accounts' }],
+    },
+});
+
+const deactivateTarget = ref<WhopAccountRow | null>(null);
+const deactivateOpen = ref(false);
+const deactivateForm = useForm({});
+
+const activateTarget = ref<WhopAccountRow | null>(null);
+const activateOpen = ref(false);
+const activateForm = useForm({});
+
+const deleteTarget = ref<WhopAccountRow | null>(null);
+const deleteOpen = ref(false);
+const deleteForm = useForm({});
+
+function confirmActivate(account: WhopAccountRow) {
+    activateTarget.value = account;
+    activateOpen.value = true;
+}
+
+function executeActivate() {
+    if (!activateTarget.value) {
+        return;
+    }
+
+    activateForm.patch(
+        `/admin/whop-accounts/${activateTarget.value.id}/activate`,
+        {
+            onSuccess: () => {
+                activateOpen.value = false;
+                activateTarget.value = null;
+            },
+        },
+    );
+}
+
+function confirmDeactivate(account: WhopAccountRow) {
+    deactivateTarget.value = account;
+    deactivateOpen.value = true;
+}
+
+function executeDeactivate() {
+    if (!deactivateTarget.value) {
+        return;
+    }
+
+    deactivateForm.patch(
+        `/admin/whop-accounts/${deactivateTarget.value.id}/deactivate`,
+        {
+            onSuccess: () => {
+                deactivateOpen.value = false;
+                deactivateTarget.value = null;
+            },
+        },
+    );
+}
+
+function confirmDelete(account: WhopAccountRow) {
+    deleteTarget.value = account;
+    deleteOpen.value = true;
+}
+
+function executeDelete() {
+    if (!deleteTarget.value) {
+        return;
+    }
+
+    deleteForm.delete(`/admin/whop-accounts/${deleteTarget.value.id}`, {
+        onSuccess: () => {
+            deleteOpen.value = false;
+            deleteTarget.value = null;
+        },
+    });
+}
+</script>
+
+<template>
+    <Head title="Whop Accounts" />
+
+    <div class="space-y-6 p-6">
+        <div class="flex items-center justify-between">
+            <h1 class="text-2xl font-semibold tracking-tight">Whop Accounts</h1>
+            <Button as-child>
+                <Link href="/admin/whop-accounts/create">
+                    <Plus class="mr-1 size-4" />
+                    Add account
+                </Link>
+            </Button>
+        </div>
+
+        <div
+            class="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm"
+        >
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-border bg-[#F7F5F2]">
+                        <th
+                            class="px-5 py-3.5 text-left text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                        >
+                            #
+                        </th>
+                        <th
+                            class="px-5 py-3.5 text-left text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                        >
+                            Account Name
+                        </th>
+                        <th
+                            class="px-5 py-3.5 text-left text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                        >
+                            Prefix
+                        </th>
+                        <th
+                            class="px-5 py-3.5 text-left text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                        >
+                            Company ID
+                        </th>
+                        <th
+                            class="px-5 py-3.5 text-left text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                        >
+                            Environment
+                        </th>
+                        <th
+                            class="px-5 py-3.5 text-left text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                        >
+                            Status
+                        </th>
+                        <th
+                            class="px-5 py-3.5 text-right text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                        >
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr
+                        v-for="(account, index) in whopAccounts"
+                        :key="account.id"
+                        class="border-b border-border/50 transition-colors duration-150 last:border-0 hover:bg-muted/40"
+                    >
+                        <td
+                            class="px-5 py-3.5 text-muted-foreground tabular-nums"
+                        >
+                            {{ index + 1 }}
+                        </td>
+                        <td class="px-5 py-3.5 font-medium">
+                            {{ account.account_name }}
+                        </td>
+                        <td
+                            class="px-5 py-3.5 font-mono text-xs text-muted-foreground"
+                        >
+                            {{ account.prefix ?? '—' }}
+                        </td>
+                        <td class="px-5 py-3.5">
+                            <div
+                                v-if="account.is_active"
+                                class="inline-flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-500"
+                            >
+                                <CheckCircle2 class="size-4" />
+                                Active
+                            </div>
+                            <div
+                                v-else
+                                class="inline-flex items-center gap-1.5 text-sm font-medium text-red-500 dark:text-red-400"
+                            >
+                                <XCircle class="size-4" />
+                                Inactive
+                            </div>
+                        </td>
+                        <td class="px-5 py-3.5 text-right">
+                            <div class="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="icon" as-child>
+                                    <Link
+                                        :href="`/admin/whop-accounts/${account.id}/edit`"
+                                        :aria-label="`Edit ${account.account_name}`"
+                                    >
+                                        <Pencil class="size-4" />
+                                    </Link>
+                                </Button>
+                                <Button
+                                    v-if="account.is_active"
+                                    variant="ghost"
+                                    size="icon"
+                                    class="cursor-pointer"
+                                    :aria-label="`Deactivate ${account.account_name}`"
+                                    @click="confirmDeactivate(account)"
+                                >
+                                    <PowerOff class="size-4 text-destructive" />
+                                </Button>
+                                <Button
+                                    v-if="!account.is_active"
+                                    variant="ghost"
+                                    size="icon"
+                                    class="cursor-pointer"
+                                    :aria-label="`Activate ${account.account_name}`"
+                                    @click="confirmActivate(account)"
+                                >
+                                    <Power class="size-4 text-green-600" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="cursor-pointer"
+                                    :disabled="
+                                        deleteForm.processing &&
+                                        deleteTarget?.id === account.id
+                                    "
+                                    :aria-label="`Delete ${account.account_name}`"
+                                    @click="confirmDelete(account)"
+                                >
+                                    <Trash2 class="size-4 text-destructive" />
+                                </Button>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr v-if="whopAccounts.length === 0">
+                        <td
+                            colspan="7"
+                            class="px-5 py-16 text-center text-sm text-muted-foreground"
+                        >
+                            No Whop accounts yet. Add an account to enable
+                            payment collection.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <Dialog v-model:open="deactivateOpen">
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Deactivate account?</DialogTitle>
+                <DialogDescription>
+                    {{ deactivateTarget?.account_name }} will no longer be
+                    available for new payments. Existing payment links remain
+                    active until paid.
+                </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+                <Button variant="outline" @click="deactivateOpen = false"
+                    >Keep active</Button
+                >
+                <Button
+                    variant="destructive"
+                    :disabled="deactivateForm.processing"
+                    @click="executeDeactivate"
+                >
+                    Deactivate
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="activateOpen">
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Activate account?</DialogTitle>
+                <DialogDescription>
+                    {{ activateTarget?.account_name }} will become available for
+                    new payments.
+                </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+                <Button variant="outline" @click="activateOpen = false"
+                    >Cancel</Button
+                >
+                <Button
+                    :disabled="activateForm.processing"
+                    @click="executeActivate"
+                >
+                    Activate
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <ConfirmDeleteDialog
+        v-model:open="deleteOpen"
+        :title="`Delete ${deleteTarget?.account_name ?? 'account'}?`"
+        description="This account will be permanently removed. This cannot be undone."
+        :processing="deleteForm.processing"
+        @confirm="executeDelete"
+    />
+</template>

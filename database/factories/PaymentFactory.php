@@ -11,6 +11,7 @@ use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use App\Models\VivaAccount;
+use App\Models\WhopAccount;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -131,6 +132,20 @@ class PaymentFactory extends Factory
             'currency' => 'usd',
             'stripe_account_id' => null,
             'authorizenet_account_id' => AuthorizenetAccount::factory(),
+        ]);
+    }
+
+    /**
+     * Whop payment: nulls the Stripe account and attaches a Whop account.
+     * Whop has no currency lock; the default currency from the factory stays.
+     */
+    public function whop(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'provider' => 'whop',
+            'stripe_account_id' => null,
+            'client_email' => 'client@example.com',
+            'whop_account_id' => WhopAccount::factory(),
         ]);
     }
 }

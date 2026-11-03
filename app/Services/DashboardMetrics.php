@@ -13,6 +13,7 @@ use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\VivaAccount;
+use App\Models\WhopAccount;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -87,6 +88,7 @@ class DashboardMetrics
             ->when($accountProvider === 'clover', fn ($q) => $q->where('clover_account_id', $accountId))
             ->when($accountProvider === 'mpgs', fn ($q) => $q->where('mpgs_account_id', $accountId))
             ->when($accountProvider === 'authorizenet', fn ($q) => $q->where('authorizenet_account_id', $accountId))
+            ->when($accountProvider === 'whop', fn ($q) => $q->where('whop_account_id', $accountId))
             ->when($this->filters['currency'] ?? null, fn ($q, $v) => $q->where('currency', $v));
     }
 
@@ -116,7 +118,7 @@ class DashboardMetrics
 
         [$provider, $id] = explode(':', $value, 2);
 
-        return in_array($provider, ['stripe', 'revolut', 'square', 'viva', 'clover', 'mpgs', 'authorizenet'], true) && ctype_digit($id)
+        return in_array($provider, ['stripe', 'revolut', 'square', 'viva', 'clover', 'mpgs', 'authorizenet', 'whop'], true) && ctype_digit($id)
             ? [$provider, (int) $id]
             : [null, null];
     }
@@ -379,9 +381,10 @@ class DashboardMetrics
         $cloverNames = CloverAccount::query()->pluck('account_name', 'id');
         $mpgsNames = MpgsAccount::query()->pluck('account_name', 'id');
         $authorizenetNames = AuthorizenetAccount::query()->pluck('account_name', 'id');
+        $whopNames = WhopAccount::query()->pluck('account_name', 'id');
 
         return collect(array_keys($accepted + $pending))
-            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames, $vivaNames, $cloverNames, $mpgsNames, $authorizenetNames) {
+            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames, $vivaNames, $cloverNames, $mpgsNames, $authorizenetNames, $whopNames) {
                 [$provider, $id] = explode(':', $key);
                 $id = (int) $id;
                 $name = match ($provider) {
@@ -391,6 +394,7 @@ class DashboardMetrics
                     'clover' => $cloverNames[$id] ?? "Account #{$id}",
                     'mpgs' => $mpgsNames[$id] ?? "Account #{$id}",
                     'authorizenet' => $authorizenetNames[$id] ?? "Account #{$id}",
+                    'whop' => $whopNames[$id] ?? "Account #{$id}",
                     default => $stripeNames[$id] ?? "Account #{$id}",
                 };
 
@@ -417,8 +421,8 @@ class DashboardMetrics
     {
         $totals = [];
 
-        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, viva_account_id, clover_account_id, mpgs_account_id, authorizenet_account_id, currency, sum(amount) as s')
-            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id', 'mpgs_account_id', 'authorizenet_account_id', 'currency')
+        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, viva_account_id, clover_account_id, mpgs_account_id, authorizenet_account_id, whop_account_id, currency, sum(amount) as s')
+            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id', 'mpgs_account_id', 'authorizenet_account_id', 'whop_account_id', 'currency')
             ->get()
             ->each(function ($r) use (&$totals) {
                 $provider = $r->provider instanceof PaymentProvider ? $r->provider->value : (string) $r->provider;
@@ -429,6 +433,7 @@ class DashboardMetrics
                     'clover' => $r->clover_account_id,
                     'mpgs' => $r->mpgs_account_id,
                     'authorizenet' => $r->authorizenet_account_id,
+                    'whop' => $r->whop_account_id,
                     default => $r->stripe_account_id,
                 };
 
@@ -659,6 +664,13 @@ class DashboardMetrics
                 'provider' => 'authorizenet',
             ]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->values()->all();
+        $whop = WhopAccount::query()->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (WhopAccount $a) => [
+                'value' => "whop:{$a->id}",
+                'name' => $a->account_name,
+                'provider' => 'whop',
+            ]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->values()->all();
     }
 }

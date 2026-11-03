@@ -17,6 +17,7 @@ use App\Models\StripeAccount;
 use App\Models\User;
 use App\Models\UserPaymentAccount;
 use App\Models\VivaAccount;
+use App\Models\WhopAccount;
 use App\Support\CurrencySupportResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -131,6 +132,7 @@ class UserController extends Controller
             'clover' => CloverAccount::pluck('account_name', 'id')->all(),
             'mpgs' => MpgsAccount::pluck('account_name', 'id')->all(),
             'authorizenet' => AuthorizenetAccount::pluck('account_name', 'id')->all(),
+            'whop' => WhopAccount::pluck('account_name', 'id')->all(),
         ];
     }
 
@@ -163,7 +165,10 @@ class UserController extends Controller
         $authorizenet = AuthorizenetAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'currency'])
             ->map(fn (AuthorizenetAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'authorizenet', 'currency' => $a->currency]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->values();
+        $whop = WhopAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (WhopAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'whop', 'currency' => null]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->values();
     }
 
     /**
