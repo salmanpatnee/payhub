@@ -62,7 +62,11 @@ class MpgsPaymentController extends Controller
             // a reload or a retry never leaves several live sessions behind.
             $payment->mpgsChargeAttempts()->where('status', 'prepared')->get()
                 ->each(function (MpgsChargeAttempt $old) {
-                    $old->update(['status' => 'abandoned', 'session_id' => null]);
+                    $old->update([
+                        'status' => 'abandoned',
+                        'session_id' => null,
+                        'decline_reason' => $old->decline_reason ?? 'superseded by newer session',
+                    ]);
                     RecordMpgsAttemptOutcome::dispatch($old->id)->delay(now()->addSeconds(30));
                 });
 
@@ -140,9 +144,16 @@ class MpgsPaymentController extends Controller
         try {
             $attempt = $payment->mpgsChargeAttempts()->whereKey($validated['attempt_id'])->first();
 
-            if (! $attempt
-                || $attempt->status !== 'prepared'
-                || $attempt->created_at->addMinutes((int) config('services.mpgs.session_lifetime_minutes'))->isPast()) {
+            $unusable = $this->unusableReason($attempt);
+
+            if ($unusable !== null) {
+                // The payer may already have cleared 3DS on this session, so leave a trail.
+                Log::warning('MPGS pay refused: session not usable', [
+                    'payment_uuid' => $payment->uuid,
+                    'attempt_id' => $validated['attempt_id'],
+                    'reason' => $unusable,
+                ]);
+
                 return response()->json(['error' => 'This payment session is no longer valid. Please refresh and try again.'], 422);
             }
 
@@ -214,11 +225,45 @@ class MpgsPaymentController extends Controller
      * Polled by the client only while the latest attempt is unresolved.
      * Read only: Payment.status is the single source of truth.
      */
-    public function status(Payment $payment): JsonResponse
+    public function status(Request $request, Payment $payment): JsonResponse
     {
         abort_unless($payment->provider === PaymentProvider::Mpgs, 404);
 
-        return response()->json(['status' => $payment->status]);
+        $body = ['status' => $payment->status];
+
+        // Optional pre-check the pay page makes before the payer starts 3DS, so a
+        // session retired by a newer page load is caught before the bank step.
+        if ($request->filled('attempt_id')) {
+            $attempt = $payment->mpgsChargeAttempts()->whereKey((int) $request->query('attempt_id'))->first();
+            $body['session_valid'] = $this->unusableReason($attempt) === null;
+        }
+
+        return response()->json($body);
+    }
+
+    /**
+     * Why an attempt cannot take a PAY, or null when it can. Shared by pay() and
+     * the status pre-check so both agree.
+     */
+    private function unusableReason(?MpgsChargeAttempt $attempt): ?string
+    {
+        if (! $attempt) {
+            return 'missing';
+        }
+
+        if ($attempt->status === 'abandoned') {
+            return 'superseded';
+        }
+
+        if ($attempt->status !== 'prepared') {
+            return 'not_prepared';
+        }
+
+        if ($attempt->created_at->addMinutes((int) config('services.mpgs.session_lifetime_minutes'))->isPast()) {
+            return 'expired';
+        }
+
+        return null;
     }
 
     /**
