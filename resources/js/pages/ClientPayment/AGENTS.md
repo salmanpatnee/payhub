@@ -13,6 +13,7 @@ The public pages a client sees when they open a payment link (`/pay/{payment}`).
 | `PayClover.vue` + `CloverPaymentForm.vue` | Clover pay page and its card form |
 | `PayMpgs.vue` + `MpgsPaymentForm.vue` | MPGS hosted session fields and the 3DS step |
 | `PayAuthorizenet.vue` + `AuthorizenetCardForm.vue` | Authorize.net, PayHub's own card inputs plus Accept.js (`@/lib/acceptjs`, `@/lib/card`) |
+| `PayWhop.vue` | Whop: embed (`@whop/elements` checkout mounted on load) or redirect (Pay now), waiting state, polling |
 | `CardLockedNotice.vue` | "Payment paused, contact your representative" notice (MPGS and Authorize.net) |
 | `Success.vue`, `Failed.vue`, `Unavailable.vue` | Shared result pages |
 
@@ -22,6 +23,7 @@ The public pages a client sees when they open a payment link (`/pay/{payment}`).
 - Amount, currency and account always come from page props built on the server; nothing a page sends decides them.
 - Show the client only fixed messages. Gateway error text never reaches the page.
 - Pages whose status comes from a charge reply (Clover, MPGS, Authorize.net) poll their status endpoint every 3 seconds after a held or unclear result instead of showing the form again. Authorize.net stops showing the waiting message after 10 minutes of visible time.
+- `PayWhop.vue` never trusts Whop's `onComplete` or the return query: it only shows "We are confirming your payment" (kept across reloads in `sessionStorage`) and polls `/pay/{uuid}/whop/status` every 3 seconds until the webhook completes the payment, giving up after 10 visible minutes. Whop text never reaches the page.
 - A JSON endpoint answering HTTP 423 means the card attempt lock is on: reload so the page shows `CardLockedNotice` (the `lockedUntil` prop).
 - Card values on the Authorize.net form live only in local refs, are never inside a `<form>`, and the wrapper carries `sentry-block`. Never put card values in Inertia form state, a URL, storage, a log or the console.
 - A new provider or pay page feature must land on every pay page (see the parity rule in root `AGENTS.md`).

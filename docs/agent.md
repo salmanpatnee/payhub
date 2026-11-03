@@ -214,6 +214,31 @@ Run `php artisan migrate`. Migration `2026_10_21_000005_upgrade_authorizenet_to_
 
 ---
 
+## Whop — Checkout Provider
+
+Eighth provider (`payments.provider = whop`). Spec: `docs/specs/0009-whop-payment-provider/` (`verify.md` has the staging run). Whop's checkout holds the card, 3D Secure and billing form, so PayHub never sees card values.
+
+### Flow
+
+1. `POST /pay/{payment}/whop/checkout` (`WhopPaymentController::checkout`, limiter `whop-checkout`) checks the consent record, takes a cache lock and creates one hidden checkout configuration through `WhopClient::createCheckoutConfiguration()` (amount from the `Payment` row; metadata `payment_id` and `reference`). The id and purchase URL are saved on the payment and reused on reload.
+2. Embed mode (`PayWhop.vue`): the page mounts `@whop/elements` on load. Redirect mode: Pay now sends the browser to Whop's hosted page. The reply's mode wins over the page's mode.
+3. The page shows "We are confirming your payment" and polls `GET /pay/{payment}/whop/status` (reads `Payment.status` only) until the webhook completes it.
+4. Webhook `POST /webhook/whop/{whopAccount}` (CSRF off): signature `webhook-id` + `webhook-timestamp` + `webhook-signature` with the account's `ws_` secret, 300 second window, dedupe in `processed_whop_events`, then `HandleWhopWebhookJob`. Only `payment.succeeded` changes status, after the payment, account, amount (`subtotal`) and currency all match. `payment.failed`, refunds, disputes and the rest are logged only.
+
+### Accounts
+
+- Admin CRUD at `admin/whop-accounts` (test connection, activate/deactivate). `api_key` and `webhook_secret` use the `encrypted` cast and are not mass-assignable. Only one active account per Whop company id. `checkout_mode` is `embed` or `redirect`.
+- Register the webhook with `php artisan whop:register-webhook {account?} --url=https://<host>/webhook/whop/{account}` (stores the secret), or create it in Whop's dashboard (events `payment.succeeded`, `payment.failed`) and paste the `ws_` secret into the account's edit form.
+- No currency lock: USD and GBP only. The checkout is sent with local currency pricing off and card as the only payment method.
+- Without a public webhook URL a Whop payment stays `pending`. Local `*.test` addresses cannot be reached by Whop; use staging or a tunnel. With `QUEUE_CONNECTION=database` run a queue worker, with `sync` the webhook completes the payment in the same request.
+
+### Sandbox testing notes
+
+- Success card `4242 4242 4242 4242`, decline `4000 0000 0000 0002` (the checkout stays open for a retry), 3D Secure `5385 3083 6013 5181` (password `Checkout1!`). Any future expiry, any CVC and billing address.
+- The webhook log (Developer → Webhooks in Whop's dashboard) shows each delivery body and has Replay delivery; a replay is re-signed with a fresh timestamp.
+
+---
+
 ## Card attempt lock (MPGS + Authorize.net)
 
 After 3 failed card attempts (`CARD_LOCK_MAX_ATTEMPTS`) the pay page is paused for 60 minutes (`CARD_LOCK_MINUTES`), so repeated declines do not hurt the merchant's health. Other providers are not affected.

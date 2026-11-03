@@ -13,6 +13,7 @@ class ProviderAccountTable
             'clover' => 'clover_accounts',
             'mpgs' => 'mpgs_accounts',
             'authorizenet' => 'authorizenet_accounts',
+            'whop' => 'whop_accounts',
             default => 'stripe_accounts',
         };
     }

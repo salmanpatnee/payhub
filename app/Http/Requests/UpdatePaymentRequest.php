@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\PaymentProvider;
 use App\Enums\SupportedCurrency;
+use App\Http\Requests\Concerns\ResolvesWhopPayment;
 use App\Models\AuthorizenetAccount;
 use App\Models\MpgsAccount;
 use App\Models\Payment;
@@ -19,6 +20,8 @@ use Illuminate\Validation\Validator;
 
 class UpdatePaymentRequest extends FormRequest
 {
+    use ResolvesWhopPayment;
+
     public function authorize(): bool
     {
         // Pending-only + ownership gate is enforced in the controller via
@@ -43,7 +46,7 @@ class UpdatePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -90,7 +93,7 @@ class UpdatePaymentRequest extends FormRequest
             ],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
             'client_name' => ['nullable', 'string', 'max:255'],
-            'client_email' => ['nullable', 'email', 'max:255'],
+            'client_email' => [Rule::requiredIf(fn () => $this->resolvesToWhop()), 'nullable', 'email', 'max:255'],
             'service' => ['nullable', 'string', 'max:255'],
             'package' => ['nullable', 'string',
                 'in:basic,standard,premium,platinum,diamond'],
@@ -98,29 +101,48 @@ class UpdatePaymentRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'client_email.required' => 'Client email is required for Whop payments.',
+        ];
+    }
+
     /**
-     * Once an Authorize.net token was issued the client may already be paying
-     * the old values, so amount, currency and account become read-only (spec 0006, AC-10).
+     * Once a charge may have started the client may already be paying the old values,
+     * so amount, currency and account become read-only: Authorize.net after the first
+     * token (spec 0006, AC-10), Whop after the first charge call (spec 0009, AC-6).
      */
     public function after(): array
     {
         return [function (Validator $validator): void {
             $payment = $this->route('payment');
 
-            if (! $payment instanceof Payment
-                || $payment->provider !== PaymentProvider::Authorizenet
-                || $payment->authorizenet_first_attempt_at === null) {
+            if (! $payment instanceof Payment) {
                 return;
             }
 
-            $changed = (int) round(((float) $this->input('amount')) * 100) !== $payment->amount
+            [$provider, $accountColumn] = match (true) {
+                $payment->provider === PaymentProvider::Authorizenet && $payment->authorizenet_first_attempt_at !== null => ['authorizenet', 'authorizenet_account_id'],
+                $payment->provider === PaymentProvider::Whop && $payment->whop_charge_started_at !== null => ['whop', 'whop_account_id'],
+                default => [null, null],
+            };
+
+            if ($provider === null) {
+                return;
+            }
+
+            $brandChanged = $provider === 'whop' && $this->input('brand_id') !== null
+                && (int) $this->input('brand_id') !== $payment->brand_id;
+
+            $changed = $brandChanged || (int) round(((float) $this->input('amount')) * 100) !== $payment->amount
                 || $this->input('currency') !== $payment->currency
                 || ($this->input('account_id') !== null
-                    && (int) $this->input('account_id') !== $payment->authorizenet_account_id)
-                || ($this->input('provider') !== null && $this->input('provider') !== 'authorizenet');
+                    && (int) $this->input('account_id') !== $payment->{$accountColumn})
+                || ($this->input('provider') !== null && $this->input('provider') !== $provider);
 
             if ($changed) {
-                $validator->errors()->add('amount', 'This payment link was already opened by the client, so the amount, currency and account can no longer be changed.');
+                $validator->errors()->add('amount', 'This payment link was already opened by the client, so the amount, currency, account and brand can no longer be changed.');
             }
         }];
     }
@@ -160,6 +182,7 @@ class UpdatePaymentRequest extends FormRequest
         $data['clover_account_id'] = $provider === 'clover' ? $accountId : null;
         $data['mpgs_account_id'] = $provider === 'mpgs' ? $accountId : null;
         $data['authorizenet_account_id'] = $provider === 'authorizenet' ? $accountId : null;
+        $data['whop_account_id'] = $provider === 'whop' ? $accountId : null;
 
         return $data;
     }

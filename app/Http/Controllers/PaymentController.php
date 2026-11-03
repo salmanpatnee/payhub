@@ -18,6 +18,7 @@ use App\Models\SquareAccount;
 use App\Models\StripeAccount;
 use App\Models\User;
 use App\Models\VivaAccount;
+use App\Models\WhopAccount;
 use App\Services\CardLock\CardLockGuard;
 use App\Support\ProviderAccountTable;
 use Illuminate\Database\Eloquent\Builder;
@@ -90,7 +91,7 @@ class PaymentController extends Controller
     {
         $canViewAll = $user->hasRole('admin') || $user->hasRole('account');
 
-        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'user', 'relationshipManager'])
+        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'user', 'relationshipManager'])
             ->orderByDesc('created_at');
 
         if (! $canViewAll) {
@@ -274,7 +275,10 @@ class PaymentController extends Controller
         $authorizenet = AuthorizenetAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'currency'])
             ->map(fn (AuthorizenetAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'authorizenet', 'currency' => $a->currency]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->values();
+        $whop = WhopAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (WhopAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'whop']);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->values();
     }
 
     /**
@@ -290,7 +294,7 @@ class PaymentController extends Controller
      * whichever branch happens to be last — see CLAUDE.md's warning about the
      * two Square CSV export bugs caused by exactly this pattern.
      *
-     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int, mpgs_account_id: ?int, authorizenet_account_id: ?int}|null
+     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int, mpgs_account_id: ?int, authorizenet_account_id: ?int, whop_account_id: ?int}|null
      */
     private function agentAccountData(User $user, string $currency): ?array
     {
@@ -317,6 +321,7 @@ class PaymentController extends Controller
             'clover_account_id' => $provider === 'clover' ? $account->account_id : null,
             'mpgs_account_id' => $provider === 'mpgs' ? $account->account_id : null,
             'authorizenet_account_id' => $provider === 'authorizenet' ? $account->account_id : null,
+            'whop_account_id' => $provider === 'whop' ? $account->account_id : null,
         ];
     }
 
@@ -385,7 +390,7 @@ class PaymentController extends Controller
                 'uuid' => $payment->uuid,
                 'brand_id' => $payment->brand_id,
                 'provider' => $payment->provider->value,
-                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id ?? $payment->mpgs_account_id ?? $payment->authorizenet_account_id,
+                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id ?? $payment->mpgs_account_id ?? $payment->authorizenet_account_id ?? $payment->whop_account_id,
                 'relationship_manager_id' => $payment->relationship_manager_id,
                 'currency' => $payment->currency,
                 // Cents → decimal string for the amount input.
@@ -455,6 +460,8 @@ class PaymentController extends Controller
             'mpgs_account_id' => ['mpgs_order_id'],
             // Authorize.net's transaction id, set by whichever path first resolves the payment.
             'authorizenet_account_id' => ['authorizenet_transaction_id'],
+            // Whop's payment id, set by the completing webhook.
+            'whop_account_id' => ['whop_payment_id'],
         ];
 
         $cleared = [];
@@ -480,6 +487,13 @@ class PaymentController extends Controller
     {
         Gate::authorize('delete', $payment);
 
+        // An open Whop checkout would stay payable, so a payment with one cannot be removed (spec 0009, AC-6).
+        if ($payment->provider === PaymentProvider::Whop && $payment->whop_checkout_configuration_id !== null) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => 'This payment has an open Whop checkout and cannot be deleted.']);
+
+            return redirect()->back();
+        }
+
         $payment->delete();
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Payment deleted.']);
@@ -501,7 +515,7 @@ class PaymentController extends Controller
     public function show(Payment $payment): Response
     {
         Gate::authorize('view', $payment);
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'relationshipManager']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'relationshipManager']);
 
         $user = auth()->user();
         $canViewStripeAccount = $user->hasRole('admin') || $user->hasRole('account');
@@ -537,6 +551,7 @@ class PaymentController extends Controller
                     PaymentProvider::Clover => $payment->clover_payment_id,
                     PaymentProvider::Mpgs => $payment->mpgs_order_id,
                     PaymentProvider::Authorizenet => $payment->authorizenet_transaction_id,
+                    PaymentProvider::Whop => $payment->whop_payment_id,
                 },
                 'paid_at' => $payment->paid_at?->toISOString(),
                 'expires_at' => $payment->expires_at?->toISOString(),

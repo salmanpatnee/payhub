@@ -43,6 +43,20 @@ return [
         'api_version' => env('REVOLUT_API_VERSION', '2024-09-01'),
     ],
 
+    'whop' => [
+        // Constants, not secrets. API key and webhook secret live encrypted per account
+        // on whop_accounts. Hosts are placeholders until the step 0 sandbox check (spec 0009, AC-13/AC-14).
+        'hosts' => [
+            // api: REST base. checkout: host put in front of the path Whop returns as purchase_url.
+            // script: Whop Elements CDN host, used for script-src and frame-src; connect: API origin for connect-src (both embed mode, CSP, from @whop/elements contentSecurityPolicy()). Sandbox has no Elements yet (docs.whop.com sandbox guide).
+            'sandbox' => ['api' => 'https://sandbox-api.whop.com/api/v1', 'connect' => 'https://sandbox-api.whop.com', 'checkout' => 'https://sandbox.whop.com', 'script' => 'https://cdn.whop.com'],
+            'production' => ['api' => 'https://api.whop.com/api/v1', 'connect' => 'https://api.whop.com', 'checkout' => 'https://whop.com', 'script' => 'https://cdn.whop.com'],
+        ],
+        'lock_seconds' => 60,
+        'connect_timeout' => 10,
+        'timeout' => 30,
+    ],
+
     'viva' => [
         // 'demo' targets the demo-*.vivapayments.com hosts; 'production' targets the live hosts.
         // Per-account client id/secret/merchant id/api key live (encrypted where applicable)
