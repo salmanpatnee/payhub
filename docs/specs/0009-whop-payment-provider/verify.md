@@ -13,10 +13,10 @@ _Steps derived from spec 0009 acceptance criteria. Covers build plan steps 1 to 
 
 ## Commands
 - [ ] `php artisan test --parallel --filter=Whop` → all pass → AC-1, AC-2, AC-6, AC-9, AC-10, AC-11, AC-12
-- [ ] `php artisan whop:register-webhook 1 --url=http://example.test` → refuses, non https URL, no Whop call → AC-12
+- [x] `php artisan whop:register-webhook 1 --url=http://example.test` → refuses, non https URL, no Whop call → AC-12
 - [ ] `php artisan whop:register-webhook 1 --url=https://<public host>/webhook/whop/1` against the sandbox → prints the table and stores an encrypted secret; running it again asks before replacing → AC-12, AC-13
 - [ ] POST to `/webhook/whop/{id}` with a bad signature, a missing header, a timestamp 10 minutes old, or an account with no stored secret → 401 (403 for no secret), no job queued → AC-9
-- [ ] Send a signed `payment.succeeded` with the right metadata and price → payment becomes `completed`, one notification queued; send the same `webhook-id` again → no change → AC-10
+- [x] Send a signed `payment.succeeded` with the right metadata and price → payment becomes `completed`, one notification queued; send the same `webhook-id` again → no change → AC-10
 - [ ] Send a signed `payment.succeeded` with a wrong amount, wrong currency, another account's payment, or a cancelled payment → status unchanged, an error line in the log → AC-10
 - [ ] Send signed `payment.failed`, a refund and a dispute event → 200, payment status unchanged, info line in the log → AC-11
 - [ ] Try to change amount, currency or account on a payment whose `whop_charge_started_at` is set → rejected; changing the name still works → AC-6
@@ -36,15 +36,15 @@ _Steps derived from spec 0009 acceptance criteria. Covers build plan steps 1 to 
 ### UI / manual
 - [ ] Edit a Whop account, switch checkout mode between Embed and Redirect, save → value persists; invalid value is rejected → AC-1
 - [ ] Open a Whop pay link in `redirect` mode, tick consent, press Pay now → browser goes to Whop's hosted checkout; pay with `4242 4242 4242 4242` → returns to the pay page, shows "We are confirming your payment. Please do not pay again.", then Success once the webhook lands → AC-4, AC-7, AC-8
-- [ ] Return with a failed card (`4000 0000 0000 0002`) → page shows Pay now again, status stays `pending` → AC-7, AC-11
-- [ ] Reload during the confirming state → still shows confirming, not Pay now; address bar has no `payment` or `status` → AC-7, AC-8
+- [x] Return with a failed card (`4000 0000 0000 0002`) → page shows Pay now again, status stays `pending` (embed: the checkout stays open for a retry; staging 2026-11-03) → AC-7, AC-11
+- [x] Reload during the confirming state → still shows confirming, not Pay now; address bar has no `payment` or `status` → AC-7, AC-8
 - [ ] Leave the tab confirming for 10 visible minutes → "Still confirming, you will get a receipt by email" → AC-8
-- [ ] In `embed` mode (production only, Elements has no sandbox): Pay now mounts Whop's checkout inside the page, cards only, no CSP errors in the console → AC-4, AC-14
+- [x] In `embed` mode (works in the sandbox, staging 2026-11-03): the card fields mount on load with no Pay now step, cards only, Whop's header and email field hidden, email and billing name prefilled → AC-4, AC-14
 - [ ] Deactivate the account → pay link shows Unavailable; a webhook for a mid flight payment still completes it → AC-4, AC-9
 - [ ] After Pay now, try to change amount, currency, account, brand, or delete the payment in admin → all refused → AC-6
 
 ### Commands
-- [ ] `php artisan test --filter=Whop` → all pass → AC-1 to AC-12, AC-14
+- [x] `php artisan test --filter=Whop` → all pass (77 tests, 300 assertions on 2026-11-03) → AC-1 to AC-12, AC-14
 - [ ] `curl -X POST https://<host>/pay/<uuid>/whop/checkout` 11 times in an hour → the 11th returns 429 with no Whop call → AC-6
 - [ ] Open the pay page of a Whop `redirect` account and a Stripe payment, read the `Content-Security-Policy` header → no `whop.com` host in either; embed account adds `https://cdn.whop.com` and the API origin → AC-14
 - [ ] Export CSV, filter the dashboard by Whop, check "Accounts Today" → Whop payment appears with the Whop payment id → AC-3
@@ -53,4 +53,13 @@ _Steps derived from spec 0009 acceptance criteria. Covers build plan steps 1 to 
 - [ ] Create a GBP payment with 12.34 → Whop checkout shows 12.34 GBP; 0.10 shows 0.10 → AC-5
 - [ ] Flip the account mode between page load and Pay now → the endpoint reply's mode wins → AC-4
 - [ ] Pay with a Whop tax or fee in play → webhook `subtotal` still equals the payment amount, otherwise fix `WhopWebhookPayload::PRICE_FIELD` → AC-10, AC-13
-- [ ] Trigger a Whop retry of a webhook and check its `webhook-timestamp` is fresh (Open question 6, merge blocker) → AC-9
+- [x] Trigger a Whop retry of a webhook and check its `webhook-timestamp` is fresh (Open question 6, answered 2026-11-03: replaying an 11 minute old delivery from Whop's dashboard returned 200 OK) → AC-9
+
+## Staging run 2026-11-03 (embed mode, `QUEUE_CONNECTION=sync`)
+- [x] Success `4242 4242 4242 4242`: the page turns from confirming to the success page with the reference code; delivery 200 OK; `subtotal`, `total` and `usd_total` are `100.00` `usd`, `metadata.payment_id` is the payment uuid → AC-7, AC-8, AC-10, AC-13
+- [x] Decline `4000 0000 0000 0002`, then pay again on the same link with `4242`: `payment.failed` 200 with no status change, then `payment.succeeded` completes → AC-7, AC-11
+- [x] 3D Secure `5385 3083 6013 5181` (password `Checkout1!`) completes → AC-4
+- [x] Reload while confirming keeps the waiting message → AC-8
+- [x] GBP payment completes → AC-5, AC-10
+- [x] Replay from Whop's dashboard of an 11 minute old event → 200 OK → AC-9
+- [ ] Not run yet: `redirect` mode, rate limit (11 posts), 10 visible minutes confirming, deactivated account, wrong amount or currency, a signature from another account, admin edit locks on a live payment, a payment with Whop tax or fees, CSP header on a `redirect` account page, refund and dispute events
