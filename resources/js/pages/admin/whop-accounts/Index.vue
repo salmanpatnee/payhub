@@ -149,11 +149,6 @@ function executeDelete() {
                         <th
                             class="px-5 py-3.5 text-left text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
                         >
-                            Company ID
-                        </th>
-                        <th
-                            class="px-5 py-3.5 text-left text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
-                        >
                             Environment
                         </th>
                         <th
@@ -186,6 +181,9 @@ function executeDelete() {
                             class="px-5 py-3.5 font-mono text-xs text-muted-foreground"
                         >
                             {{ account.prefix ?? '—' }}
+                        </td>
+                        <td class="px-5 py-3.5 capitalize">
+                            {{ account.environment }}
                         </td>
                         <td class="px-5 py-3.5">
                             <div
@@ -252,7 +250,7 @@ function executeDelete() {
 
                     <tr v-if="whopAccounts.length === 0">
                         <td
-                            colspan="7"
+                            colspan="6"
                             class="px-5 py-16 text-center text-sm text-muted-foreground"
                         >
                             No Whop accounts yet. Add an account to enable
