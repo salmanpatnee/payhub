@@ -342,12 +342,23 @@ onMounted(() => {
         // The client may retry inside Whop's checkout.
         writeConfirming(null)
 
+        if (props.mode === 'embed') {
+            void payNow()
+        }
+
         return
     }
 
     // Succeeded, processing or any pending value, or a reload during confirmation.
     if (status !== null || readConfirming() !== null) {
         startWaiting()
+
+        return
+    }
+
+    // Embed shows the card fields straight away; redirect still needs the Pay now click.
+    if (props.mode === 'embed') {
+        void payNow()
     }
 })
 
@@ -397,7 +408,15 @@ onBeforeUnmount(() => {
                         <AlertDescription>{{ message }}</AlertDescription>
                     </Alert>
 
-                    <div class="space-y-3">
+                    <!-- Embed: fields mount on load, so only a placeholder or a retry shows here. -->
+                    <div v-if="mode === 'embed'" class="space-y-3">
+                        <p v-if="uiState === 'starting'" class="py-12 text-center text-sm text-slate-500">Preparing…</p>
+                        <Button v-else-if="canRetry" type="button" class="w-full" :disabled="consentBusy" @click="payNow">
+                            Try again
+                        </Button>
+                    </div>
+
+                    <div v-else class="space-y-3">
                         <div class="flex items-baseline justify-between rounded-lg border border-slate-200 px-4 py-3">
                             <span class="text-sm text-slate-500">Amount due</span>
                             <span class="text-lg font-semibold text-slate-900">{{ formatMoney(payment.amount, payment.currency) }}</span>
@@ -421,7 +440,7 @@ onBeforeUnmount(() => {
                             id="policy-consent"
                             v-model="consent"
                             :aria-invalid="!!consentError"
-                            :disabled="consentBusy || uiState !== 'ready'"
+                            :disabled="consentBusy || uiState !== 'ready' || mode === 'embed'"
                             class="mt-px size-3.5 shrink-0 data-[state=checked]:!bg-slate-400 data-[state=checked]:!border-slate-400 data-[state=checked]:!text-white"
                             @update:model-value="consentError = undefined"
                         />
