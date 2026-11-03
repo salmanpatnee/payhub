@@ -165,6 +165,8 @@ class ClientPaymentController extends Controller
             'hasConsent' => $payment->consents()->exists(),
             // Prefills Whop's email field (embed only); required on every Whop payment.
             'clientEmail' => $embed ? $payment->client_email : null,
+            // Prefills the billing name on Whop's card form (embed only); required on every payment.
+            'clientName' => $embed ? $payment->client_name : null,
             // Display only: the page never reads window.location, and this never changes status.
             'returnStatus' => $this->whopReturnStatus($request),
             'scriptHost' => $embed ? config("services.whop.hosts.{$account->environment}.script") : null,

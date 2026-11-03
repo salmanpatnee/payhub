@@ -36,6 +36,7 @@ const props = defineProps<{
     hasCheckout: boolean
     hasConsent: boolean
     clientEmail: string | null
+    clientName: string | null
     returnStatus: string | null
     scriptHost: string | null
 }>()
@@ -257,7 +258,10 @@ async function mountEmbed(checkoutConfigurationId: string): Promise<void> {
     checkoutHandle = group
     // The email was set when the payment was created: prefill and lock it (the field itself is hidden above).
     group
-        .create('checkout', props.clientEmail ? { buyerEmail: props.clientEmail, lockBuyerEmail: true } : {})
+        .create('checkout', {
+            ...(props.clientEmail ? { buyerEmail: props.clientEmail, lockBuyerEmail: true } : {}),
+            ...(props.clientName ? { defaultValues: { billingDetails: { name: props.clientName } } } : {}),
+        })
         .mount(container.value as HTMLElement)
 }
 
