@@ -247,6 +247,8 @@ async function mountEmbed(checkoutConfigurationId: string): Promise<void> {
     const group = whop.checkout.create({
         checkoutConfiguration: checkoutConfigurationId,
         returnUrl: `${window.location.origin}/pay/${props.payment.uuid}`,
+        // The page above already shows the brand and amount, so hide Whop's seller and price summary.
+        appearance: { classes: { 'whop-CheckoutSummary': { display: 'none' } } },
         // Display only. Status changes only from the signed webhook.
         onComplete: () => startWaiting(),
     })

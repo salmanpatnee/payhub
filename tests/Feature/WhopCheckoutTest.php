@@ -99,6 +99,9 @@ it('creates one checkout configuration from the payment record and saves it', fu
             && $body['variant']['billing_type'] === 'one_time'
             && $body['variant']['release_method'] === 'buy_now'
             && $body['variant']['visibility'] === 'hidden'
+            && $body['variant']['adaptive_pricing_enabled'] === false
+            && $body['variant']['payment_method_configuration']['enabled'] === ['card']
+            && $body['variant']['payment_method_configuration']['include_platform_defaults'] === false
             && ! isset($body['plan'])
             && $body['metadata']['payment_id'] === $payment->uuid
             && str_starts_with($body['redirect_url'], 'http');

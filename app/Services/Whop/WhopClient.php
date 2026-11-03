@@ -76,6 +76,15 @@ class WhopClient
                 'currency' => strtolower($currency),
                 // Whop wants a JSON number in dollars; the string comes from integer math.
                 'initial_price' => (float) WhopAmount::centsToDecimal($amountCents),
+                // Charge in the payment's own currency, never the buyer's local one.
+                'adaptive_pricing_enabled' => false,
+                'payment_method_configuration' => [
+                    // Card only: the pay page says "Pay securely by card". An allowlist also keeps
+                    // methods Whop adds later (ACH, crypto, wallets) off the checkout.
+                    'enabled' => ['card'],
+                    'disabled' => [],
+                    'include_platform_defaults' => false,
+                ],
             ],
             'metadata' => $metadata,
             'redirect_url' => $redirectUrl,
