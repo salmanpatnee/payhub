@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AlertCircle, LockIcon } from 'lucide-vue-next'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -146,7 +146,41 @@ async function prepare(): Promise<boolean> {
     return true
 }
 
+// A page restored from the back/forward cache still holds a session the server may have
+// retired, so start again with a fresh one.
+function onPageShow(event: PageTransitionEvent): void {
+    if (event.persisted) {
+        window.location.reload()
+    }
+}
+
+onBeforeUnmount(() => window.removeEventListener('pageshow', onPageShow))
+
+/**
+ * False only when the server says this page's session was retired (another page load
+ * made a newer one) or expired. A failed check returns true: the pay step still decides.
+ */
+async function sessionStillValid(attemptId: number): Promise<boolean> {
+    try {
+        const response = await fetch(`/pay/${props.payment.uuid}/mpgs/status?attempt_id=${attemptId}`, {
+            headers: { Accept: 'application/json' },
+        })
+
+        if (!response.ok) {
+            return true
+        }
+
+        const data = await response.json()
+
+        return data.session_valid !== false
+    } catch {
+        return true
+    }
+}
+
 onMounted(async () => {
+    window.addEventListener('pageshow', onPageShow)
+
     const notice = takeNotice(props.payment.uuid)
 
     try {
@@ -198,6 +232,13 @@ async function submit(): Promise<void> {
     }
 
     try {
+        // Don't send the payer through the bank step on a session the server already retired.
+        if (!(await sessionStillValid(session.attempt_id))) {
+            reloadWithNotice(props.payment.uuid, 'This payment session is no longer valid. Please try again.')
+
+            return
+        }
+
         await captureCard()
 
         const threeDs = await authenticatePayer(session)

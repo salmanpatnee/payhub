@@ -8,6 +8,7 @@ use App\Models\Payment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Spatie\Permission\Models\Role;
@@ -94,7 +95,9 @@ it('retires the earlier prepared attempt and issues order id -2 on a second prep
 
     $statuses = $payment->mpgsChargeAttempts()->orderBy('sequence')->pluck('status')->all();
     expect($statuses)->toBe(['abandoned', 'prepared']);
-    expect($payment->mpgsChargeAttempts()->where('status', 'abandoned')->first()->session_id)->toBeNull();
+    $retired = $payment->mpgsChargeAttempts()->where('status', 'abandoned')->first();
+    expect($retired->session_id)->toBeNull()
+        ->and($retired->decline_reason)->toBe('superseded by newer session');
 });
 
 it('refuses to prepare when the payment cannot be paid', function (string $case) {
@@ -372,6 +375,51 @@ it('reports the payment status read only and 404s a non MPGS payment', function 
 
     $this->getJson(route('pay.mpgs.status', $payment))->assertOk()->assertExactJson(['status' => 'completed']);
     $this->getJson(route('pay.mpgs.status', Payment::factory()->create()))->assertNotFound();
+});
+
+it('tells the pay page whether its session is still usable, read only', function (string $case, bool $valid) {
+    $payment = mpgsPayable();
+    $other = mpgsPayable();
+
+    $attemptId = match ($case) {
+        'prepared' => MpgsChargeAttempt::factory()->prepared()->create(['payment_id' => $payment->id])->id,
+        'retired' => MpgsChargeAttempt::factory()->prepared()->create(['payment_id' => $payment->id, 'status' => 'abandoned'])->id,
+        'expired' => tap(MpgsChargeAttempt::factory()->prepared()->create(['payment_id' => $payment->id]),
+            fn ($a) => $a->forceFill(['created_at' => now()->subHours(2)])->save())->id,
+        'another payments attempt' => MpgsChargeAttempt::factory()->prepared()->create(['payment_id' => $other->id])->id,
+    };
+
+    $this->getJson(route('pay.mpgs.status', ['payment' => $payment, 'attempt_id' => $attemptId]))
+        ->assertOk()
+        ->assertJsonPath('session_valid', $valid)
+        ->assertJsonPath('status', 'pending');
+})->with([
+    'prepared' => ['prepared', true],
+    'retired' => ['retired', false],
+    'expired' => ['expired', false],
+    'another payments attempt' => ['another payments attempt', false],
+]);
+
+it('leaves session_valid out of the status reply when no attempt id is sent', function () {
+    $payment = mpgsPayable();
+
+    $this->getJson(route('pay.mpgs.status', $payment))->assertExactJson(['status' => 'pending']);
+});
+
+it('logs why a pay was refused for a retired session', function () {
+    Http::fake();
+    Log::spy();
+    $payment = mpgsPayable();
+    $attempt = MpgsChargeAttempt::factory()->prepared()->create(['payment_id' => $payment->id, 'status' => 'abandoned']);
+
+    $this->postJson(route('pay.mpgs.pay', $payment), ['attempt_id' => $attempt->id])->assertStatus(422);
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn ($message, $context) => $message === 'MPGS pay refused: session not usable'
+            && $context['reason'] === 'superseded'
+            && $context['attempt_id'] === $attempt->id)
+        ->once();
+    Http::assertNothingSent();
 });
 
 // ── 3DS return route ─────────────────────────────────────────────────────────
