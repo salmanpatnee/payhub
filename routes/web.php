@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\SquareAccountController;
 use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VivaAccountController;
+use App\Http\Controllers\Admin\WhopAccountController;
 use App\Http\Controllers\AuthorizenetPaymentController;
 use App\Http\Controllers\AuthorizenetWebhookController;
 use App\Http\Controllers\BankAccountActivityLogController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\SquareWebhookController;
 use App\Http\Controllers\StripeHealthController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\VivaWebhookController;
+use App\Http\Controllers\WhopWebhookController;
 use App\Http\Controllers\ZelleAccountController;
 use App\Support\Navigation;
 use Illuminate\Support\Facades\Artisan;
@@ -168,6 +170,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'revolut-accounts/{revolut_account}/test-connection',
             [RevolutAccountController::class, 'testStoredConnection']
         )->name('revolut-accounts.test-stored-connection');
+
+        Route::resource('whop-accounts', WhopAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'whop-accounts/{whop_account}/deactivate',
+            [WhopAccountController::class, 'deactivate']
+        )->name('whop-accounts.deactivate');
+
+        Route::patch(
+            'whop-accounts/{whop_account}/activate',
+            [WhopAccountController::class, 'activate']
+        )->name('whop-accounts.activate');
+
+        Route::post(
+            'whop-accounts/test-connection',
+            [WhopAccountController::class, 'testKeyConnection']
+        )->name('whop-accounts.test-connection');
+
+        Route::post(
+            'whop-accounts/{whop_account}/test-connection',
+            [WhopAccountController::class, 'testStoredConnection']
+        )->name('whop-accounts.test-stored-connection');
 
         Route::resource('square-accounts', SquareAccountController::class)
             ->except(['show']);
@@ -373,6 +398,11 @@ Route::post('/webhook/mpgs/{mpgsAccount}', [MpgsWebhookController::class, 'handl
 // {authorizenetAccount} resolves by integer id. Protected by the X-ANET-Signature HMAC (spec 0006, AC-8).
 Route::post('/webhook/authorizenet/{authorizenetAccount}', [AuthorizenetWebhookController::class, 'handle'])
     ->name('webhook.authorizenet')
+    ->middleware('throttle:120,1');
+
+// {whopAccount} resolves by integer id. Standard Webhooks signature, verified in the controller (spec 0009, AC-9).
+Route::post('/webhook/whop/{whopAccount}', [WhopWebhookController::class, 'handle'])
+    ->name('webhook.whop')
     ->middleware('throttle:120,1');
 
 // {vivaAccount} resolves by integer id (implicit model binding).

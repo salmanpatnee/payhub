@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\SupportedCurrency;
+use App\Http\Requests\Concerns\ResolvesWhopPayment;
 use App\Models\AuthorizenetAccount;
 use App\Models\MpgsAccount;
 use App\Models\Payment;
@@ -17,6 +18,8 @@ use Illuminate\Validation\Rule;
 
 class StorePaymentRequest extends FormRequest
 {
+    use ResolvesWhopPayment;
+
     public function authorize(): bool
     {
         return $this->user()?->can('create', Payment::class) ?? false;
@@ -39,7 +42,7 @@ class StorePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -86,11 +89,18 @@ class StorePaymentRequest extends FormRequest
             ],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
             'client_name' => ['required', 'string', 'max:255'],
-            'client_email' => ['nullable', 'email', 'max:255'],
+            'client_email' => [Rule::requiredIf(fn () => $this->resolvesToWhop()), 'nullable', 'email', 'max:255'],
             'service' => ['nullable', 'string', 'max:255'],
             'package' => ['nullable', 'string',
                 'in:basic,standard,premium,platinum,diamond'],
             'note' => ['nullable', 'string', 'max:2000'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'client_email.required' => 'Client email is required for Whop payments.',
         ];
     }
 
@@ -132,6 +142,7 @@ class StorePaymentRequest extends FormRequest
         $data['clover_account_id'] = $provider === 'clover' ? $accountId : null;
         $data['mpgs_account_id'] = $provider === 'mpgs' ? $accountId : null;
         $data['authorizenet_account_id'] = $provider === 'authorizenet' ? $accountId : null;
+        $data['whop_account_id'] = $provider === 'whop' ? $accountId : null;
 
         return $data;
     }

@@ -43,6 +43,19 @@ return [
         'api_version' => env('REVOLUT_API_VERSION', '2024-09-01'),
     ],
 
+    'whop' => [
+        // Constants, not secrets. API key and webhook secret live encrypted per account
+        // on whop_accounts. Hosts are placeholders until the step 0 sandbox check (spec 0009, AC-13/AC-14).
+        'hosts' => [
+            'sandbox' => ['api' => 'https://sandbox-api.whop.com/api/v1'],
+            'production' => ['api' => 'https://api.whop.com/api/v1'],
+        ],
+        'unclear_pause_seconds' => 600,
+        'lock_seconds' => 60,
+        'connect_timeout' => 10,
+        'timeout' => 30,
+    ],
+
     'viva' => [
         // 'demo' targets the demo-*.vivapayments.com hosts; 'production' targets the live hosts.
         // Per-account client id/secret/merchant id/api key live (encrypted where applicable)
