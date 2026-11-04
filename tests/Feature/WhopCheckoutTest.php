@@ -103,6 +103,8 @@ it('creates one checkout configuration from the payment record and saves it', fu
             && $body['variant']['payment_method_configuration']['enabled'] === ['card']
             && $body['variant']['payment_method_configuration']['include_platform_defaults'] === false
             && ! isset($body['plan'])
+            && $body['variant']['description'] === $payment->formattedReferenceCode()
+            && $body['variant']['title'] === $body['variant']['description']
             && $body['metadata']['payment_id'] === $payment->uuid
             && str_starts_with($body['redirect_url'], 'http');
     });
