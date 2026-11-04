@@ -39,6 +39,8 @@ const emit = defineEmits<{
 
 const ready        = ref(false)
 const processing   = ref(false)
+// True once the server says another tab took over this payment's card session.
+const stale        = ref(false)
 const errorMessage = ref<string | null>(null)
 
 const fieldInvalid = ref<Record<keyof MpgsFieldTargets, boolean>>({
@@ -157,24 +159,30 @@ function onPageShow(event: PageTransitionEvent): void {
 onBeforeUnmount(() => window.removeEventListener('pageshow', onPageShow))
 
 /**
- * False only when the server says this page's session was retired (another page load
- * made a newer one) or expired. A failed check returns true: the pay step still decides.
+ * 'superseded' when another page load made a newer session (this tab must stay put:
+ * reloading would retire that tab's live session), 'dead' when this session is gone for
+ * another reason (expired, unknown), 'ok' otherwise. A failed check returns 'ok': the
+ * pay step still decides.
  */
-async function sessionStillValid(attemptId: number): Promise<boolean> {
+async function checkSession(attemptId: number): Promise<'ok' | 'superseded' | 'dead'> {
     try {
         const response = await fetch(`/pay/${props.payment.uuid}/mpgs/status?attempt_id=${attemptId}`, {
             headers: { Accept: 'application/json' },
         })
 
         if (!response.ok) {
-            return true
+            return 'ok'
         }
 
         const data = await response.json()
 
-        return data.session_valid !== false
+        if (data.session_valid !== false) {
+            return 'ok'
+        }
+
+        return data.session_reason === 'superseded' ? 'superseded' : 'dead'
     } catch {
-        return true
+        return 'ok'
     }
 }
 
@@ -233,7 +241,19 @@ async function submit(): Promise<void> {
 
     try {
         // Don't send the payer through the bank step on a session the server already retired.
-        if (!(await sessionStillValid(session.attempt_id))) {
+        const sessionCheck = await checkSession(session.attempt_id)
+
+        if (sessionCheck === 'superseded') {
+            // Another tab owns the live session. Don't reload: that would create a new session
+            // and retire the other tab's. Stay blocked until the payer refreshes on purpose.
+            stale.value = true
+            errorMessage.value = 'This payment page was opened in another tab or window. Please continue there, or refresh this page to use it instead.'
+            processing.value = false
+
+            return
+        }
+
+        if (sessionCheck === 'dead') {
             reloadWithNotice(props.payment.uuid, 'This payment session is no longer valid. Please try again.')
 
             return
@@ -394,7 +414,7 @@ async function submit(): Promise<void> {
                 type="submit"
                 size="lg"
                 class="w-full bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary)]/90 focus-visible:ring-[var(--brand-primary)]/50 font-semibold tracking-wide cursor-pointer"
-                :disabled="processing || !ready"
+                :disabled="processing || !ready || stale"
             >
                 <Spinner v-if="processing" class="size-4 mr-2" />
                 <span>{{ processing ? 'Processing…' : `Pay ${formatAmount(payment.amount, payment.currency)}` }}</span>

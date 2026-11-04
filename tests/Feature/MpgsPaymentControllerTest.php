@@ -6,6 +6,7 @@ use App\Models\MpgsAccount;
 use App\Models\MpgsChargeAttempt;
 use App\Models\Payment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -252,7 +253,7 @@ it('never approves a success whose amount does not match, and queues the resolve
 
 it('treats a timeout as unknown and queues the read only resolver', function () {
     Queue::fake();
-    Http::fake(fn () => throw new Illuminate\Http\Client\ConnectionException('timed out'));
+    Http::fake(fn () => throw new ConnectionException('timed out'));
     $payment = mpgsPayable();
     $attempt = MpgsChargeAttempt::factory()->prepared()->create(['payment_id' => $payment->id]);
 
@@ -377,7 +378,7 @@ it('reports the payment status read only and 404s a non MPGS payment', function 
     $this->getJson(route('pay.mpgs.status', Payment::factory()->create()))->assertNotFound();
 });
 
-it('tells the pay page whether its session is still usable, read only', function (string $case, bool $valid) {
+it('tells the pay page whether its session is still usable, read only', function (string $case, bool $valid, ?string $reason) {
     $payment = mpgsPayable();
     $other = mpgsPayable();
 
@@ -389,15 +390,20 @@ it('tells the pay page whether its session is still usable, read only', function
         'another payments attempt' => MpgsChargeAttempt::factory()->prepared()->create(['payment_id' => $other->id])->id,
     };
 
-    $this->getJson(route('pay.mpgs.status', ['payment' => $payment, 'attempt_id' => $attemptId]))
+    $response = $this->getJson(route('pay.mpgs.status', ['payment' => $payment, 'attempt_id' => $attemptId]))
         ->assertOk()
         ->assertJsonPath('session_valid', $valid)
         ->assertJsonPath('status', 'pending');
+
+    // Only a retired attempt means another tab took over; the page stays put for that one.
+    $reason === null
+        ? $response->assertJsonMissingPath('session_reason')
+        : $response->assertJsonPath('session_reason', $reason);
 })->with([
-    'prepared' => ['prepared', true],
-    'retired' => ['retired', false],
-    'expired' => ['expired', false],
-    'another payments attempt' => ['another payments attempt', false],
+    'prepared' => ['prepared', true, null],
+    'retired' => ['retired', false, 'superseded'],
+    'expired' => ['expired', false, 'expired'],
+    'another payments attempt' => ['another payments attempt', false, 'missing'],
 ]);
 
 it('leaves session_valid out of the status reply when no attempt id is sent', function () {
