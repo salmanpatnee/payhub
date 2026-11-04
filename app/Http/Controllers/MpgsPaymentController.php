@@ -235,7 +235,14 @@ class MpgsPaymentController extends Controller
         // session retired by a newer page load is caught before the bank step.
         if ($request->filled('attempt_id')) {
             $attempt = $payment->mpgsChargeAttempts()->whereKey((int) $request->query('attempt_id'))->first();
-            $body['session_valid'] = $this->unusableReason($attempt) === null;
+            $reason = $this->unusableReason($attempt);
+            $body['session_valid'] = $reason === null;
+
+            // Only 'superseded' means another tab took over. The page uses this to stay
+            // put instead of reloading, which would retire the other tab's live session.
+            if ($reason !== null) {
+                $body['session_reason'] = $reason;
+            }
         }
 
         return response()->json($body);
