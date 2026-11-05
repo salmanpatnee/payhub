@@ -355,7 +355,8 @@ onBeforeUnmount(() => {
 
                         <Button
                             type="button"
-                            class="w-full"
+                            class="w-full bg-[var(--btn-color)] text-white hover:bg-[var(--btn-color)]/90 focus-visible:ring-[var(--btn-color)]/50 font-semibold cursor-pointer"
+                            :style="{ '--btn-color': brand.secondary_color || brand.primary_color }"
                             :disabled="uiState === 'starting' || consentBusy"
                             @click="payNow"
                         >
