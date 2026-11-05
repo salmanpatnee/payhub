@@ -18,6 +18,7 @@ use App\Http\Controllers\BankAccountActivityLogController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\KurvPaymentController;
 use App\Http\Controllers\KurvWebhookController;
 use App\Http\Controllers\MpgsPaymentController;
 use App\Http\Controllers\MpgsWebhookController;
@@ -406,6 +407,15 @@ Route::post('/pay/{payment}/whop/checkout', [WhopPaymentController::class, 'chec
     ->middleware('throttle:whop-checkout');
 Route::get('/pay/{payment}/whop/status', [WhopPaymentController::class, 'status'])
     ->name('pay.whop.status')
+    ->middleware('throttle:60,1');
+
+// Kurv hosted payment page pay thread (spec 0010), public (scoped by the payment UUID). The limiter keys
+// use the raw route string because throttle runs before route model binding.
+Route::post('/pay/{payment}/kurv/checkout', [KurvPaymentController::class, 'checkout'])
+    ->name('pay.kurv.checkout')
+    ->middleware('throttle:kurv-checkout');
+Route::get('/pay/{payment}/kurv/status', [KurvPaymentController::class, 'status'])
+    ->name('pay.kurv.status')
     ->middleware('throttle:60,1');
 
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)

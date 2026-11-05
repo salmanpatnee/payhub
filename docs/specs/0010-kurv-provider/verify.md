@@ -17,6 +17,20 @@ _Steps derived from spec 0010 acceptance criteria. `/check verify` runs these; `
 - [ ] Give an agent a USD slot that points to a Kurv account (Users, edit) → saved; that agent can create a Kurv payment without choosing an account → AC-3
 - [ ] Give an agent a GBP slot on a Kurv account → rejected → AC-2
 
+## Pay page and checkout (build steps 6 and 7)
+- [ ] Open a Kurv payment link as a client → brand layout, amount and "Pay now"; the consent box is ticked and the three policies open in a read only dialog → AC-4
+- [ ] Press Pay now with the consent box cleared → "You must agree to the Terms..." and no request to Kurv → AC-4
+- [ ] Press Pay now with consent → browser goes to a `sandbox-pay.kurv.app` page; the payment now shows a Kurv request id and the amount, currency, account and brand are locked in the edit form → AC-5, AC-6
+- [ ] Go back and press Pay now again → same Kurv page opens, and the Kurv sandbox shows only one payment request for the reference → AC-5
+- [ ] Pay with a sandbox card on Kurv and let it return → page says "We are confirming your payment. Please do not pay again.", the address bar loses the query values, and within about 10 seconds you land on the Success page → AC-9
+- [ ] Reload the page while it says confirming → it keeps waiting (does not show Pay now) → AC-9
+- [ ] Press cancel on Kurv's page (back to PayHub without `kurv_return`) → "Pay now" is shown again → AC-9
+- [ ] Pay with a declining sandbox card, return → within about a minute the page shows "Your payment was not completed. You can try again." with Pay now, and the same Kurv link is used → AC-9, AC-11
+- [ ] Wait 10 minutes on the confirming state without paying → "Still confirming, you will get a receipt by email." → AC-9
+- [ ] Open the link of a completed payment → goes to Success; of a cancelled one → "unavailable" page; with the account deactivated → "unavailable" page → AC-4
+- [ ] Call the checkout endpoint 11 times in an hour → the 11th gives a JSON 429 "Too many attempts. Please try again later." and makes no Kurv call → AC-6
+- [ ] View page source and the Inertia props of the pay page → no API key, no `kurv_payment_url`, no Kurv request id; the Content Security Policy header is the same as a Stripe page → AC-4, AC-14
+
 ## Commands
 - [ ] `php artisan test --parallel --filter=Kurv` → all green (52 tests at the time of writing) → AC-1, AC-2, AC-6, AC-7, AC-8, AC-11, AC-12, AC-14
 - [ ] `php artisan migrate:status` → the three `2026_11_05_00000[2-4]` Kurv migrations show `Ran` → AC-1, AC-11
@@ -47,5 +61,6 @@ _Steps derived from spec 0010 acceptance criteria. `/check verify` runs these; `
 - AC-11 partly covered (attempt rows and outcomes); the admin attempts panel and fixed client messages come with build steps 7 and 9
 - AC-12 covered by the completed payment step
 - AC-14 partly covered (token masking); the CSP and key logging checks are finished with the pay page
-- AC-4, AC-5, AC-9, AC-10 are not built yet and have no steps here
+- AC-4, AC-5, AC-9 covered by the pay page and checkout steps
+- AC-10 (the sweep) is not built yet and has no steps here
 - AC-13 covered in part by the sandbox smoke check; the browser items (return URL values, cancel URL, callback retries, double payment) stay open in the spec's Follow-up
