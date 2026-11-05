@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\SquareAccount;
 use App\Models\User;
 use App\Models\UserPaymentAccount;
+use App\Support\Countries;
 use App\Support\CurrencySupportResolver;
 use App\Support\ProviderAccountTable;
 use Illuminate\Foundation\Http\FormRequest;
@@ -90,6 +91,7 @@ class StorePaymentRequest extends FormRequest
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
             'client_name' => ['required', 'string', 'max:255'],
             'client_email' => [Rule::requiredIf(fn () => $this->resolvesToWhop()), 'nullable', 'email', 'max:255'],
+            'country' => ['nullable', 'string', Rule::in(array_keys(Countries::all()))],
             'service' => ['nullable', 'string', 'max:255'],
             'package' => ['nullable', 'string',
                 'in:basic,standard,premium,platinum,diamond'],

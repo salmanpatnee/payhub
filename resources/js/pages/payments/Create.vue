@@ -28,6 +28,7 @@ const props = defineProps<{
     agentCurrencies: AgentCurrencyOption[];
     isAccountLocked: boolean;
     relationshipManagers: RmOption[];
+    countries: { id: string; name: string }[];
 }>();
 
 defineOptions({
@@ -48,6 +49,7 @@ const form = useForm({
     amount:                    '',
     client_name:               '',
     client_email:              '',
+    country:                   '',
     service:                   '',
     package:                   '',
     note:                      '',
@@ -166,6 +168,20 @@ function submit() {
                             search-placeholder="Search relationship managers…"
                         />
                         <InputError class="mt-1" :message="form.errors.relationship_manager_id" />
+                    </div>
+
+                    <!-- Country -->
+                    <div class="grid gap-2">
+                        <Label for="country">Country</Label>
+                        <SearchableSelect
+                            id="country"
+                            v-model="form.country"
+                            :options="props.countries"
+                            placeholder="Select a country"
+                            search-placeholder="Search countries…"
+                            clear-label="No country"
+                        />
+                        <InputError class="mt-1" :message="form.errors.country" />
                     </div>
 
                     <!-- Currency — locked when the selected account is single-currency (e.g. Square),

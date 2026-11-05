@@ -21,7 +21,7 @@ class Payment extends Model
         'user_id', 'relationship_manager_id',
         'amount', 'currency', 'status',
         'client_email', 'client_name',
-        'service', 'package', 'note',
+        'service', 'package', 'note', 'country',
         'stripe_payment_intent_id', 'revolut_order_id', 'square_payment_id',
         'viva_transaction_id', 'viva_order_code', 'expires_at', 'paid_at',
         'clover_payment_id', 'mpgs_order_id', 'authorizenet_transaction_id', 'whop_payment_id', 'whop_charge_started_at', 'whop_checkout_configuration_id', 'whop_purchase_url',

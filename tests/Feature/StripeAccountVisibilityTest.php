@@ -30,8 +30,8 @@ function makeMappedAgent(StripeAccount $account): User
     return $agent;
 }
 
-// Agent index: account_name is stripped and the accounts filter is empty.
-it('hides the stripe account name from agents on the index', function () {
+// Agent index: the list no longer carries the account name or an accounts filter.
+it('does not expose the stripe account name to agents on the index', function () {
     $account = StripeAccount::factory()->create(['is_active' => true, 'account_name' => 'Secret Brand']);
     $agent = makeMappedAgent($account);
 
@@ -44,13 +44,13 @@ it('hides the stripe account name from agents on the index', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('canViewStripeAccount', false)
-            ->where('payments.data.0.account_name', null)
-            ->where('accounts', [])
+            ->missing('payments.data.0.account_name')
+            ->missing('accounts')
         );
 });
 
-// Admin index: account_name is present and the accounts filter is populated.
-it('shows the stripe account name to admins on the index', function () {
+// Admin index: the Account column and filter were replaced by Country.
+it('does not put the stripe account name on the index for admins', function () {
     $admin = User::factory()->create();
     $admin->assignRole('admin');
 
@@ -65,13 +65,13 @@ it('shows the stripe account name to admins on the index', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('canViewStripeAccount', true)
-            ->where('payments.data.0.account_name', 'Secret Brand')
-            ->has('accounts', 1)
+            ->missing('payments.data.0.account_name')
+            ->missing('accounts')
         );
 });
 
-// Account index: account_name is present and the accounts filter is populated.
-it('shows the stripe account name to the account role on the index', function () {
+// Account index: the Account column and filter were replaced by Country.
+it('does not put the stripe account name on the index for the account role', function () {
     $accountUser = User::factory()->create();
     $accountUser->assignRole('account');
 
@@ -86,8 +86,8 @@ it('shows the stripe account name to the account role on the index', function ()
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('canViewStripeAccount', true)
-            ->where('payments.data.0.account_name', 'Secret Brand')
-            ->has('accounts', 1)
+            ->missing('payments.data.0.account_name')
+            ->missing('accounts')
         );
 });
 

@@ -21,6 +21,7 @@ type PaymentDetail = {
     status: string;
     client_name: string;
     client_email: string;
+    country_name: string | null;
     service: string | null;
     package: string | null;
     note: string | null;
@@ -332,6 +333,10 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                         <div>
                             <dt :class="labelClass">Relationship manager</dt>
                             <dd class="mt-1">{{ payment.relationship_manager_name ?? '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt :class="labelClass">Country</dt>
+                            <dd class="mt-1">{{ payment.country_name ?? '—' }}</dd>
                         </div>
                         <div>
                             <dt :class="labelClass">Service</dt>

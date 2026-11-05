@@ -69,6 +69,8 @@ class WhopClient
             'account_id' => $this->companyId,
             'variant' => [
                 'title' => $planTitle,
+                // Same text as the title: tested as a way to get the reference into Whop's export "Description" column.
+                'description' => $planTitle,
                 'billing_type' => 'one_time',
                 'release_method' => 'buy_now',
                 // One off price for one payment: keep it out of the company's store.
