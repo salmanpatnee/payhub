@@ -79,6 +79,7 @@ class PaymentsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMap
                 PaymentProvider::Mpgs => $payment->mpgs_order_id,
                 PaymentProvider::Authorizenet => $payment->authorizenet_transaction_id,
                 PaymentProvider::Whop => $payment->whop_payment_id,
+                PaymentProvider::Kurv => $payment->kurv_payment_id ?? $payment->kurv_request_id,
             },
             $payment->relationshipManager?->name,
             ucfirst($payment->status),

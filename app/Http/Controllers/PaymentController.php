@@ -286,7 +286,7 @@ class PaymentController extends Controller
             ->map(fn (WhopAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'whop']);
 
         $kurv = KurvAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
-            ->map(fn (KurvAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'kurv']);
+            ->map(fn (KurvAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'kurv', 'currency' => 'usd']);
 
         return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->concat($kurv)->values();
     }

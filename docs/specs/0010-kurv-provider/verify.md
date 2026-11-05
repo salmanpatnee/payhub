@@ -40,6 +40,14 @@ _Steps derived from spec 0010 acceptance criteria. `/check verify` runs these; `
 - [ ] Open a Kurv payment that has no link yet → "No lookups yet" → AC-11
 - [ ] Read `storage/logs` after leaving a payment pending for over 72 hours → one warning with the count of Kurv payments still pending past the window → AC-10
 
+## Parity (build step 10)
+- [ ] Payments list → the Provider filter has "Kurv" and returns only Kurv payments; the badge shows a violet "Kurv" → AC-3
+- [ ] Export the payments register with a Kurv payment in it → provider "Kurv", the account name, and the Kurv payment id (or the request id before it is paid) in the transaction column → AC-3
+- [ ] Dashboard → pick Provider "Kurv" and then one Kurv account in the account filter → totals and "Accounts Today" show only Kurv; a paid Kurv payment appears under its account name → AC-3
+- [ ] Create a payment form as admin → the Kurv account is in the account list and the currency locks to USD → AC-2, AC-3
+- [ ] Open `/api/central/v1/summary` with a valid token after paying a Kurv payment → the payment is counted in completed links and money → AC-3
+- [ ] Open the Success page of a paid Kurv payment and the pay link of a completed one → Success shows "Powered by Kurv"; the link goes to Success, never to a Stripe form → AC-3, AC-4
+
 ## Commands
 - [ ] `php artisan test --parallel --filter=Kurv` → all green (52 tests at the time of writing) → AC-1, AC-2, AC-6, AC-7, AC-8, AC-11, AC-12, AC-14
 - [ ] `php artisan migrate:status` → the three `2026_11_05_00000[2-4]` Kurv migrations show `Ran` → AC-1, AC-11

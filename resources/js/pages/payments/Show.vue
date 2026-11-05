@@ -173,6 +173,7 @@ const providerReferenceLabels: Record<string, string> = {
     mpgs: 'Online Bank Order ID',
     authorizenet: 'Authorize.net Transaction ID',
     whop: 'Whop Payment ID',
+    kurv: 'Kurv Payment ID',
 };
 
 // Unknown providers fall back to Stripe's label, as the old inline ternary did.
