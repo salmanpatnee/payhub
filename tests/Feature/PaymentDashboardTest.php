@@ -162,7 +162,7 @@ it('admin sees brands and accounts props for filters', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('brands')
-            ->has('accounts')
+            ->has('countries')
             ->where('isAdmin', true)
         );
 });
@@ -204,7 +204,6 @@ it('user does not receive brands or accounts props', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('isAdmin', false)
             ->where('brands', [])
-            ->where('accounts', [])
         );
 });
 
@@ -250,4 +249,38 @@ it('filters prop is returned matching query params', function () {
             ->where('filters.status', 'pending')
             ->where('filters.from', '2026-01-01')
         );
+});
+
+it('filters the payments list by country and shows the country name', function () {
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    Payment::factory()->create(['country' => 'GB', 'client_name' => 'Uk Client']);
+    Payment::factory()->create(['country' => 'US', 'client_name' => 'Us Client']);
+
+    $this->actingAs($admin)
+        ->get(route('payments.index', ['country' => 'GB']))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('payments.data', 1)
+            ->where('payments.data.0.country_name', 'United Kingdom')
+        );
+});
+
+it('finds payments by amount in the search box', function () {
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    Payment::factory()->create(['amount' => 100000, 'client_name' => 'Big Spender']);
+    Payment::factory()->create(['amount' => 5000, 'client_name' => 'Small Spender']);
+
+    foreach (['1000', '1000.00', '$1,000.00', 'USD 1000'] as $term) {
+        $this->actingAs($admin)
+            ->get(route('payments.index', ['search' => $term]))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('payments.data', 1)
+                ->where('payments.data.0.client_name', 'Big Spender')
+            );
+    }
 });

@@ -15,12 +15,17 @@ export function toUrl(href: NonNullable<InertiaLinkProps['href']>) {
  * Format an integer-cents amount as a localized currency string.
  * USD, GBP, and PKR (Bank Accounts, and MPGS payments); never mix currencies in a single figure.
  */
-export function formatMoney(cents: number, currency: string): string {
+export function formatMoney(
+    cents: number,
+    currency: string,
+    options?: { grouping?: boolean },
+): string {
     const locale = currency === 'gbp' ? 'en-GB' : currency === 'pkr' ? 'en-PK' : 'en-US';
 
     return new Intl.NumberFormat(locale, {
         style: 'currency',
         currency: currency.toUpperCase(),
+        useGrouping: options?.grouping ?? true,
     }).format(cents / 100);
 }
 

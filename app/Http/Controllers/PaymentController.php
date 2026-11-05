@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Models\VivaAccount;
 use App\Models\WhopAccount;
 use App\Services\CardLock\CardLockGuard;
+use App\Support\Countries;
 use App\Support\ProviderAccountTable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -54,7 +55,7 @@ class PaymentController extends Controller
                 'currency' => $p->currency,
                 'brand_name' => $p->brand->name,
                 'provider' => $p->provider->value,
-                'account_name' => $canViewAll ? $p->providerAccountName() : null,
+                'country_name' => Countries::name($p->country),
                 'relationship_manager_name' => $p->relationshipManager?->name,
                 'status' => $p->status,
                 'created_at' => $p->created_at->toISOString(),
@@ -62,13 +63,11 @@ class PaymentController extends Controller
                 'client_name' => $p->client_name,
                 'card_locked_until' => $isAdmin && $p->isCardLocked() ? $p->card_locked_until->toIso8601String() : null,
             ]),
-            'filters' => $request->only(['brand_id', 'stripe_account_id', 'provider', 'relationship_manager_id', 'status', 'from', 'to', 'search']),
+            'filters' => $request->only(['brand_id', 'country', 'provider', 'relationship_manager_id', 'status', 'from', 'to', 'search']),
             'brands' => $canViewAll
                 ? Brand::orderBy('name')->get(['id', 'name'])
                 : [],
-            'accounts' => $canViewAll
-                ? StripeAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
-                : [],
+            'countries' => Countries::options(),
             'isAdmin' => $isAdmin,
             'readOnly' => $isAccount,
             'canExport' => $canViewAll,
@@ -100,7 +99,7 @@ class PaymentController extends Controller
 
         return $query
             ->when($request->brand_id, fn ($q, $v) => $q->where('brand_id', $v))
-            ->when($request->stripe_account_id, fn ($q, $v) => $q->where('stripe_account_id', $v))
+            ->when($request->country, fn ($q, $v) => $q->where('country', $v))
             ->when($request->provider, fn ($q, $v) => $q->where('provider', $v))
             ->when($request->relationship_manager_id, fn ($q, $v) => $q->where('relationship_manager_id', $v))
             ->when($request->status, fn ($q, $v) => $q->where('status', $v))
@@ -119,6 +118,12 @@ class PaymentController extends Controller
                 $refSearch = ltrim(ltrim($refSearch, '#'), '0');
                 if ($refSearch !== '' && ctype_digit($refSearch)) {
                     $inner->orWhere('reference_code', (int) $refSearch);
+                }
+
+                // Amount: "1000", "1000.00", "$1,000.00" all match 100000 cents.
+                $amountSearch = preg_replace('/[\s,$£]|[a-z]{3}/i', '', $v);
+                if (preg_match('/^\d+(\.\d{1,2})?$/', $amountSearch) === 1) {
+                    $inner->orWhere('amount', (int) round((float) $amountSearch * 100));
                 }
             }));
     }
@@ -209,6 +214,7 @@ class PaymentController extends Controller
             'agentCurrencies' => $agentCurrencies,
             'isAccountLocked' => $isAccountLocked,
             'relationshipManagers' => $relationshipManagers,
+            'countries' => Countries::options(),
         ];
     }
 
@@ -400,6 +406,7 @@ class PaymentController extends Controller
                 'service' => $payment->service,
                 'package' => $payment->package,
                 'note' => $payment->note,
+                'country' => $payment->country,
             ],
         ]);
     }
@@ -535,6 +542,7 @@ class PaymentController extends Controller
                 'provider_label' => $payment->provider->label(),
                 'client_name' => $payment->client_name,
                 'client_email' => $payment->client_email,
+                'country_name' => Countries::name($payment->country),
                 'service' => $payment->service,
                 'package' => $payment->package,
                 'note' => $payment->note,
