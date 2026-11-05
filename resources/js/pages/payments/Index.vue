@@ -359,7 +359,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                         <Input
                             v-model="filters.search"
                             type="search"
-                            placeholder="Name, email or reference…"
+                            placeholder="Name, email, reference or amount…"
                             class="pl-8"
                         />
                     </div>
@@ -530,7 +530,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                                 Card payments paused until {{ lockedUntilLabel(payment.card_locked_until) }}. Customer should contact their representative.
                             </p>
                         </td>
-                        <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatMoney(payment.amount, payment.currency) }}</td>
+                        <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatMoney(payment.amount, payment.currency, { grouping: false }) }}</td>
                         <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
                         <td v-if="canViewStripeAccount && visibleColumns.provider" class="px-5 py-3.5">
                             <div class="flex justify-center">

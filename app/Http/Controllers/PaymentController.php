@@ -119,6 +119,12 @@ class PaymentController extends Controller
                 if ($refSearch !== '' && ctype_digit($refSearch)) {
                     $inner->orWhere('reference_code', (int) $refSearch);
                 }
+
+                // Amount: "1000", "1000.00", "$1,000.00" all match 100000 cents.
+                $amountSearch = preg_replace('/[\s,$£]|[a-z]{3}/i', '', $v);
+                if (preg_match('/^\d+(\.\d{1,2})?$/', $amountSearch) === 1) {
+                    $inner->orWhere('amount', (int) round((float) $amountSearch * 100));
+                }
             }));
     }
 

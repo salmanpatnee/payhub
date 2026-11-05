@@ -266,3 +266,21 @@ it('filters the payments list by country and shows the country name', function (
             ->where('payments.data.0.country_name', 'United Kingdom')
         );
 });
+
+it('finds payments by amount in the search box', function () {
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    Payment::factory()->create(['amount' => 100000, 'client_name' => 'Big Spender']);
+    Payment::factory()->create(['amount' => 5000, 'client_name' => 'Small Spender']);
+
+    foreach (['1000', '1000.00', '$1,000.00', 'USD 1000'] as $term) {
+        $this->actingAs($admin)
+            ->get(route('payments.index', ['search' => $term]))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('payments.data', 1)
+                ->where('payments.data.0.client_name', 'Big Spender')
+            );
+    }
+});
