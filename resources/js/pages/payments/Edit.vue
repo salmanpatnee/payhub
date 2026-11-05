@@ -71,7 +71,7 @@ const form = useForm({
     note:                      props.payment.note ?? '',
 });
 
-const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut', square: 'Square', viva: 'Viva', clover: 'Clover', mpgs: 'MPGS', authorizenet: 'Authorize.net', whop: 'Whop' };
+const providerLabel: Record<string, string> = { stripe: 'Stripe', revolut: 'Revolut', square: 'Square', viva: 'Viva', clover: 'Clover', mpgs: 'MPGS', authorizenet: 'Authorize.net', whop: 'Whop', kurv: 'Kurv' };
 
 // The account selector encodes "provider:id" since ids collide across providers.
 const accountValue = ref(`${props.payment.provider}:${props.payment.account_id}`);

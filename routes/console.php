@@ -3,6 +3,7 @@
 use App\Jobs\ResolveCloverChargeAttempt;
 use App\Models\CloverChargeAttempt;
 use App\Services\Authorizenet\AuthorizenetStalePaymentSweep;
+use App\Services\Kurv\KurvStalePaymentSweep;
 use App\Services\Mpgs\MpgsStaleAttemptSweep;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -35,6 +36,11 @@ Schedule::call(new MpgsStaleAttemptSweep)
 // the last 24 hours by invoice number, one list pass per account. Read only.
 Schedule::call(new AuthorizenetStalePaymentSweep)
     ->name('authorizenet:sweep-stale-payments')->everyTenMinutes()->withoutOverlapping();
+
+// Backstop for Kurv payments (spec 0010, AC-10): looks again at pending payments whose link is 2 minutes
+// to 72 hours old. Read only, never creates a Kurv request, works with the sync queue.
+Schedule::call(new KurvStalePaymentSweep)
+    ->name('kurv:sweep-stale-payments')->everyTenMinutes()->withoutOverlapping();
 
 // Ask Stripe whether each account can still take payments (spec 0004).
 Schedule::command('stripe:check-health')->everyFifteenMinutes()->withoutOverlapping();

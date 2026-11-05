@@ -14,6 +14,7 @@ class ProviderAccountTable
             'mpgs' => 'mpgs_accounts',
             'authorizenet' => 'authorizenet_accounts',
             'whop' => 'whop_accounts',
+            'kurv' => 'kurv_accounts',
             default => 'stripe_accounts',
         };
     }

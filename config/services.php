@@ -57,6 +57,23 @@ return [
         'timeout' => 30,
     ],
 
+    'kurv' => [
+        // Constants, not secrets. The API key lives encrypted per account on kurv_accounts (spec 0010).
+        'hosts' => [
+            'sandbox' => 'https://api-sandbox.kurv.app',
+            'production' => 'https://api.kurv.app',
+        ],
+        'lock_seconds' => 60,
+        'connect_timeout' => 10,
+        // Total timeout for the create call; lookups use lookup_timeout.
+        'timeout' => 30,
+        'lookup_timeout' => 10,
+        'poll_lookup_seconds' => 10,
+        'min_age_seconds' => 120,
+        'lookup_gap_seconds' => 300,
+        'sweep_hours' => 72,
+    ],
+
     'viva' => [
         // 'demo' targets the demo-*.vivapayments.com hosts; 'production' targets the live hosts.
         // Per-account client id/secret/merchant id/api key live (encrypted where applicable)

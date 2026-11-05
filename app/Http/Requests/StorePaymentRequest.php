@@ -43,7 +43,7 @@ class StorePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop,kurv'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -74,7 +74,7 @@ class StorePaymentRequest extends FormRequest
                         return;
                     }
 
-                    if ($value === SupportedCurrency::PKR->value) {
+                    if ($value === SupportedCurrency::PKR->value && $provider !== 'kurv') {
                         $fail('PKR is only supported on MPGS accounts that accept PKR.');
 
                         return;
@@ -83,6 +83,7 @@ class StorePaymentRequest extends FormRequest
                     $fail(match ($provider) {
                         'viva' => 'Viva payments must be in GBP.',
                         'clover' => 'This Clover account only accepts USD payments.',
+                        'kurv' => 'This Kurv account only accepts USD payments.',
                         'authorizenet' => "This Authorize.net account only accepts {$accountCurrency} payments.",
                         default => "This Square account only accepts {$accountCurrency} payments.",
                     });
@@ -90,7 +91,7 @@ class StorePaymentRequest extends FormRequest
             ],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
             'client_name' => ['required', 'string', 'max:255'],
-            'client_email' => [Rule::requiredIf(fn () => $this->resolvesToWhop()), 'nullable', 'email', 'max:255'],
+            'client_email' => [Rule::requiredIf(fn () => $this->resolvesToWhop() || $this->resolvesToKurv()), 'nullable', 'email', 'max:255'],
             'country' => ['nullable', 'string', Rule::in(array_keys(Countries::all()))],
             'service' => ['nullable', 'string', 'max:255'],
             'package' => ['nullable', 'string',
@@ -102,7 +103,9 @@ class StorePaymentRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'client_email.required' => 'Client email is required for Whop payments.',
+            'client_email.required' => $this->resolvesToKurv()
+                ? 'Client email is required for Kurv payments.'
+                : 'Client email is required for Whop payments.',
         ];
     }
 
@@ -145,6 +148,7 @@ class StorePaymentRequest extends FormRequest
         $data['mpgs_account_id'] = $provider === 'mpgs' ? $accountId : null;
         $data['authorizenet_account_id'] = $provider === 'authorizenet' ? $accountId : null;
         $data['whop_account_id'] = $provider === 'whop' ? $accountId : null;
+        $data['kurv_account_id'] = $provider === 'kurv' ? $accountId : null;
 
         return $data;
     }

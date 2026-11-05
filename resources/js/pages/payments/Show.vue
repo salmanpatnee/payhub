@@ -38,11 +38,26 @@ type PaymentDetail = {
     card_locked_until: string | null;
 };
 
-type AttemptRow = { sequence: number; reference: string | null; status: string; reason: string | null; started_at: string };
+type AttemptRow = {
+    sequence: number;
+    reference: string | null;
+    status: string;
+    reason: string | null;
+    started_at: string;
+    /** Kurv only: Kurv's status and result code for the lookup. */
+    status_detail?: string | null;
+    /** Kurv only: what triggered the lookup (callback, poll or sweep). */
+    source?: string;
+};
 
 // Authorize.net payments made before attempts were stored have no rows, only the summary.
 type AttemptHistory =
     | { provider: 'mpgs'; rows: AttemptRow[] }
+    | {
+        provider: 'kurv';
+        rows: AttemptRow[];
+        summary: { kurv_request_id: string | null; kurv_payment_id: string | null; charge_started_at: string | null };
+    }
     | {
         provider: 'authorizenet';
         rows: AttemptRow[];
@@ -64,6 +79,12 @@ const attemptTone: Record<string, string> = {
     prepared: 'pending',
     pending: 'pending',
     abandoned: 'cancelled',
+    // Kurv lookups
+    paid: 'completed',
+    mismatch: 'failed',
+    duplicate: 'failed',
+    closed: 'cancelled',
+    unknown: 'pending',
     // Authorize.net
     sent: 'pending',
     held: 'pending',
@@ -152,6 +173,7 @@ const providerReferenceLabels: Record<string, string> = {
     mpgs: 'Online Bank Order ID',
     authorizenet: 'Authorize.net Transaction ID',
     whop: 'Whop Payment ID',
+    kurv: 'Kurv Payment ID',
 };
 
 // Unknown providers fall back to Stripe's label, as the old inline ternary did.
@@ -364,7 +386,7 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                         <span class="rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">Admins only</span>
                     </div>
 
-                    <div v-if="attempts.rows.length || attempts.provider === 'mpgs'" class="overflow-x-auto">
+                    <div v-if="attempts.rows.length || attempts.provider === 'mpgs' || attempts.provider === 'kurv'" class="overflow-x-auto">
                         <table
                             v-if="attempts.rows.length"
                             class="w-full text-sm max-sm:block [&_tbody]:max-sm:block [&_tr]:max-sm:block"
@@ -373,9 +395,10 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                                 <tr class="bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                     <th class="px-4 py-3">#</th>
                                     <th class="px-4 py-3">Started</th>
-                                    <th class="px-4 py-3">{{ attempts.provider === 'mpgs' ? 'Order ID' : 'Transaction ID' }}</th>
+                                    <th class="px-4 py-3">{{ attempts.provider === 'mpgs' ? 'Order ID' : attempts.provider === 'kurv' ? 'Request ID' : 'Transaction ID' }}</th>
                                     <th class="px-4 py-3">Status</th>
                                     <th class="px-4 py-3">Reason</th>
+                                    <th v-if="attempts.provider === 'kurv'" class="px-4 py-3">Source</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -392,12 +415,30 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                                             :status="attemptTone[row.status] ?? 'cancelled'"
                                             :label="row.status.replace('_', ' ')"
                                         />
+                                        <div v-if="row.status_detail" class="mt-1 text-xs text-muted-foreground">{{ row.status_detail }}</div>
                                     </td>
                                     <td class="px-4 py-3.5 align-top sm:max-w-[34ch] max-sm:p-0">{{ row.reason ?? '—' }}</td>
+                                    <td v-if="attempts.provider === 'kurv'" class="px-4 py-3.5 align-top capitalize max-sm:p-0">{{ row.source ?? '—' }}</td>
                                 </tr>
                             </tbody>
                         </table>
+                        <p v-else-if="attempts.provider === 'kurv'" class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No lookups yet. PayHub has not asked Kurv about this payment.</p>
                         <p v-else class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No attempts yet. The client has not opened the payment link.</p>
+
+                        <dl v-if="attempts.provider === 'kurv'" class="grid grid-cols-1 gap-x-4 gap-y-4 border-t border-border px-5 py-5 text-sm sm:grid-cols-3 sm:px-6">
+                            <div class="min-w-0">
+                                <dt :class="labelClass">Kurv request ID</dt>
+                                <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.kurv_request_id ?? '—' }}</dd>
+                            </div>
+                            <div class="min-w-0">
+                                <dt :class="labelClass">Kurv payment ID</dt>
+                                <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.kurv_payment_id ?? '—' }}</dd>
+                            </div>
+                            <div>
+                                <dt :class="labelClass">Link created</dt>
+                                <dd class="mt-1 tabular-nums">{{ attempts.summary.charge_started_at ? formatDateTime(attempts.summary.charge_started_at) : '—' }}</dd>
+                            </div>
+                        </dl>
                     </div>
 
                     <div v-else-if="attempts.provider === 'authorizenet'" class="space-y-3 px-5 py-5 sm:px-6">

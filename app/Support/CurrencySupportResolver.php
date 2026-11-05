@@ -7,7 +7,7 @@ use App\Enums\SupportedCurrency;
 /**
  * Single source of truth for "does this provider/account support this currency".
  *
- * Viva is GBP-only and Clover is USD-only, both as flat platform rules (every
+ * Viva is GBP-only and Clover and Kurv are USD-only, both as flat platform rules (every
  * account is provisioned with that single currency — see CloverAccount). Square
  * is locked to whatever currency the individual account was provisioned with
  * (nullable — a Square account with no currency set accepts either). Stripe
@@ -27,7 +27,7 @@ class CurrencySupportResolver
 
         return match ($provider) {
             'viva' => $currency === SupportedCurrency::GBP->value,
-            'clover' => $currency === SupportedCurrency::USD->value,
+            'clover', 'kurv' => $currency === SupportedCurrency::USD->value,
             'authorizenet', 'square' => $accountCurrency === null || $accountCurrency === $currency,
             default => true,
         };
