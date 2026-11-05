@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Enums\PaymentProvider;
 use App\Models\Payment;
+use App\Support\Countries;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -41,6 +42,7 @@ class PaymentsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMap
             'Brand',
             'Provider',
             'Payment Account',
+            'Country',
             'Provider Reference',
             'Relationship Manager',
             'Status',
@@ -67,6 +69,7 @@ class PaymentsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMap
             $payment->brand?->name,
             $payment->provider->label(),
             $payment->providerAccountName(),
+            Countries::name($payment->country),
             match ($payment->provider) {
                 PaymentProvider::Stripe => $payment->stripe_payment_intent_id,
                 PaymentProvider::Revolut => $payment->revolut_order_id,

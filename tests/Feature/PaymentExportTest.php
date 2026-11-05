@@ -74,7 +74,7 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
     // arm previously left Square's Provider Reference column blank too (see git
     // history) — the Viva assertion below guards against the same class of bug.
     $headings = (new PaymentsExport(Payment::query()))->headings();
-    expect($headings)->toContain('Provider', 'Payment Account', 'Provider Reference');
+    expect($headings)->toContain('Provider', 'Payment Account', 'Country', 'Provider Reference');
     expect($headings)->not->toContain('Stripe Account');
 
     $with = ['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'relationshipManager'];
@@ -89,7 +89,7 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
     $stripeRow = $export->map($stripePayment->load($with));
     expect($stripeRow[6])->toBe('Stripe');
     expect($stripeRow[7])->toBe('Acme Stripe');
-    expect($stripeRow[8])->toBe('pi_123');
+    expect($stripeRow[9])->toBe('pi_123');
 
     $revolutAccount = RevolutAccount::factory()->create(['account_name' => 'Acme Revolut']);
     $revolutPayment = Payment::factory()->revolut()->create([
@@ -100,7 +100,7 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
     $revolutRow = $export->map($revolutPayment->load($with));
     expect($revolutRow[6])->toBe('Revolut');
     expect($revolutRow[7])->toBe('Acme Revolut');
-    expect($revolutRow[8])->toBe('ord_999');
+    expect($revolutRow[9])->toBe('ord_999');
 
     $squareAccount = SquareAccount::factory()->create(['account_name' => 'Acme Square']);
     $squarePayment = Payment::factory()->square()->create([
@@ -111,7 +111,7 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
     $squareRow = $export->map($squarePayment->load($with));
     expect($squareRow[6])->toBe('Square');
     expect($squareRow[7])->toBe('Acme Square');
-    expect($squareRow[8])->toBe('sq_pay_777');
+    expect($squareRow[9])->toBe('sq_pay_777');
 
     $vivaAccount = VivaAccount::factory()->create(['account_name' => 'Acme Viva']);
     $vivaPayment = Payment::factory()->viva()->create([
@@ -122,7 +122,7 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
     $vivaRow = $export->map($vivaPayment->load($with));
     expect($vivaRow[6])->toBe('Viva');
     expect($vivaRow[7])->toBe('Acme Viva');
-    expect($vivaRow[8])->toBe('viva_txn_555');
+    expect($vivaRow[9])->toBe('viva_txn_555');
 
     // Pending/pre-webhook Viva payments only have viva_order_code (set when the
     // pay page creates the Viva order) — viva_transaction_id is only populated
@@ -136,7 +136,7 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
 
     $pendingVivaRow = $export->map($pendingVivaPayment->load($with));
     expect($pendingVivaRow[6])->toBe('Viva');
-    expect($pendingVivaRow[8])->toBe('order_888');
+    expect($pendingVivaRow[9])->toBe('order_888');
 
     $cloverAccount = CloverAccount::factory()->create(['account_name' => 'Acme Clover']);
     $cloverPayment = Payment::factory()->clover()->create([
@@ -147,7 +147,7 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
     $cloverRow = $export->map($cloverPayment->load($with));
     expect($cloverRow[6])->toBe('Clover');
     expect($cloverRow[7])->toBe('Acme Clover');
-    expect($cloverRow[8])->toBe('clover_pay_555');
+    expect($cloverRow[9])->toBe('clover_pay_555');
 
     // A pending Clover payment has no charge id yet — spec 0002's Hosted Iframe
     // integration has no pre-charge session concept (unlike spec 0001's Hosted
@@ -160,7 +160,7 @@ it('maps provider-aware account columns for stripe, revolut, square, and viva ro
 
     $pendingCloverRow = $export->map($pendingCloverPayment->load($with));
     expect($pendingCloverRow[6])->toBe('Clover');
-    expect($pendingCloverRow[8])->toBeNull();
+    expect($pendingCloverRow[9])->toBeNull();
 });
 
 it('scopes the export to the active brand filter', function () {

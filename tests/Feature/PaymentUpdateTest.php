@@ -594,3 +594,33 @@ it('nulls clover_payment_id when the payment moves to another clover account', f
     expect($payment->clover_account_id)->toBe($cloverAccountB->id);
     expect($payment->clover_payment_id)->toBeNull();
 });
+
+it('admin can set a country on a payment and invalid codes are rejected', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $brand = Brand::factory()->create();
+    $account = StripeAccount::factory()->create(['is_active' => true]);
+    $rm = RelationshipManager::factory()->create();
+
+    $payment = Payment::factory()->create([
+        'user_id' => $admin->id,
+        'brand_id' => $brand->id,
+        'stripe_account_id' => $account->id,
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", updatePayload($brand, $account, $rm) + ['country' => 'ZZ'])
+        ->assertSessionHasErrors('country');
+
+    $this->actingAs($admin)
+        ->patch("/payments/{$payment->uuid}", updatePayload($brand, $account, $rm) + ['country' => 'PK'])
+        ->assertSessionHasNoErrors();
+
+    expect($payment->refresh()->country)->toBe('PK');
+
+    $this->actingAs($admin)
+        ->get("/payments/{$payment->uuid}")
+        ->assertInertia(fn ($page) => $page->where('payment.country_name', 'Pakistan'));
+});

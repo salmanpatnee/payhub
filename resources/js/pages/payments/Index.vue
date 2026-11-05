@@ -38,7 +38,7 @@ type PaymentRow = {
     currency: string;
     brand_name: string;
     provider: string;
-    account_name: string | null;
+    country_name: string | null;
     relationship_manager_name: string | null;
     status: string;
     created_at: string;
@@ -50,7 +50,7 @@ type PaymentRow = {
 
 type FilterState = {
     brand_id: string;
-    stripe_account_id: string;
+    country: string;
     provider: string;
     relationship_manager_id: string;
     status: string;
@@ -73,7 +73,7 @@ const props = defineProps<{
     payments: PaginatedPayments;
     filters: FilterState;
     brands: { id: number; name: string }[];
-    accounts: { id: number; account_name: string }[];
+    countries: { id: string; name: string }[];
     isAdmin: boolean;
     readOnly: boolean;
     canExport: boolean;
@@ -125,7 +125,7 @@ const COLUMN_DEFS = [
     { key: 'amount', label: 'Amount' },
     { key: 'brand', label: 'Brand' },
     { key: 'provider', label: 'Provider' },
-    { key: 'account_name', label: 'Account' },
+    { key: 'country_name', label: 'Country' },
     { key: 'relationship_manager_name', label: 'RM' },
     { key: 'status', label: 'Status' },
     { key: 'created', label: 'Created' },
@@ -148,7 +148,7 @@ const visibleColumnCount = computed(
         COLUMN_DEFS.filter(
             (c) =>
                 visibleColumns.value[c.key] &&
-                ((c.key !== 'account_name' && c.key !== 'provider') || props.canViewStripeAccount),
+                (c.key !== 'provider' || props.canViewStripeAccount),
         ).length,
 );
 
@@ -162,13 +162,9 @@ defineOptions({
 
 const UNSET = '__all';
 
-const accountOptions = computed(() =>
-    props.accounts.map((a) => ({ id: a.id, name: a.account_name })),
-);
-
 const filters = reactive<FilterState>({
     brand_id: props.filters.brand_id || UNSET,
-    stripe_account_id: props.filters.stripe_account_id || UNSET,
+    country: props.filters.country || UNSET,
     provider: props.filters.provider || UNSET,
     relationship_manager_id: props.filters.relationship_manager_id || UNSET,
     status: props.filters.status || UNSET,
@@ -179,7 +175,7 @@ const filters = reactive<FilterState>({
 
 const hasActiveFilters = computed(() =>
     filters.brand_id !== UNSET ||
-    filters.stripe_account_id !== UNSET ||
+    filters.country !== UNSET ||
     filters.provider !== UNSET ||
     filters.relationship_manager_id !== UNSET ||
     filters.status !== UNSET ||
@@ -191,7 +187,7 @@ const hasActiveFilters = computed(() =>
 const activeFilterCount = computed(() =>
     [
         filters.brand_id !== UNSET,
-        filters.stripe_account_id !== UNSET,
+        filters.country !== UNSET,
         filters.provider !== UNSET,
         filters.relationship_manager_id !== UNSET,
         filters.status !== UNSET,
@@ -240,7 +236,7 @@ const exportUrl = computed((): string => {
 
 function clearFilters(): void {
     filters.brand_id = UNSET;
-    filters.stripe_account_id = UNSET;
+    filters.country = UNSET;
     filters.provider = UNSET;
     filters.relationship_manager_id = UNSET;
     filters.status = UNSET;
@@ -381,15 +377,15 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                     />
                 </div>
 
-                <div v-if="accounts.length" class="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account</Label>
+                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Country</Label>
                     <SearchableSelect
-                        v-model="filters.stripe_account_id"
-                        :options="accountOptions"
+                        v-model="filters.country"
+                        :options="countries"
                         :all-value="UNSET"
-                        all-label="All Accounts"
-                        placeholder="All accounts"
-                        search-placeholder="Search accounts…"
+                        all-label="All Countries"
+                        placeholder="All countries"
+                        search-placeholder="Search countries…"
                     />
                 </div>
 
@@ -500,7 +496,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                         <th v-if="visibleColumns.amount" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
                         <th v-if="visibleColumns.brand" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
                         <th v-if="canViewStripeAccount && visibleColumns.provider" class="text-center px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Provider</th>
-                        <th v-if="canViewStripeAccount && visibleColumns.account_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Account</th>
+                        <th v-if="visibleColumns.country_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Country</th>
                         <th v-if="visibleColumns.relationship_manager_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</th>
                         <th v-if="visibleColumns.status" class="text-center px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                         <th v-if="visibleColumns.created" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
@@ -541,7 +537,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                                 <PaymentProviderBadge :provider="payment.provider" />
                             </div>
                         </td>
-                        <td v-if="canViewStripeAccount && visibleColumns.account_name" class="px-5 py-3.5">{{ payment.account_name ?? '—' }}</td>
+                        <td v-if="visibleColumns.country_name" class="px-5 py-3.5">{{ payment.country_name ?? '—' }}</td>
                         <td v-if="visibleColumns.relationship_manager_name" class="px-5 py-3.5">{{ payment.relationship_manager_name ?? '—' }}</td>
                         <td v-if="visibleColumns.status" class="px-5 py-3.5">
                             <div class="flex justify-center">
