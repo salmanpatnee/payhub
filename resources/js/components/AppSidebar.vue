@@ -44,6 +44,7 @@ const mainNavItems = computed((): NavItem[] => [
                 { title: 'Viva Accounts',    href: '/admin/viva-accounts',    icon: Landmark },
                 { title: 'Authorize.net',     href: '/admin/authorizenet-accounts', icon: CreditCard },
                 { title: 'Whop Accounts',     href: '/admin/whop-accounts',         icon: CreditCard },
+                { title: 'Kurv Accounts',     href: '/admin/kurv-accounts',         icon: CreditCard },
             ],
         } as NavItem,
     ] : []),

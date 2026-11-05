@@ -12,6 +12,7 @@ enum PaymentProvider: string
     case Mpgs = 'mpgs';
     case Authorizenet = 'authorizenet';
     case Whop = 'whop';
+    case Kurv = 'kurv';
 
     public function label(): string
     {
@@ -24,6 +25,7 @@ enum PaymentProvider: string
             self::Mpgs => 'MPGS',
             self::Authorizenet => 'Authorize.net',
             self::Whop => 'Whop',
+            self::Kurv => 'Kurv',
         };
     }
 }

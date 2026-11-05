@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Models\AuthorizenetAccount;
 use App\Models\Brand;
 use App\Models\CloverAccount;
+use App\Models\KurvAccount;
 use App\Models\MpgsAccount;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
@@ -146,6 +147,21 @@ class PaymentFactory extends Factory
             'stripe_account_id' => null,
             'client_email' => 'client@example.com',
             'whop_account_id' => WhopAccount::factory(),
+        ]);
+    }
+
+    /**
+     * Kurv payment: nulls the Stripe account and attaches a Kurv account.
+     * Kurv is USD only and needs a client email.
+     */
+    public function kurv(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'provider' => 'kurv',
+            'currency' => 'usd',
+            'stripe_account_id' => null,
+            'client_email' => 'client@example.com',
+            'kurv_account_id' => KurvAccount::factory(),
         ]);
     }
 }

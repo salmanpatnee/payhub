@@ -1,7 +1,7 @@
 # 0010. Kurv as the ninth payment provider, using Kurv's hosted payment page
 
 **Date**: 2026-11-05
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
@@ -173,12 +173,12 @@ Relationships: `kurv_accounts` 1:N `payments`; `payments` 1:N `kurv_lookup_attem
 
 Build approach: none recorded in `AGENTS.md`, so end to end Tracer Bullet slices are assumed. The first thread goes from checkout to callback to a lookup to a completed payment against the Kurv sandbox, because it is the one path testable end to end.
 
-0. Kurv check against the sandbox and docs: answer every Open question, record answers in Follow-up, fix field names in `KurvClient`, `KurvPaymentRequestReply` and `KurvLookupReply`; hard gate: nothing after it starts until the answers are recorded, satisfies **AC-13**
-1. Migrations (`kurv_accounts`, payments columns, `kurv_lookup_attempts`), `PaymentProvider::Kurv`, models, factories, `config/services.php`, satisfies **AC-1**, **AC-11**
-2. `KurvClient` (create request, get request, search payments, a read only ping), the two reply classes, `KurvChargeResolver` with its lock and guarded update, satisfies **AC-7**, **AC-11**, **AC-12**
-3. Callback route, token helper, per IP throttle, CSRF exclusion in `bootstrap/app.php`, satisfies **AC-8**
-4. Admin account CRUD, activate, deactivate, test connection, satisfies **AC-1**
-5. Payment create and update requests, `CurrencySupportResolver`, `client_email` rule, edit and cancel locks, agent assignment, satisfies **AC-2**, **AC-6**
+0. [~] Kurv check against the sandbox (API part done 2026-11-05, browser part open) and docs: answer every Open question, record answers in Follow-up, fix field names in `KurvClient`, `KurvPaymentRequestReply` and `KurvLookupReply`; hard gate: nothing after it starts until the answers are recorded, satisfies **AC-13**
+1. [x] Migrations (`kurv_accounts`, payments columns, `kurv_lookup_attempts`), `PaymentProvider::Kurv`, models, factories, `config/services.php`, satisfies **AC-1**, **AC-11**
+2. [x] `KurvClient` (create request, get request, search payments, a read only ping), the two reply classes, `KurvChargeResolver` with its lock and guarded update, satisfies **AC-7**, **AC-11**, **AC-12**
+3. [x] Callback route, token helper, per IP throttle, CSRF exclusion in `bootstrap/app.php`, satisfies **AC-8**
+4. [x] Admin account CRUD, activate, deactivate, test connection, satisfies **AC-1**
+5. [x] Payment create and update requests, `CurrencySupportResolver`, `client_email` rule, edit and cancel locks, agent assignment, satisfies **AC-2**, **AC-6**
 6. Checkout endpoint with consent check, lock, saved link reuse and the `kurv-checkout` limiter, satisfies **AC-5**, **AC-6**
 7. `showKurv` in `ClientPaymentController`, the status endpoint with its throttled lookup, and `PayKurv.vue` (consent, amount, button, redirect, `returnStatus`, waiting state in `sessionStorage`, polling, query clean up, fixed messages), satisfies **AC-3**, **AC-4**, **AC-9**, **AC-11**, **AC-14**
 8. `KurvStalePaymentSweep` and its schedule in `routes/console.php`, satisfies **AC-10**
@@ -210,8 +210,22 @@ Build approach: none recorded in `AGENTS.md`, so end to end Tracer Bullet slices
 
 ## Follow-up
 
-- [ ] Pull `master` into `misc` before building (6 commits behind at spec time).
-- [ ] Step 0 check (Build plan step 0): answer Open questions 1 to 11 and record them here.
+- [x] Pulled `master` into `feature/kurv-provider-spec` before building (2026-11-05).
+- [ ] Build steps 1 to 5 landed 2026-11-05 (52 Kurv tests green). Open: `KurvLookupReply::CLOSED_STATUSES` (`expired`, `voided`, `void`, `cancelled`, `canceled`) is a guess until a real closed link is seen; a PKR payment on Kurv shows the USD only message (AC-2).
+- [ ] Until build step 10, exhaustive `PaymentProvider` matches elsewhere (CSV export, dashboard, `CentralSummary`, client pages) are not yet Kurv aware; do not create Kurv payments on staging before then.
+- [~] Step 0 check, sandbox part done 2026-11-05 (API calls only; the browser parts are still open, see below). Answers:
+  - **Q1** Create with `request_methods: ["WEB"]`, `customer_first_name` (full name), `email` returns `result: success`, `transaction_id`, `short_url`, `long_url`, `qrcode_link`. Redirect to `long_url` (host `sandbox-pay.kurv.app`); `short_url` is `krpy.me`. The request lookup later shows a `last_name` split from the email, so no last name is needed. Keep `fixed_amount: true`.
+  - **Q2** `amount` is a JSON number in whole units with decimals (`12.34` worked, echoed back as `12.34`). `currency` must be upper case: `usd` gave 422 "merchant does not have access to the specified currency" (misleading text). Send `USD`.
+  - **Q3** `GET /payment-requests/{id}` returns `{transaction: {...}}`. Seen `status`: `pending` (invoice_status `unpaid`) and `success` (invoice_status `paid`, with `payment_id`, `payment_date`, `amount`, `currency`, `payment_type` `DB`). Expiry field is `expiration_date` (null so far). No expired, voided or failed request status seen yet, so `closed` stays unproven. An unknown id gives 422 `transaction_id is not valid` (not 404).
+  - **Q4** A decline does not change the request: it stays `pending` and a NOK row appears in `GET /payments` (`status: NOK`, `status_label: failed`, `payment_id` empty, reason only in `result_description`, for example "Card Declined (Do not honor)", "Card Declined (Insufficient funds)", "invalid postal code: N"). `result_code` is absent on rows. The same request can be retried: request 1074083OO had a NOK row and later became `success`. So a decline means "client retries on the same link" and PayHub needs no `closed` for it. Code 253 is not explained by any row.
+  - **Q5** Double payment still unproven (order 31 was paid twice through two links). Link expiry and reopening a paid link: not tested.
+  - **Q6, Q7** Need a browser payment: what is appended to `redirect_url`, whether `cancel_url` works, callback retries, sender IPs. Open.
+  - **Q8** Test connection ping: `GET /payments?limit=1` works with a valid key. A bad key returns 403 (not 401), so AC-1 messages must treat 401 and 403 from a bad key as "wrong key"; the plan problem is still the 422 about Invoicing. To tell a missing permission from a wrong key, treat 403 as "wrong key or missing permission".
+  - **Q9** `GET /payments` is paged: keys `payments`, `page`, `limit`, `page_count`, `total_count`; `limit` max 50 (more gives 422). Rows carry `transaction_id`, `payment_id`, `amount`, `currency`, `payment_type`, `status` (`ACK` or `NOK`), `status_label` (`success` or `failed`), `reference_number`, `payment_date`. Matching on `transaction_id` works. `GET /payments/{payment_id}` also works and returns `{payment: {...}}`.
+  - **Q10** No decline test cards found. Failed rows in the history came from earlier plugin tests (do not honor, insufficient funds, bad postal code). No rate limit headers were returned; 429 limits unknown.
+  - **Q11** Live plan, PCI scan: still a business step, unchanged.
+  - Changes to make in the build: AC-1 test connection treats 403 as wrong key or missing permission; AC-7 can read the payment from the request lookup (`status` `success`, `payment_id`, amount, currency, `payment_type` `DB`) and use `GET /payments/{payment_id}` instead of a keyword search when `payment_id` is present; AC-11 `declined` outcome comes from a NOK history row for the same `transaction_id`.
+  - Still to do in a browser (a human card payment on the sandbox page): Q5, Q6, Q7, Q10 sandbox test cards.
 - [ ] Get a Kurv plan that allows payment requests live, and settle the failed PCI scan, before any live payment (research: `docs/research/kurv.md`).
 - [ ] Confirm PCI level (SAQ A) with Kurv or the acquirer in writing.
 - [ ] Ask Kurv: signed callbacks or fixed sender IPs, official sandbox decline cards, what result code 253 means.
