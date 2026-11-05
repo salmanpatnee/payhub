@@ -256,7 +256,7 @@ it('maps provider, account name and order id for MPGS rows in the export', funct
 
     expect($row[6])->toBe('MPGS');
     expect($row[7])->toBe('Acme MPGS');
-    expect($row[8])->toBe('7-2');
+    expect($row[9])->toBe('7-2');
 });
 
 it('includes MPGS accounts in the dashboard accounts-today panel and provider filter', function () {
