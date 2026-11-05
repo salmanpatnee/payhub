@@ -39,8 +39,8 @@ class ClientPaymentController extends Controller
     {
         $payment->loadMissing('brand');
 
-        // Whop: a webhook that lands before the client returns sends them to Success, ahead of the guard below.
-        if ($payment->provider === PaymentProvider::Whop && $payment->status === 'completed') {
+        // Whop and Kurv: a webhook or lookup that lands before the client returns sends them to Success, ahead of the guard below.
+        if (in_array($payment->provider, [PaymentProvider::Whop, PaymentProvider::Kurv], true) && $payment->status === 'completed') {
             return redirect()->route('pay.success', $payment);
         }
 
@@ -68,6 +68,7 @@ class ClientPaymentController extends Controller
             PaymentProvider::Mpgs => $this->showMpgs($payment),
             PaymentProvider::Authorizenet => $this->showAuthorizenet($payment),
             PaymentProvider::Whop => $this->showWhop($request, $payment),
+            PaymentProvider::Kurv => $this->showKurv($request, $payment),
             default => $this->showStripe($payment),
         };
     }
@@ -170,6 +171,37 @@ class ClientPaymentController extends Controller
             // Display only: the page never reads window.location, and this never changes status.
             'returnStatus' => $this->whopReturnStatus($request),
             'scriptHost' => $embed ? config("services.whop.hosts.{$account->environment}.script") : null,
+        ]);
+    }
+
+    /**
+     * Kurv hosted payment page (spec 0010, AC-4, AC-9). The API key, the saved link and the Kurv
+     * request id are NOT in these props: the browser only gets the link from
+     * KurvPaymentController::checkout() after consent and a click on Pay now.
+     */
+    private function showKurv(Request $request, Payment $payment): Response
+    {
+        $payment->loadMissing('kurvAccount');
+
+        // An inactive account or a closed link is unavailable (an already open link can still be
+        // paid on Kurv's side, and the sweep or callback still completes it).
+        if ($payment->kurvAccount === null || ! $payment->kurvAccount->is_active || $payment->kurv_link_closed_at !== null) {
+            return Inertia::render('ClientPayment/Unavailable', [
+                'status' => $payment->status,
+                'payment' => $this->paymentProps($payment),
+                'brand' => $this->brandProps($payment->brand),
+                'provider' => $payment->provider->value,
+            ]);
+        }
+
+        return Inertia::render('ClientPayment/PayKurv', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'policies' => $this->policyProps(),
+            'hasConsent' => $payment->consents()->exists(),
+            'hasLink' => $payment->kurv_request_id !== null,
+            // Display only: Kurv appends other query values, which are ignored. Never changes status.
+            'returnStatus' => $request->query('kurv_return') === '1' ? 'returned' : null,
         ]);
     }
 
@@ -748,7 +780,7 @@ class ClientPaymentController extends Controller
         // The status === 'cancelled' guard below still applies regardless, and
         // the authoritative status write remains webhook-only either way.
 
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'kurvAccount']);
 
         // CR-02 fix: block cancelled payments from showing success via crafted URLs.
         // failed is intentionally excluded: after a retry Stripe redirects before the webhook fires,

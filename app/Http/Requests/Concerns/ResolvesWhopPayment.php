@@ -16,15 +16,29 @@ trait ResolvesWhopPayment
      */
     private function resolvesToWhop(): bool
     {
+        return $this->resolvesToProvider('whop');
+    }
+
+    /**
+     * Same check for Kurv (spec 0010, AC-2): the Kurv pay page never asks for an email either,
+     * and Kurv needs one to create the payment request.
+     */
+    private function resolvesToKurv(): bool
+    {
+        return $this->resolvesToProvider('kurv');
+    }
+
+    private function resolvesToProvider(string $provider): bool
+    {
         $user = $this->user();
 
         if ($user !== null && $user->hasRole('agent')) {
             return UserPaymentAccount::where('user_id', $user->id)
                 ->where('currency', $this->input('currency'))
-                ->where('provider', 'whop')
+                ->where('provider', $provider)
                 ->exists();
         }
 
-        return $this->input('provider') === 'whop';
+        return $this->input('provider') === $provider;
     }
 }

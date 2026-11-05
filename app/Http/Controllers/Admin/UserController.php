@@ -9,6 +9,7 @@ use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\AuthorizenetAccount;
 use App\Models\Brand;
 use App\Models\CloverAccount;
+use App\Models\KurvAccount;
 use App\Models\MpgsAccount;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
@@ -133,6 +134,7 @@ class UserController extends Controller
             'mpgs' => MpgsAccount::pluck('account_name', 'id')->all(),
             'authorizenet' => AuthorizenetAccount::pluck('account_name', 'id')->all(),
             'whop' => WhopAccount::pluck('account_name', 'id')->all(),
+            'kurv' => KurvAccount::pluck('account_name', 'id')->all(),
         ];
     }
 
@@ -168,7 +170,10 @@ class UserController extends Controller
         $whop = WhopAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
             ->map(fn (WhopAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'whop', 'currency' => null]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->values();
+        $kurv = KurvAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (KurvAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'kurv', 'currency' => null]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->concat($kurv)->values();
     }
 
     /**

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AuthorizenetAccountController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CloverAccountController;
+use App\Http\Controllers\Admin\KurvAccountController;
 use App\Http\Controllers\Admin\MpgsAccountController;
 use App\Http\Controllers\Admin\RelationshipManagerController;
 use App\Http\Controllers\Admin\RevolutAccountController;
@@ -17,6 +18,8 @@ use App\Http\Controllers\BankAccountActivityLogController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\KurvPaymentController;
+use App\Http\Controllers\KurvWebhookController;
 use App\Http\Controllers\MpgsPaymentController;
 use App\Http\Controllers\MpgsWebhookController;
 use App\Http\Controllers\PaymentController;
@@ -194,6 +197,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'whop-accounts/{whop_account}/test-connection',
             [WhopAccountController::class, 'testStoredConnection']
         )->name('whop-accounts.test-stored-connection');
+
+        Route::resource('kurv-accounts', KurvAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'kurv-accounts/{kurv_account}/deactivate',
+            [KurvAccountController::class, 'deactivate']
+        )->name('kurv-accounts.deactivate');
+
+        Route::patch(
+            'kurv-accounts/{kurv_account}/activate',
+            [KurvAccountController::class, 'activate']
+        )->name('kurv-accounts.activate');
+
+        Route::post(
+            'kurv-accounts/test-connection',
+            [KurvAccountController::class, 'testKeyConnection']
+        )->name('kurv-accounts.test-connection');
+
+        Route::post(
+            'kurv-accounts/{kurv_account}/test-connection',
+            [KurvAccountController::class, 'testStoredConnection']
+        )->name('kurv-accounts.test-stored-connection');
 
         Route::resource('square-accounts', SquareAccountController::class)
             ->except(['show']);
@@ -383,6 +409,15 @@ Route::get('/pay/{payment}/whop/status', [WhopPaymentController::class, 'status'
     ->name('pay.whop.status')
     ->middleware('throttle:60,1');
 
+// Kurv hosted payment page pay thread (spec 0010), public (scoped by the payment UUID). The limiter keys
+// use the raw route string because throttle runs before route model binding.
+Route::post('/pay/{payment}/kurv/checkout', [KurvPaymentController::class, 'checkout'])
+    ->name('pay.kurv.checkout')
+    ->middleware('throttle:kurv-checkout');
+Route::get('/pay/{payment}/kurv/status', [KurvPaymentController::class, 'status'])
+    ->name('pay.kurv.status')
+    ->middleware('throttle:60,1');
+
 // Webhook routes — public, no auth middleware, no CSRF (SEC-03)
 // {stripeAccount} resolves by integer id (implicit model binding — StripeAccount has no getRouteKeyName() override)
 Route::post('/webhook/stripe/{stripeAccount}', [StripeWebhookController::class, 'handle'])
@@ -414,6 +449,11 @@ Route::post('/webhook/authorizenet/{authorizenetAccount}', [AuthorizenetWebhookC
 Route::post('/webhook/whop/{whopAccount}', [WhopWebhookController::class, 'handle'])
     ->name('webhook.whop')
     ->middleware('throttle:120,1');
+
+// Kurv's unsigned callback (spec 0010, AC-8). {kurvAccount} is read as a raw id by hand (no model
+// binding, so an unknown id still answers 200). Token and limits are checked in the controller.
+Route::post('/webhook/kurv/{kurvAccount}', [KurvWebhookController::class, 'handle'])
+    ->name('webhook.kurv');
 
 // {vivaAccount} resolves by integer id (implicit model binding).
 // GET: Viva's one-time verification handshake, sent before any signed POSTs.

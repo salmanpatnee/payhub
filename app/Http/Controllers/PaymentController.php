@@ -10,6 +10,7 @@ use App\Http\Requests\UpdatePaymentRequest;
 use App\Models\AuthorizenetAccount;
 use App\Models\Brand;
 use App\Models\CloverAccount;
+use App\Models\KurvAccount;
 use App\Models\MpgsAccount;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
@@ -90,7 +91,7 @@ class PaymentController extends Controller
     {
         $canViewAll = $user->hasRole('admin') || $user->hasRole('account');
 
-        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'user', 'relationshipManager'])
+        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'kurvAccount', 'user', 'relationshipManager'])
             ->orderByDesc('created_at');
 
         if (! $canViewAll) {
@@ -284,7 +285,10 @@ class PaymentController extends Controller
         $whop = WhopAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
             ->map(fn (WhopAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'whop']);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->values();
+        $kurv = KurvAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (KurvAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'kurv', 'currency' => 'usd']);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->concat($kurv)->values();
     }
 
     /**
@@ -300,7 +304,7 @@ class PaymentController extends Controller
      * whichever branch happens to be last — see CLAUDE.md's warning about the
      * two Square CSV export bugs caused by exactly this pattern.
      *
-     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int, mpgs_account_id: ?int, authorizenet_account_id: ?int, whop_account_id: ?int}|null
+     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int, mpgs_account_id: ?int, authorizenet_account_id: ?int, whop_account_id: ?int, kurv_account_id: ?int}|null
      */
     private function agentAccountData(User $user, string $currency): ?array
     {
@@ -328,6 +332,7 @@ class PaymentController extends Controller
             'mpgs_account_id' => $provider === 'mpgs' ? $account->account_id : null,
             'authorizenet_account_id' => $provider === 'authorizenet' ? $account->account_id : null,
             'whop_account_id' => $provider === 'whop' ? $account->account_id : null,
+            'kurv_account_id' => $provider === 'kurv' ? $account->account_id : null,
         ];
     }
 
@@ -396,7 +401,7 @@ class PaymentController extends Controller
                 'uuid' => $payment->uuid,
                 'brand_id' => $payment->brand_id,
                 'provider' => $payment->provider->value,
-                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id ?? $payment->mpgs_account_id ?? $payment->authorizenet_account_id ?? $payment->whop_account_id,
+                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id ?? $payment->mpgs_account_id ?? $payment->authorizenet_account_id ?? $payment->whop_account_id ?? $payment->kurv_account_id,
                 'relationship_manager_id' => $payment->relationship_manager_id,
                 'currency' => $payment->currency,
                 // Cents → decimal string for the amount input.
@@ -432,7 +437,7 @@ class PaymentController extends Controller
 
         // status and user_id are never updated here. Provider transaction ids are only
         // ever cleared, never set — see clearStaleProviderTransactionIds().
-        $data = [...$data, ...$this->clearStaleProviderTransactionIds($payment, $data)];
+        $data = [...$data, ...$this->clearStaleProviderTransactionIds($payment, $data), ...$this->clearClosedKurvLink($payment, $data)];
 
         $payment->update($data);
 
@@ -469,6 +474,8 @@ class PaymentController extends Controller
             'authorizenet_account_id' => ['authorizenet_transaction_id'],
             // Whop's payment id, set by the completing webhook.
             'whop_account_id' => ['whop_payment_id'],
+            // The Kurv request id, payment id and saved hosted link belong to the account that made them.
+            'kurv_account_id' => ['kurv_request_id', 'kurv_payment_url', 'kurv_payment_id', 'kurv_charge_started_at', 'kurv_last_lookup_at', 'kurv_link_closed_at'],
         ];
 
         $cleared = [];
@@ -490,9 +497,40 @@ class PaymentController extends Controller
         return $cleared;
     }
 
+    /**
+     * A closed Kurv link cannot be paid again (spec 0010, AC-6). When an edit changes the amount
+     * or currency of such a payment, the saved link goes so the client gets a fresh one.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, null>
+     */
+    private function clearClosedKurvLink(Payment $payment, array $data): array
+    {
+        if ($payment->provider !== PaymentProvider::Kurv || $payment->kurv_link_closed_at === null) {
+            return [];
+        }
+
+        if ((int) ($data['amount'] ?? $payment->amount) === (int) $payment->amount
+            && ($data['currency'] ?? $payment->currency) === $payment->currency) {
+            return [];
+        }
+
+        return [
+            'kurv_request_id' => null, 'kurv_payment_url' => null, 'kurv_payment_id' => null,
+            'kurv_charge_started_at' => null, 'kurv_last_lookup_at' => null, 'kurv_link_closed_at' => null,
+        ];
+    }
+
     public function destroy(Payment $payment): RedirectResponse
     {
         Gate::authorize('delete', $payment);
+
+        // A Kurv link that Kurv has not reported closed can still be paid, so it blocks deletion (spec 0010, AC-6).
+        if ($payment->provider === PaymentProvider::Kurv && $payment->kurv_charge_started_at !== null && $payment->kurv_link_closed_at === null) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => 'This payment has an open Kurv payment link and cannot be deleted.']);
+
+            return redirect()->back();
+        }
 
         // An open Whop checkout would stay payable, so a payment with one cannot be removed (spec 0009, AC-6).
         if ($payment->provider === PaymentProvider::Whop && $payment->whop_checkout_configuration_id !== null) {
@@ -522,7 +560,7 @@ class PaymentController extends Controller
     public function show(Payment $payment): Response
     {
         Gate::authorize('view', $payment);
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'relationshipManager']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'kurvAccount', 'relationshipManager']);
 
         $user = auth()->user();
         $canViewStripeAccount = $user->hasRole('admin') || $user->hasRole('account');
@@ -560,6 +598,7 @@ class PaymentController extends Controller
                     PaymentProvider::Mpgs => $payment->mpgs_order_id,
                     PaymentProvider::Authorizenet => $payment->authorizenet_transaction_id,
                     PaymentProvider::Whop => $payment->whop_payment_id,
+                    PaymentProvider::Kurv => $payment->kurv_payment_id ?? $payment->kurv_request_id,
                 },
                 'paid_at' => $payment->paid_at?->toISOString(),
                 'expires_at' => $payment->expires_at?->toISOString(),
@@ -610,6 +649,30 @@ class PaymentController extends Controller
                     'last_attempt_at' => $payment->authorizenet_last_attempt_at?->toISOString(),
                     'transaction_id' => $payment->authorizenet_transaction_id,
                     'status' => $payment->status,
+                ],
+            ],
+            // Kurv (spec 0010, AC-11): one row per lookup, newest first, with where it came from.
+            PaymentProvider::Kurv => [
+                'provider' => 'kurv',
+                'rows' => $payment->kurvLookupAttempts()
+                    ->orderByDesc('created_at')
+                    ->orderByDesc('id')
+                    ->limit(100)
+                    ->get()
+                    ->map(fn ($attempt) => [
+                        'sequence' => $attempt->id,
+                        'reference' => $attempt->kurv_request_id,
+                        'status' => $attempt->outcome,
+                        'status_detail' => collect([$attempt->kurv_status, $attempt->result_code])->filter()->implode(' · ') ?: null,
+                        'reason' => $attempt->reason,
+                        'source' => $attempt->source,
+                        'started_at' => $attempt->created_at->toISOString(),
+                    ])
+                    ->all(),
+                'summary' => [
+                    'kurv_request_id' => $payment->kurv_request_id,
+                    'kurv_payment_id' => $payment->kurv_payment_id,
+                    'charge_started_at' => $payment->kurv_charge_started_at?->toISOString(),
                 ],
             ],
             default => null,

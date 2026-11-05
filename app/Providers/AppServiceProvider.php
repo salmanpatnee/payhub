@@ -77,6 +77,16 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
+        // Kurv (spec 0010, AC-6): 10 checkout calls per payment and 30 per IP per hour. Reuse calls count.
+        RateLimiter::for('kurv-checkout', function (Request $request): array {
+            $tooMany = fn () => response()->json(['message' => 'Too many attempts. Please try again later.'], 429);
+
+            return [
+                Limit::perHour(10)->by('kurv-payment:'.($request->route('payment') ?? $request->ip()))->response($tooMany),
+                Limit::perHour(30)->by('kurv-ip:'.$request->ip())->response($tooMany),
+            ];
+        });
+
         RateLimiter::for('authorizenet-charge', function (Request $request): array {
             $tooMany = fn () => response()->json(['message' => 'Too many attempts. Please try again later.'], 429);
 
