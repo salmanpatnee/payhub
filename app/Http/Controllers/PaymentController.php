@@ -651,6 +651,30 @@ class PaymentController extends Controller
                     'status' => $payment->status,
                 ],
             ],
+            // Kurv (spec 0010, AC-11): one row per lookup, newest first, with where it came from.
+            PaymentProvider::Kurv => [
+                'provider' => 'kurv',
+                'rows' => $payment->kurvLookupAttempts()
+                    ->orderByDesc('created_at')
+                    ->orderByDesc('id')
+                    ->limit(100)
+                    ->get()
+                    ->map(fn ($attempt) => [
+                        'sequence' => $attempt->id,
+                        'reference' => $attempt->kurv_request_id,
+                        'status' => $attempt->outcome,
+                        'status_detail' => collect([$attempt->kurv_status, $attempt->result_code])->filter()->implode(' · ') ?: null,
+                        'reason' => $attempt->reason,
+                        'source' => $attempt->source,
+                        'started_at' => $attempt->created_at->toISOString(),
+                    ])
+                    ->all(),
+                'summary' => [
+                    'kurv_request_id' => $payment->kurv_request_id,
+                    'kurv_payment_id' => $payment->kurv_payment_id,
+                    'charge_started_at' => $payment->kurv_charge_started_at?->toISOString(),
+                ],
+            ],
             default => null,
         };
     }

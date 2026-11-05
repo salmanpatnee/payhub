@@ -31,6 +31,15 @@ _Steps derived from spec 0010 acceptance criteria. `/check verify` runs these; `
 - [ ] Call the checkout endpoint 11 times in an hour → the 11th gives a JSON 429 "Too many attempts. Please try again later." and makes no Kurv call → AC-6
 - [ ] View page source and the Inertia props of the pay page → no API key, no `kurv_payment_url`, no Kurv request id; the Content Security Policy header is the same as a Stripe page → AC-4, AC-14
 
+## Sweep and attempts panel (build steps 8 and 9)
+- [ ] Pay a sandbox payment, close the Kurv tab before returning, and wait up to about 15 minutes → the payment becomes Completed by itself (the sweep ran, source "sweep" in the attempts panel) → AC-10
+- [ ] Run `php artisan schedule:list` → shows `kurv:sweep-stale-payments` every 10 minutes → AC-10
+- [ ] Deactivate the Kurv account after creating a link, then pay the link → the payment still completes (callback or sweep) → AC-4, AC-10
+- [ ] Open a Kurv payment as admin → a "Payment attempts" card lists each lookup newest first with Request ID, outcome plus Kurv status and result code, reason and source (callback, poll or sweep), and below it the Kurv request ID, payment ID and link creation time → AC-11
+- [ ] Open the same payment as an agent → no attempts card → AC-11
+- [ ] Open a Kurv payment that has no link yet → "No lookups yet" → AC-11
+- [ ] Read `storage/logs` after leaving a payment pending for over 72 hours → one warning with the count of Kurv payments still pending past the window → AC-10
+
 ## Commands
 - [ ] `php artisan test --parallel --filter=Kurv` → all green (52 tests at the time of writing) → AC-1, AC-2, AC-6, AC-7, AC-8, AC-11, AC-12, AC-14
 - [ ] `php artisan migrate:status` → the three `2026_11_05_00000[2-4]` Kurv migrations show `Ran` → AC-1, AC-11
@@ -62,5 +71,5 @@ _Steps derived from spec 0010 acceptance criteria. `/check verify` runs these; `
 - AC-12 covered by the completed payment step
 - AC-14 partly covered (token masking); the CSP and key logging checks are finished with the pay page
 - AC-4, AC-5, AC-9 covered by the pay page and checkout steps
-- AC-10 (the sweep) is not built yet and has no steps here
+- AC-10 covered by the sweep steps; AC-11 now fully covered with the attempts panel steps
 - AC-13 covered in part by the sandbox smoke check; the browser items (return URL values, cancel URL, callback retries, double payment) stay open in the spec's Follow-up
