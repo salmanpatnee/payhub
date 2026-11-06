@@ -58,15 +58,20 @@ return [
             'script' => [
                 'https://pay.google.com', 'https://applepay.cdn-apple.com', 'https://js.braintreegateway.com',
                 'https://www.paypal.com', 'https://c.paypal.com', 'https://cdn.plaid.com',
+                'https://assets.braintreegateway.com', 'https://www.sandbox.paypal.com',
             ],
             'frame' => [
                 'https://checkout.paypal.com', 'https://assets.braintreegateway.com',
                 'https://www.paypal.com', 'https://cdn.plaid.com',
+                'https://www.sandbox.paypal.com', 'https://checkout.sandbox.paypal.com',
             ],
+            'font' => ['https://applepay.cdn-apple.com'],
             'connect' => [
                 'https://pay.google.com', 'https://google.com', 'https://account.google.com', 'https://www.google.com',
                 'https://api.basistheory.com', 'https://payments.braintree-api.com', 'https://api.braintreegateway.com',
                 'https://api-m.paypal.com', 'https://www.paypal.com', 'https://production.plaid.com',
+                'https://api-m.sandbox.paypal.com', 'https://www.sandbox.paypal.com',
+                'https://payments.sandbox.braintree-api.com', 'https://api.sandbox.braintreegateway.com', 'https://sandbox.plaid.com',
             ],
         ],
         'lock_seconds' => 60,
