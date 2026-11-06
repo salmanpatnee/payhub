@@ -400,7 +400,7 @@ onBeforeUnmount(() => {
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight text-slate-900">Complete your payment</h1>
                     <p class="text-sm text-slate-500 mt-1.5 leading-relaxed">
-                        Pay securely by card. You will see a receipt once the payment is confirmed.
+                        Pay securely online. You will see a receipt once the payment is confirmed.
                     </p>
                 </div>
 
