@@ -100,8 +100,7 @@ it('creates one checkout configuration from the payment record and saves it', fu
             && $body['variant']['release_method'] === 'buy_now'
             && $body['variant']['visibility'] === 'hidden'
             && $body['variant']['adaptive_pricing_enabled'] === false
-            && $body['variant']['payment_method_configuration']['enabled'] === ['card']
-            && $body['variant']['payment_method_configuration']['include_platform_defaults'] === false
+            && ! isset($body['variant']['payment_method_configuration'])
             && ! isset($body['plan'])
             && $body['variant']['description'] === $payment->formattedReferenceCode()
             && $body['variant']['title'] === $body['variant']['description']
@@ -283,11 +282,13 @@ it('adds the Whop hosts to the CSP only for an embed account on the Whop pay pag
 
     $embedCsp = $this->get("/pay/{$embed->uuid}")->headers->get('Content-Security-Policy');
     expect($embedCsp)->toContain('https://cdn.whop.com')->toContain('https://sandbox-api.whop.com')
+        ->toContain('https://www.paypal.com')->toContain('https://pay.google.com')
+        ->toContain('https://applepay.cdn-apple.com')->toContain('https://cdn.plaid.com')
         ->not->toContain("'unsafe-eval'");
 
     foreach ([$redirect, $stripe] as $payment) {
         expect($this->get("/pay/{$payment->uuid}")->headers->get('Content-Security-Policy'))
-            ->not->toContain('whop.com');
+            ->not->toContain('whop.com')->not->toContain('paypal.com')->not->toContain('plaid.com');
     }
 });
 

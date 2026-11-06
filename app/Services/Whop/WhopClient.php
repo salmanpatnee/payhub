@@ -80,13 +80,8 @@ class WhopClient
                 'initial_price' => (float) WhopAmount::centsToDecimal($amountCents),
                 // Charge in the payment's own currency, never the buyer's local one.
                 'adaptive_pricing_enabled' => false,
-                'payment_method_configuration' => [
-                    // Card only: the pay page says "Pay securely by card". An allowlist also keeps
-                    // methods Whop adds later (ACH, crypto, wallets) off the checkout.
-                    'enabled' => ['card'],
-                    'disabled' => [],
-                    'include_platform_defaults' => false,
-                ],
+                // No payment_method_configuration: Whop uses the account's Payment methods settings
+                // (dashboard > Settings > Checkout), so methods are switched on and off there.
             ],
             'metadata' => $metadata,
             'redirect_url' => $redirectUrl,
