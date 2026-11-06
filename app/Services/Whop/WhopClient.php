@@ -17,6 +17,9 @@ use Illuminate\Support\Facades\Http;
  */
 class WhopClient
 {
+    /** Whop payment method names allowed on a PayHub checkout (Whop's PaymentMethodTypes). */
+    public const PAYMENT_METHODS = ['card', 'apple_pay', 'google_pay', 'paypal', 'us_bank_account'];
+
     public function __construct(
         private readonly string $apiKey,
         private readonly string $companyId,
@@ -81,9 +84,10 @@ class WhopClient
                 // Charge in the payment's own currency, never the buyer's local one.
                 'adaptive_pricing_enabled' => false,
                 'payment_method_configuration' => [
-                    // Card only: the pay page says "Pay securely by card". An allowlist also keeps
-                    // methods Whop adds later (ACH, crypto, wallets) off the checkout.
-                    'enabled' => ['card'],
+                    // Allowlist: card, wallets, PayPal and US bank transfer (ACH). It also keeps
+                    // methods Whop adds later (crypto, buy now pay later) off the checkout.
+                    // Whop still hides any method the buyer or account is not eligible for.
+                    'enabled' => self::PAYMENT_METHODS,
                     'disabled' => [],
                     'include_platform_defaults' => false,
                 ],

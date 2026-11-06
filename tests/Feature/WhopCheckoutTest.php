@@ -100,7 +100,7 @@ it('creates one checkout configuration from the payment record and saves it', fu
             && $body['variant']['release_method'] === 'buy_now'
             && $body['variant']['visibility'] === 'hidden'
             && $body['variant']['adaptive_pricing_enabled'] === false
-            && $body['variant']['payment_method_configuration']['enabled'] === ['card']
+            && $body['variant']['payment_method_configuration']['enabled'] === ['card', 'apple_pay', 'google_pay', 'paypal', 'us_bank_account']
             && $body['variant']['payment_method_configuration']['include_platform_defaults'] === false
             && ! isset($body['plan'])
             && $body['variant']['description'] === $payment->formattedReferenceCode()
