@@ -52,6 +52,23 @@ return [
             'sandbox' => ['api' => 'https://sandbox-api.whop.com/api/v1', 'connect' => 'https://sandbox-api.whop.com', 'checkout' => 'https://sandbox.whop.com', 'script' => 'https://cdn.whop.com'],
             'production' => ['api' => 'https://api.whop.com/api/v1', 'connect' => 'https://api.whop.com', 'checkout' => 'https://whop.com', 'script' => 'https://cdn.whop.com'],
         ],
+        // Extra hosts the embed needs for PayPal, Google Pay, Apple Pay and ACH bank linking (Plaid).
+        // Copied from @whop/elements contentSecurityPolicy(); added to the CSP only on an embed pay page.
+        'payment_method_hosts' => [
+            'script' => [
+                'https://pay.google.com', 'https://applepay.cdn-apple.com', 'https://js.braintreegateway.com',
+                'https://www.paypal.com', 'https://c.paypal.com', 'https://cdn.plaid.com',
+            ],
+            'frame' => [
+                'https://checkout.paypal.com', 'https://assets.braintreegateway.com',
+                'https://www.paypal.com', 'https://cdn.plaid.com',
+            ],
+            'connect' => [
+                'https://pay.google.com', 'https://google.com', 'https://account.google.com', 'https://www.google.com',
+                'https://api.basistheory.com', 'https://payments.braintree-api.com', 'https://api.braintreegateway.com',
+                'https://api-m.paypal.com', 'https://www.paypal.com', 'https://production.plaid.com',
+            ],
+        ],
         'lock_seconds' => 60,
         'connect_timeout' => 10,
         'timeout' => 30,

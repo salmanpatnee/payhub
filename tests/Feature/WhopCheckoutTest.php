@@ -283,11 +283,13 @@ it('adds the Whop hosts to the CSP only for an embed account on the Whop pay pag
 
     $embedCsp = $this->get("/pay/{$embed->uuid}")->headers->get('Content-Security-Policy');
     expect($embedCsp)->toContain('https://cdn.whop.com')->toContain('https://sandbox-api.whop.com')
+        ->toContain('https://www.paypal.com')->toContain('https://pay.google.com')
+        ->toContain('https://applepay.cdn-apple.com')->toContain('https://cdn.plaid.com')
         ->not->toContain("'unsafe-eval'");
 
     foreach ([$redirect, $stripe] as $payment) {
         expect($this->get("/pay/{$payment->uuid}")->headers->get('Content-Security-Policy'))
-            ->not->toContain('whop.com');
+            ->not->toContain('whop.com')->not->toContain('paypal.com')->not->toContain('plaid.com');
     }
 });
 
