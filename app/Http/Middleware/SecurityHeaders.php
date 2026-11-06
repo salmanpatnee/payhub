@@ -79,7 +79,7 @@ class SecurityHeaders
             && $routePayment instanceof Payment
             && $routePayment->provider === PaymentProvider::Whop;
         $whopAccount = $isWhopPayPage ? $routePayment->loadMissing('whopAccount')->whopAccount : null;
-        $whopScript = $whopConnect = $whopMethodScript = $whopMethodFrame = $whopMethodConnect = '';
+        $whopScript = $whopConnect = $whopMethodScript = $whopMethodFrame = $whopMethodConnect = $whopMethodFont = $whopWorker = '';
         if ($whopAccount?->checkout_mode === 'embed') {
             $whopScript = ' '.config("services.whop.hosts.{$whopAccount->environment}.script");
             $whopConnect = ' '.config("services.whop.hosts.{$whopAccount->environment}.connect");
@@ -87,6 +87,9 @@ class SecurityHeaders
             $whopMethodScript = ' '.implode(' ', config('services.whop.payment_method_hosts.script'));
             $whopMethodFrame = ' '.implode(' ', config('services.whop.payment_method_hosts.frame'));
             $whopMethodConnect = ' '.implode(' ', config('services.whop.payment_method_hosts.connect'));
+            $whopMethodFont = ' '.implode(' ', config('services.whop.payment_method_hosts.font'));
+            // The embed starts a web worker from a blob: URL; without this it falls back to script-src.
+            $whopWorker = " worker-src 'self' blob:;";
         }
 
         $response->headers->set('Content-Security-Policy',
@@ -96,7 +99,7 @@ class SecurityHeaders
             "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$authorizenetConnect}{$whopConnect}{$whopMethodConnect}{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$square}{$vite}; ".
-            "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$vite};"
+            "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$whopMethodFont}{$vite};{$whopWorker}"
         );
 
         return $response;
