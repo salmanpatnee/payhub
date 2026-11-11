@@ -216,6 +216,20 @@ it('success page renders when redirect_status is succeeded', function () {
         ->assertInertia(fn ($page) => $page->component('ClientPayment/Success'));
 });
 
+it('success page shows the client name and email', function () {
+    $payment = Payment::factory()->create([
+        'status' => 'pending',
+        'client_name' => 'Jane Doe',
+        'client_email' => 'jane@example.com',
+    ]);
+    $this->get("/pay/{$payment->uuid}/success?redirect_status=succeeded")
+        ->assertInertia(fn ($page) => $page
+            ->component('ClientPayment/Success')
+            ->where('payment.client_name', 'Jane Doe')
+            ->where('payment.client_email', 'jane@example.com')
+        );
+});
+
 // CLIENT-06: Success redirects to failed when redirect_status is not succeeded
 it('success redirects to failed page when redirect_status is not succeeded', function () {
     $payment = Payment::factory()->create(['status' => 'pending']);

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3'
+import { CircleCheck, Mail, User } from 'lucide-vue-next'
 import PaymentLayout from '@/layouts/PaymentLayout.vue'
 
 const props = defineProps<{
@@ -10,6 +11,8 @@ const props = defineProps<{
         currency: string
         service: string | null
         package: string | null
+        client_name: string | null
+        client_email: string | null
     }
     brand: {
         name: string
@@ -90,13 +93,21 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
             <!-- Receipt details -->
             <dl class="receipt-card">
                 <div class="receipt-row">
-                    <dt>Status</dt>
+                    <dt><CircleCheck class="receipt-icon" aria-hidden="true" />Status</dt>
                     <dd>
                         <span class="paid-badge">
                             <span class="paid-dot"></span>
                             Paid
                         </span>
                     </dd>
+                </div>
+                <div v-if="payment.client_name" class="receipt-row">
+                    <dt><User class="receipt-icon" aria-hidden="true" />Full Name</dt>
+                    <dd>{{ payment.client_name }}</dd>
+                </div>
+                <div v-if="payment.client_email" class="receipt-row">
+                    <dt><Mail class="receipt-icon" aria-hidden="true" />Email Address</dt>
+                    <dd class="receipt-email">{{ payment.client_email }}</dd>
                 </div>
                 <div v-if="payment.service" class="receipt-row">
                     <dt>Service</dt>
@@ -264,6 +275,19 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
     margin: 0;
 }
 
+.receipt-row dt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.receipt-icon {
+    width: 14px;
+    height: 14px;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
 .receipt-row dd {
     font-size: 13px;
     font-weight: 500;
@@ -272,6 +296,11 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
     text-transform: capitalize;
     margin: 0;
     max-width: 60%;
+}
+
+.receipt-row dd.receipt-email {
+    text-transform: none;
+    word-break: break-all;
 }
 
 /* ─── Paid badge ─────────────────────────────────────── */
