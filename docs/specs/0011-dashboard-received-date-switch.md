@@ -1,7 +1,7 @@
 # 0011. Dashboard "Received in this period" switch
 
 **Date**: 2026-11-11
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 
