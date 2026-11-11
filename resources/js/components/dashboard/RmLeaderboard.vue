@@ -22,7 +22,7 @@ interface DisplayRow {
     name: string;
     amounts: DisplayAmount[];
     completedCount: number;
-    conversionRate: number;
+    conversionRate: number | null;
 }
 
 const displayRows = computed<DisplayRow[]>(() => {
@@ -108,7 +108,7 @@ function barPct(a: DisplayAmount): number {
                         <span v-else class="text-muted-foreground">—</span>
                     </td>
                     <td class="py-1.5 text-right tabular-nums align-top">{{ r.completedCount }}</td>
-                    <td class="py-1.5 text-right tabular-nums align-top">{{ r.conversionRate }}%</td>
+                    <td class="py-1.5 text-right tabular-nums align-top">{{ r.conversionRate === null ? '—' : `${r.conversionRate}%` }}</td>
                 </tr>
             </tbody>
         </table>

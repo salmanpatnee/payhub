@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { X } from 'lucide-vue-next';
+import { CalendarCheck, X } from 'lucide-vue-next';
 import { computed, reactive, watch } from 'vue';
 import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -30,6 +31,7 @@ const state = reactive({
     currency: props.filters.currency ?? ALL,
     from: props.filters.from ?? '',
     to: props.filters.to ?? '',
+    received: props.filters.received ?? false,
 });
 
 function buildQuery(): Record<string, string> {
@@ -40,6 +42,7 @@ function buildQuery(): Record<string, string> {
     if (state.currency !== ALL) query.currency = state.currency;
     if (state.from) query.from = state.from;
     if (state.to) query.to = state.to;
+    if (state.received) query.received = '1';
     return query;
 }
 
@@ -65,6 +68,7 @@ function clearFilters(): void {
     state.currency = ALL;
     state.from = '';
     state.to = '';
+    state.received = false;
 }
 
 // Account options narrow to the chosen provider; clear a now-incompatible account.
@@ -152,5 +156,26 @@ watch(
                 </Button>
             </div>
         </div>
+        <label
+            for="dashboard-received"
+            class="mt-3 flex w-fit max-w-full cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors"
+            :class="
+                state.received
+                    ? 'border-primary/60 bg-primary/10'
+                    : 'border-dashed border-border bg-muted/40 hover:border-primary/40 hover:bg-muted'
+            "
+        >
+            <Checkbox id="dashboard-received" v-model="state.received" class="size-5" />
+            <CalendarCheck
+                class="size-5 shrink-0 transition-colors"
+                :class="state.received ? 'text-primary' : 'text-muted-foreground'"
+            />
+            <span class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                <span class="text-sm font-semibold">Received in this period</span>
+                <span v-if="state.received && !state.from && !state.to" class="text-xs font-medium text-amber-600">
+                    Pick a date range for this to take effect.
+                </span>
+            </span>
+        </label>
     </div>
 </template>
