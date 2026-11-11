@@ -29,6 +29,10 @@ class SecurityHeaders
             : '';
         $scriptInline = app()->environment('local') ? " 'unsafe-inline'" : '';
 
+        // Sentry browser SDK posts error envelopes to the ingest host. Its session replay (and the
+        // Whop embed) start a web worker from a blob: URL, allowed through worker-src below.
+        $sentryConnect = ' https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io';
+
         // Revolut Merchant Web SDK: embed.js/version.js are loaded as scripts, the
         // Card Field + 3DS challenge render in an iframe, and the SDK makes XHRs —
         // all from the merchant host (sandbox + prod). Both are whitelisted so the
@@ -79,7 +83,7 @@ class SecurityHeaders
             && $routePayment instanceof Payment
             && $routePayment->provider === PaymentProvider::Whop;
         $whopAccount = $isWhopPayPage ? $routePayment->loadMissing('whopAccount')->whopAccount : null;
-        $whopScript = $whopConnect = $whopMethodScript = $whopMethodFrame = $whopMethodConnect = $whopMethodFont = $whopWorker = '';
+        $whopScript = $whopConnect = $whopMethodScript = $whopMethodFrame = $whopMethodConnect = $whopMethodFont = '';
         if ($whopAccount?->checkout_mode === 'embed') {
             $whopScript = ' '.config("services.whop.hosts.{$whopAccount->environment}.script");
             $whopConnect = ' '.config("services.whop.hosts.{$whopAccount->environment}.connect");
@@ -88,18 +92,17 @@ class SecurityHeaders
             $whopMethodFrame = ' '.implode(' ', config('services.whop.payment_method_hosts.frame'));
             $whopMethodConnect = ' '.implode(' ', config('services.whop.payment_method_hosts.connect'));
             $whopMethodFont = ' '.implode(' ', config('services.whop.payment_method_hosts.font'));
-            // The embed starts a web worker from a blob: URL; without this it falls back to script-src.
-            $whopWorker = " worker-src 'self' blob:;";
         }
 
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
             "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$authorizenetScript}{$whopScript}{$whopMethodScript}{$vite}{$scriptInline}; ".
             "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}{$whopScript}{$whopMethodFrame}; ".
-            "connect-src 'self' https://api.stripe.com{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$authorizenetConnect}{$whopConnect}{$whopMethodConnect}{$vite}{$viteWs}; ".
+            "connect-src 'self' https://api.stripe.com{$sentryConnect}{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$authorizenetConnect}{$whopConnect}{$whopMethodConnect}{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$square}{$vite}; ".
-            "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$whopMethodFont}{$vite};{$whopWorker}"
+            "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$whopMethodFont}{$vite}; ".
+            "worker-src 'self' blob:"
         );
 
         return $response;
