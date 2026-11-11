@@ -336,3 +336,140 @@ it('keeps the currently-filtered inactive RM visible in the dashboard filter dro
             ->where('filterOptions.relationshipManagers', fn ($rms) => collect($rms)->contains('id', $inactiveRm->id))
         );
 });
+
+/**
+ * Create a payment with explicit created/paid dates for the "received in this period" tests.
+ */
+function receivedPayment(Brand $brand, array $attrs): Payment
+{
+    return Payment::factory()->for($brand)->create([
+        'stripe_account_id' => StripeAccount::factory()->create()->id,
+        'currency' => 'usd',
+        ...$attrs,
+    ]);
+}
+
+const RECEIVED_RANGE = ['from' => '2026-03-10', 'to' => '2026-03-20'];
+
+it('counts by created day when received is off, by paid day when on (AC-2, AC-3)', function () {
+    $brand = Brand::factory()->create();
+    receivedPayment($brand, ['amount' => 1000, 'status' => 'completed', 'created_at' => '2026-03-15 10:00:00', 'paid_at' => '2026-03-25 10:00:00']);
+    receivedPayment($brand, ['amount' => 2000, 'status' => 'completed', 'created_at' => '2026-03-01 10:00:00', 'paid_at' => '2026-03-12 10:00:00']);
+
+    $off = DashboardMetrics::for(RECEIVED_RANGE)['kpis'];
+    $on = DashboardMetrics::for([...RECEIVED_RANGE, 'received' => true])['kpis'];
+
+    expect($off['collected'])->toBe(['usd' => 1000]);
+    expect($on['collected'])->toBe(['usd' => 2000]);
+    expect($on['avgPaymentValue'])->toBe(['usd' => 2000]);
+    expect($on['activeBrands'])->toBe(1);
+});
+
+it('counts a completed payment with no paid_at by created day when received is on (AC-5)', function () {
+    $brand = Brand::factory()->create();
+    receivedPayment($brand, ['amount' => 1500, 'status' => 'completed', 'created_at' => '2026-03-15 10:00:00', 'paid_at' => null]);
+
+    $on = DashboardMetrics::for([...RECEIVED_RANGE, 'received' => true])['kpis'];
+
+    expect($on['collected'])->toBe(['usd' => 1500]);
+});
+
+it('keeps pending, funnel and rates on created day (AC-6)', function () {
+    $brand = Brand::factory()->create();
+    receivedPayment($brand, ['amount' => 700, 'status' => 'pending', 'created_at' => '2026-03-15 10:00:00']);
+    receivedPayment($brand, ['amount' => 1000, 'status' => 'completed', 'created_at' => '2026-03-15 10:00:00', 'paid_at' => '2026-03-25 10:00:00']);
+
+    $off = DashboardMetrics::for(RECEIVED_RANGE);
+    $on = DashboardMetrics::for([...RECEIVED_RANGE, 'received' => true]);
+
+    expect($on['kpis']['pendingPipeline'])->toBe($off['kpis']['pendingPipeline']);
+    expect($on['kpis']['conversionRate'])->toBe($off['kpis']['conversionRate']);
+    expect($on['kpis']['successRate'])->toBe($off['kpis']['successRate']);
+    expect($on['funnel'])->toBe($off['funnel']);
+    expect($on['worklist'])->toBe($off['worklist']);
+});
+
+it('uses paid day for brand revenue but created day for conversion (AC-4)', function () {
+    $brand = Brand::factory()->create(['name' => 'Brand X']);
+    receivedPayment($brand, ['amount' => 1000, 'status' => 'completed', 'created_at' => '2026-03-15 10:00:00', 'paid_at' => '2026-03-25 10:00:00']);
+    receivedPayment($brand, ['amount' => 500, 'status' => 'pending', 'created_at' => '2026-03-16 10:00:00']);
+    receivedPayment($brand, ['amount' => 4000, 'status' => 'completed', 'created_at' => '2026-03-01 10:00:00', 'paid_at' => '2026-03-12 10:00:00']);
+
+    $row = DashboardMetrics::for([...RECEIVED_RANGE, 'received' => true])['brandPerformance'][0];
+
+    expect($row['revenue'])->toBe(['usd' => 4000]);
+    expect($row['completedCount'])->toBe(1);
+    expect($row['totalCount'])->toBe(2);
+    expect($row['conversionRate'])->toBe(50.0);
+});
+
+it('lists a row that has only paid day money with null conversion (AC-4)', function () {
+    $brand = Brand::factory()->create(['name' => 'Late Brand']);
+    receivedPayment($brand, ['amount' => 4000, 'status' => 'completed', 'created_at' => '2026-03-01 10:00:00', 'paid_at' => '2026-03-12 10:00:00']);
+
+    $rows = DashboardMetrics::for([...RECEIVED_RANGE, 'received' => true])['brandPerformance'];
+
+    expect($rows)->toHaveCount(1);
+    expect($rows[0]['revenue'])->toBe(['usd' => 4000]);
+    expect($rows[0]['totalCount'])->toBe(0);
+    expect($rows[0]['conversionRate'])->toBeNull();
+});
+
+it('sorts brands by paid day revenue when received is on (AC-4)', function () {
+    $small = Brand::factory()->create(['name' => 'Small']);
+    $big = Brand::factory()->create(['name' => 'Big']);
+    receivedPayment($small, ['amount' => 9000, 'status' => 'completed', 'created_at' => '2026-03-15 10:00:00', 'paid_at' => '2026-03-25 10:00:00']);
+    receivedPayment($small, ['amount' => 100, 'status' => 'completed', 'created_at' => '2026-03-15 10:00:00', 'paid_at' => '2026-03-15 10:00:00']);
+    receivedPayment($big, ['amount' => 5000, 'status' => 'completed', 'created_at' => '2026-03-01 10:00:00', 'paid_at' => '2026-03-12 10:00:00']);
+
+    $rows = DashboardMetrics::for([...RECEIVED_RANGE, 'received' => true])['brandPerformance'];
+
+    expect($rows[0]['name'])->toBe('Big');
+});
+
+it('ignores received when no dates are set (AC-8)', function () {
+    seedDashboardPayments();
+
+    $off = DashboardMetrics::for([]);
+    $on = DashboardMetrics::for(['received' => true]);
+
+    expect($on['kpis'])->toBe($off['kpis']);
+    expect($on['brandPerformance'])->toBe($off['brandPerformance']);
+});
+
+it('treats the paid day boundary correctly and supports open ended ranges (AC-3, AC-8)', function () {
+    $brand = Brand::factory()->create();
+    receivedPayment($brand, ['amount' => 1000, 'status' => 'completed', 'created_at' => '2026-03-01 10:00:00', 'paid_at' => '2026-03-20 23:59:00']);
+    receivedPayment($brand, ['amount' => 2000, 'status' => 'completed', 'created_at' => '2026-03-01 10:00:00', 'paid_at' => '2026-03-21 00:00:00']);
+
+    expect(DashboardMetrics::for([...RECEIVED_RANGE, 'received' => true])['kpis']['collected'])->toBe(['usd' => 1000]);
+    expect(DashboardMetrics::for(['from' => '2026-03-21', 'received' => true])['kpis']['collected'])->toBe(['usd' => 2000]);
+    expect(DashboardMetrics::for(['to' => '2026-03-20', 'received' => true])['kpis']['collected'])->toBe(['usd' => 1000]);
+});
+
+it('leaves revenue trend and accounts today the same on and off (AC-7)', function () {
+    $brand = Brand::factory()->create();
+    receivedPayment($brand, ['amount' => 1000, 'status' => 'completed', 'created_at' => '2026-03-15 10:00:00', 'paid_at' => '2026-03-25 10:00:00']);
+    receivedPayment($brand, ['amount' => 2000, 'status' => 'completed', 'created_at' => '2026-03-01 10:00:00', 'paid_at' => '2026-03-12 10:00:00']);
+
+    $off = DashboardMetrics::for(RECEIVED_RANGE);
+    $on = DashboardMetrics::for([...RECEIVED_RANGE, 'received' => true]);
+
+    expect($on['revenueTrend'])->toBe($off['revenueTrend']);
+    expect($on['accountsToday'])->toBe($off['accountsToday']);
+});
+
+it('reads received from the query string as a safe boolean (AC-1, AC-9)', function () {
+    $admin = User::factory()->create();
+    $admin->syncRoles(['admin']);
+
+    foreach ([['1', true], ['0', false], ['', false], ['junk', false]] as [$value, $expected]) {
+        $this->actingAs($admin)
+            ->get(route('dashboard', ['received' => $value]))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('filters.received', $expected));
+    }
+
+    $this->actingAs($admin)->get(route('dashboard'))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('filters.received', false));
+});

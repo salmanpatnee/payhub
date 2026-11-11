@@ -795,7 +795,11 @@ class ClientPaymentController extends Controller
         }
 
         return Inertia::render('ClientPayment/Success', [
-            'payment' => $this->paymentProps($payment),
+            'payment' => [
+                ...$this->paymentProps($payment),
+                'client_name' => $payment->client_name,
+                'client_email' => $payment->client_email,
+            ],
             'brand' => $this->brandProps($payment->brand),
             'provider' => $payment->provider->value,
         ]);

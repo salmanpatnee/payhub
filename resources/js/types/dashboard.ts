@@ -32,7 +32,7 @@ export interface PerformanceRow {
     revenue: MoneyByCurrency;
     completedCount: number;
     totalCount: number;
-    conversionRate: number;
+    conversionRate: number | null;
 }
 
 export interface WorklistRow {
@@ -70,6 +70,7 @@ export interface DashboardFilterValues {
     provider: string | null;
     account: string | null;
     currency: string | null;
+    received: boolean;
 }
 
 export interface DashboardFilterOptions {

@@ -25,7 +25,7 @@ use Illuminate\Support\Collection;
  * All money is kept as integer cents and never summed across currencies —
  * USD and GBP are reported on separate keys. Formatting happens on the client.
  *
- * @phpstan-type Filters array{from?: string|null, to?: string|null, brand_id?: int|string|null, relationship_manager_id?: int|string|null, provider?: string|null, account?: string|null, currency?: string|null}
+ * @phpstan-type Filters array{from?: string|null, to?: string|null, brand_id?: int|string|null, relationship_manager_id?: int|string|null, provider?: string|null, account?: string|null, currency?: string|null, received?: bool|null}
  */
 class DashboardMetrics
 {
@@ -105,6 +105,31 @@ class DashboardMetrics
     }
 
     /**
+     * Completed payments only. With the "received" switch on and a date range set, the range
+     * applies to the day the money was paid (created day when paid_at is empty); otherwise
+     * it is exactly baseQuery() plus the completed status.
+     */
+    private function completedQuery(): Builder
+    {
+        $from = $this->filters['from'] ?? null;
+        $to = $this->filters['to'] ?? null;
+
+        if (! $this->receivedMode() || (! $from && ! $to)) {
+            return $this->baseQuery()->where('status', self::COMPLETED);
+        }
+
+        return $this->filteredQuery()
+            ->where('status', self::COMPLETED)
+            ->when($from, fn ($q, $v) => $q->whereRaw('DATE(COALESCE(paid_at, created_at)) >= ?', [$v]))
+            ->when($to, fn ($q, $v) => $q->whereRaw('DATE(COALESCE(paid_at, created_at)) <= ?', [$v]));
+    }
+
+    private function receivedMode(): bool
+    {
+        return (bool) ($this->filters['received'] ?? false);
+    }
+
+    /**
      * Split the combined "{provider}:{id}" account filter into [provider, id].
      * Returns [null, null] when no (or a malformed) account filter is set.
      *
@@ -142,16 +167,14 @@ class DashboardMetrics
         $collected = $this->revenueByCurrency(self::COMPLETED);
         $pending = $this->revenueByCurrency(self::PENDING);
 
-        $avgByCurrency = (clone $this->baseQuery())
-            ->where('status', self::COMPLETED)
+        $avgByCurrency = (clone $this->completedQuery())
             ->selectRaw('currency, avg(amount) as a')
             ->groupBy('currency')
             ->get()
             ->mapWithKeys(fn ($r) => [$r->currency => (int) round((float) $r->a)])
             ->all();
 
-        $activeBrands = (clone $this->baseQuery())
-            ->where('status', self::COMPLETED)
+        $activeBrands = (clone $this->completedQuery())
             ->distinct()
             ->count('brand_id');
 
@@ -179,8 +202,11 @@ class DashboardMetrics
      */
     private function revenueByCurrency(string $status): array
     {
-        return (clone $this->baseQuery())
-            ->where('status', $status)
+        $query = $status === self::COMPLETED
+            ? $this->completedQuery()
+            : $this->baseQuery()->where('status', $status);
+
+        return (clone $query)
             ->selectRaw('currency, sum(amount) as s')
             ->groupBy('currency')
             ->get()
@@ -287,24 +313,37 @@ class DashboardMetrics
      */
     private function groupedPerformance(string $column): Collection
     {
-        $rows = (clone $this->baseQuery())
-            ->selectRaw("{$column} as gid, currency, status, count(*) as c, sum(amount) as s")
-            ->groupBy('gid', 'currency', 'status')
-            ->get();
+        $created = (clone $this->baseQuery())
+            ->selectRaw("{$column} as gid, status, count(*) as c")
+            ->groupBy('gid', 'status')
+            ->get()
+            ->groupBy(fn ($r) => (string) $r->gid);
 
-        return $rows
-            ->groupBy('gid')
-            ->map(function (Collection $group, $gid) {
-                $revenue = [];
-                $completed = 0;
+        $paid = (clone $this->completedQuery())
+            ->selectRaw("{$column} as gid, currency, count(*) as c, sum(amount) as s")
+            ->groupBy('gid', 'currency')
+            ->get()
+            ->groupBy(fn ($r) => (string) $r->gid);
+
+        return collect(array_unique([...$created->keys()->all(), ...$paid->keys()->all()]))
+            ->map(function ($gid) use ($created, $paid) {
+                $gid = (string) $gid;
                 $total = 0;
+                $createdCompleted = 0;
 
-                foreach ($group as $r) {
+                foreach ($created->get($gid, []) as $r) {
                     $total += (int) $r->c;
                     if ($r->status === self::COMPLETED) {
-                        $completed += (int) $r->c;
-                        $revenue[$r->currency] = ($revenue[$r->currency] ?? 0) + (int) $r->s;
+                        $createdCompleted += (int) $r->c;
                     }
+                }
+
+                $revenue = [];
+                $completed = 0;
+
+                foreach ($paid->get($gid, []) as $r) {
+                    $completed += (int) $r->c;
+                    $revenue[$r->currency] = ($revenue[$r->currency] ?? 0) + (int) $r->s;
                 }
 
                 return [
@@ -312,7 +351,7 @@ class DashboardMetrics
                     'revenue' => $revenue,
                     'completedCount' => $completed,
                     'totalCount' => $total,
-                    'conversionRate' => $total > 0 ? round($completed / $total * 100, 1) : 0.0,
+                    'conversionRate' => $total > 0 ? round($createdCompleted / $total * 100, 1) : null,
                 ];
             })
             ->values();
@@ -593,6 +632,7 @@ class DashboardMetrics
             'provider' => $this->filters['provider'] ?? null,
             'account' => $this->filters['account'] ?? null,
             'currency' => $this->filters['currency'] ?? null,
+            'received' => $this->receivedMode(),
         ];
     }
 

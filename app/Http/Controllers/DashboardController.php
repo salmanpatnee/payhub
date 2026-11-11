@@ -24,6 +24,8 @@ class DashboardController extends Controller
             'currency' => ['nullable', 'in:usd,gbp,pkr'],
         ]);
 
+        $filters['received'] = $request->boolean('received');
+
         $props = DashboardMetrics::for($filters);
 
         if ($request->user()->hasRole('admin')) {
