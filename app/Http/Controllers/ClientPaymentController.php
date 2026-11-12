@@ -540,6 +540,11 @@ class ClientPaymentController extends Controller
             return response()->json(['ok' => false, 'error' => 'This payment cannot be processed.'], 422);
         }
 
+        // The pay page records consent before any card or wallet charge; never charge without it.
+        if (! $payment->consents()->exists()) {
+            return response()->json(['ok' => false, 'error' => 'This payment cannot be processed.'], 422);
+        }
+
         $validated = $request->validate([
             'source_id' => ['required', 'string'],
             'verification_token' => ['nullable', 'string'],

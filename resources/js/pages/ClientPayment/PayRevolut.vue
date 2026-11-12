@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
 import { Head, useHttp } from '@inertiajs/vue3'
-import { AlertCircle, CreditCard, LockIcon, X } from 'lucide-vue-next'
 import RevolutCheckout from '@revolut/checkout'
-import PaymentLayout from '@/layouts/PaymentLayout.vue'
-import { Button } from '@/components/ui/button'
+import { AlertCircle, CreditCard, LockIcon, X } from 'lucide-vue-next'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { storeConsent } from '@/actions/App/Http/Controllers/ClientPaymentController'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
-import { storeConsent } from '@/actions/App/Http/Controllers/ClientPaymentController'
+import PaymentLayout from '@/layouts/PaymentLayout.vue'
 import { withBase } from '@/lib/basePath'
 
 type Policy = { key: string; title: string; version: string; html: string }
@@ -62,6 +62,7 @@ const policyScrolled = ref(false)
 
 function openPolicy(key: string): void {
     const found = props.policies.find((p) => p.key === key)
+
     if (found) {
         policyScrolled.value = false
         activePolicy.value = found
@@ -75,6 +76,142 @@ function onPolicyScroll(event: Event): void {
 function onConsentChange(): void {
     consentError.value = undefined
 }
+
+const CONSENT_REQUIRED = 'You must agree to the Terms & Conditions, Refund Policy, and Privacy Policy before proceeding.'
+const WALLET_FAILED    = 'Your payment could not be completed. Please try again or pay by card.'
+
+/**
+ * Consent gate shared by the card and the wallets: shows the consent error when the
+ * box is unticked, otherwise records consent for the audit trail.
+ * useHttp = standalone XHR (no Inertia visit) so entered card data is preserved.
+ */
+async function recordConsent(): Promise<boolean> {
+    if (!consent.value) {
+        consentError.value = CONSENT_REQUIRED
+
+        return false
+    }
+
+    let consentRecorded = false
+    await useHttp({ accepted: true }).post(storeConsent(props.payment.uuid).url, {
+        onSuccess: () => {
+ consentRecorded = true 
+},
+    })
+
+    if (!consentRecorded) {
+        consentError.value = 'We could not record your acceptance. Please try again.'
+    }
+
+    return consentRecorded
+}
+
+function payUrl(path = ''): string {
+    return `${window.location.origin}${withBase(`/pay/${props.payment.uuid}${path}`)}`
+}
+
+// UX only: the ORDER_COMPLETED webhook is the sole source of truth for status.
+function goToSuccess(): void {
+    window.location.href = payUrl('/success')
+}
+
+// One tap wallets (Revolut Payments module). Needs the account's public key; without it
+// the page stays card only. The order already exists on the server (orderToken), so
+// createOrder only records consent and hands back that same order.
+const showGooglePay    = ref(false)
+const showRevolutPay   = ref(false)
+const googlePayEl      = ref<HTMLElement | null>(null)
+const revolutPayEl     = ref<HTMLElement | null>(null)
+let walletsModule: { destroy: () => void } | null = null
+
+async function createOrder(): Promise<{ publicId: string }> {
+    if (!(await recordConsent())) {
+        // Stops the wallet flow; the consent error shows under the box.
+        throw new Error(CONSENT_REQUIRED)
+    }
+
+    return { publicId: props.orderToken }
+}
+
+async function initWallets(): Promise<void> {
+    const publicToken = props.revolutAccount.public_key
+
+    if (!publicToken) {
+return
+}
+
+    try {
+        const module = await RevolutCheckout.payments({ publicToken, mode: props.mode, locale: 'en' })
+        walletsModule = module
+        const currency = props.payment.currency.toUpperCase()
+
+        // Google Pay only. Apple Pay is not offered on Revolut: the domain's Apple Pay
+        // file belongs to Square, so Revolut's Apple Pay button would fail.
+        if (googlePayEl.value) {
+            const googlePay = module.paymentRequest(googlePayEl.value, {
+                amount: props.payment.amount,
+                currency,
+                preferredPaymentMethod: 'googlePay',
+                createOrder,
+                buttonStyle: { height: '44px', radius: 'small', variant: 'dark', action: 'pay' },
+                onSuccess: goToSuccess,
+                onError: () => {
+ errorMessage.value = WALLET_FAILED 
+},
+            })
+
+            if ((await googlePay.canMakePayment()) === 'googlePay') {
+                await googlePay.render()
+                showGooglePay.value = true
+            } else {
+                googlePay.destroy()
+            }
+        }
+
+        if (revolutPayEl.value) {
+            module.revolutPay.mount(revolutPayEl.value, {
+                currency,
+                totalAmount: props.payment.amount,
+                createOrder,
+                validate: () => {
+                    if (!consent.value) {
+                        consentError.value = CONSENT_REQUIRED
+
+                        return false
+                    }
+
+                    return true
+                },
+                customer: email.value.trim() ? { email: email.value.trim() } : undefined,
+                buttonStyle: { height: '44px', radius: 'small', variant: 'dark' },
+                // After paying in the Revolut app the client lands back here; the success
+                // page shows the result once the webhook has completed the payment.
+                redirectUrls: { success: payUrl('/success'), failure: payUrl(), cancel: payUrl() },
+                mobileRedirectUrls: { success: payUrl('/success'), failure: payUrl(), cancel: payUrl() },
+            })
+            module.revolutPay.on('payment', (event: { type: string }) => {
+                if (event.type === 'success') {
+goToSuccess()
+}
+
+                if (event.type === 'error') {
+errorMessage.value = WALLET_FAILED
+}
+            })
+            showRevolutPay.value = true
+        }
+    } catch {
+        // Wallets are optional; the card field still works.
+        showGooglePay.value = false
+        showRevolutPay.value = false
+    }
+}
+
+onBeforeUnmount(() => {
+    try {
+ walletsModule?.destroy() 
+} catch { /* noop */ }
+})
 
 function blockCopyKeys(event: KeyboardEvent): void {
     if ((event.ctrlKey || event.metaKey) && ['c', 'a', 'x', 's', 'p'].includes(event.key.toLowerCase())) {
@@ -112,12 +249,10 @@ onMounted(async () => {
             onValidation: (errors: unknown[]) => {
                 cardComplete.value = errors.length === 0
             },
-            onSuccess: () => {
-                // Truth still comes from the webhook; this is UX only.
-                window.location.href = `${window.location.origin}${withBase(`/pay/${props.payment.uuid}/success`)}`
-            },
-            onError: (error: { message?: string }) => {
-                errorMessage.value = error?.message ?? 'An unexpected error occurred. Please try again.'
+            onSuccess: goToSuccess,
+            // Fixed text only: Revolut's own error wording never reaches the page.
+            onError: () => {
+                errorMessage.value = 'Your payment could not be processed. Please check your card details and try again.'
                 processing.value = false
             },
         })
@@ -125,7 +260,11 @@ onMounted(async () => {
         cardLoaded.value = true
     } catch {
         errorMessage.value = 'Payment system is unavailable. Please refresh and try again.'
+
+        return
     }
+
+    await initWallets()
 })
 
 function formatAmount(cents: number, currency: string): string {
@@ -133,10 +272,12 @@ function formatAmount(cents: number, currency: string): string {
         currency === 'gbp' ? 'en-GB' : 'en-US',
         { style: 'currency', currency: currency.toUpperCase() }
     )
+
     return formatter.formatToParts(cents / 100).map((part, i, parts) => {
         if (part.type === 'currency' && parts[i + 1]?.type !== 'literal') {
             return part.value + ' '
         }
+
         return part.value
     }).join('')
 }
@@ -144,41 +285,34 @@ function formatAmount(cents: number, currency: string): string {
 async function submit(): Promise<void> {
     if (!cardField) {
         errorMessage.value = 'Payment system is unavailable. Please refresh and try again.'
+
         return
     }
 
     // Revolut requires a valid customer email + a full cardholder name on submit.
     const customerEmail = email.value.trim()
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
         errorMessage.value = 'Please enter a valid email address.'
+
         return
     }
 
     const customerName = cardholderName.value.trim()
+
     if (customerName.split(/\s+/).filter(Boolean).length < 2) {
         errorMessage.value = 'Please enter the cardholder’s full name (first and last).'
-        return
-    }
 
-    // Consent gate — block before any payment call if unchecked.
-    if (!consent.value) {
-        consentError.value = 'You must agree to the Terms & Conditions, Refund Policy, and Privacy Policy before proceeding.'
         return
     }
 
     processing.value = true
     errorMessage.value = null
 
-    // Record consent for the audit trail before submitting the card.
-    // useHttp = standalone XHR (no Inertia visit) so entered card data is preserved.
-    let consentRecorded = false
-    await useHttp({ accepted: true }).post(storeConsent(props.payment.uuid).url, {
-        onSuccess: () => { consentRecorded = true },
-    })
-
-    if (!consentRecorded) {
-        errorMessage.value = 'We could not record your acceptance. Please try again.'
+    // Consent gate: block before any payment call if unchecked or not recorded.
+    if (!(await recordConsent())) {
         processing.value = false
+
         return
     }
 
@@ -210,6 +344,20 @@ async function submit(): Promise<void> {
                 <p class="text-sm text-slate-500 mt-1.5 leading-relaxed">
                     Enter your card details below to pay securely.
                 </p>
+            </div>
+
+            <!-- One tap wallets. Both targets must exist before the SDK mounts into them;
+                 they stay empty (no height) until a wallet renders. Faded while the
+                 consent box is unticked: a tap then only shows the consent error. -->
+            <div class="space-y-3" :class="{ 'opacity-50': (showGooglePay || showRevolutPay) && !consent }">
+                <div ref="googlePayEl"></div>
+                <div ref="revolutPayEl"></div>
+
+                <div v-if="showGooglePay || showRevolutPay" class="flex items-center gap-3 pt-1 text-xs text-slate-400">
+                    <span class="h-px flex-1 bg-slate-200"></span>
+                    <span>or pay with card</span>
+                    <span class="h-px flex-1 bg-slate-200"></span>
+                </div>
             </div>
 
             <form @submit.prevent="submit" class="space-y-5">

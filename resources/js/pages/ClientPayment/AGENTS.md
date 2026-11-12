@@ -19,7 +19,8 @@ The public pages a client sees when they open a payment link (`/pay/{payment}`).
 
 ## Conventions
 
-- Every pay page records the client's consent (`storeConsent`) before any card data is sent; the Terms, Refund and Privacy policies open in a read only dialog.
+- Every pay page records the client's consent (`storeConsent`) before any card data is sent; the Terms, Refund and Privacy policies open in a read only dialog. `Pay.vue` owns the consent box for both Stripe and Square and passes `recordConsent` into `SquarePaymentForm`.
+- Wallet buttons (Square: Apple Pay, Google Pay, Cash App Pay; Revolut: Google Pay, Revolut Pay) are faded while the consent box is unticked. Apple Pay and Google Pay must open their sheet straight from the click, so Square tokenizes first and records consent before the charge; Revolut records it in `createOrder`. A wallet that cannot start stays hidden and the card form still works. Wallet failures show fixed text only.
 - Amount, currency and account always come from page props built on the server; nothing a page sends decides them.
 - Show the client only fixed messages. Gateway error text never reaches the page.
 - Pages whose status comes from a charge reply (Clover, MPGS, Authorize.net) poll their status endpoint every 3 seconds after a held or unclear result instead of showing the form again. Authorize.net stops showing the waiting message after 10 minutes of visible time.
