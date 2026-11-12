@@ -87,6 +87,8 @@ it('adds the revolut wallet hosts only on a revolut pay page', function () {
     expect(cspDirective($csp, 'frame-src'))->toContain('https://checkout.revolut.com');
     // Apple Pay in Chrome builds a PaymentRequest for https://apple.com/apple-pay, which needs connect-src.
     expect(cspDirective($csp, 'connect-src'))->toContain('https://apple.com');
+    // The Apple Pay QR code window outside Safari is a frame from applepay.cdn-apple.com.
+    expect(cspDirective($csp, 'frame-src'))->toContain('https://applepay.cdn-apple.com');
 });
 
 it('adds no wallet hosts outside the square and revolut pay pages', function () {
