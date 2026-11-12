@@ -34,6 +34,8 @@ const props = defineProps<{
     revolutAccount: { public_key: string | null }
     orderToken: string
     mode: 'sandbox' | 'prod'
+    // True when this site's Apple Pay file belongs to Revolut (services.apple_pay.provider).
+    applePay: boolean
     customerEmail: string | null
     customerName: string | null
     policies: Policy[]
@@ -95,8 +97,8 @@ async function recordConsent(): Promise<boolean> {
     let consentRecorded = false
     await useHttp({ accepted: true }).post(storeConsent(props.payment.uuid).url, {
         onSuccess: () => {
- consentRecorded = true 
-},
+            consentRecorded = true
+        },
     })
 
     if (!consentRecorded) {
@@ -137,34 +139,37 @@ async function initWallets(): Promise<void> {
     const publicToken = props.revolutAccount.public_key
 
     if (!publicToken) {
-return
-}
+        return
+    }
 
     try {
         const module = await RevolutCheckout.payments({ publicToken, mode: props.mode, locale: 'en' })
         walletsModule = module
         const currency = props.payment.currency.toUpperCase()
 
-        // Google Pay only. Apple Pay is not offered on Revolut: the domain's Apple Pay
-        // file belongs to Square, so Revolut's Apple Pay button would fail.
+        // One button that shows Apple Pay or Google Pay, whichever the browser supports.
+        // Apple Pay only when this site's Apple Pay file belongs to Revolut (applePay prop);
+        // otherwise a Revolut Apple Pay button would fail, so only Google Pay is kept.
         if (googlePayEl.value) {
-            const googlePay = module.paymentRequest(googlePayEl.value, {
+            const walletButton = module.paymentRequest(googlePayEl.value, {
                 amount: props.payment.amount,
                 currency,
-                preferredPaymentMethod: 'googlePay',
+                preferredPaymentMethod: props.applePay ? ['applePay', 'googlePay'] : 'googlePay',
                 createOrder,
                 buttonStyle: { height: '44px', radius: 'small', variant: 'dark', action: 'pay' },
                 onSuccess: goToSuccess,
                 onError: () => {
- errorMessage.value = WALLET_FAILED 
-},
+                    errorMessage.value = WALLET_FAILED
+                },
             })
 
-            if ((await googlePay.canMakePayment()) === 'googlePay') {
-                await googlePay.render()
+            const method = await walletButton.canMakePayment()
+
+            if (method === 'googlePay' || (method === 'applePay' && props.applePay)) {
+                await walletButton.render()
                 showGooglePay.value = true
             } else {
-                googlePay.destroy()
+                walletButton.destroy()
             }
         }
 
@@ -209,8 +214,8 @@ errorMessage.value = WALLET_FAILED
 
 onBeforeUnmount(() => {
     try {
- walletsModule?.destroy() 
-} catch { /* noop */ }
+        walletsModule?.destroy()
+    } catch { /* noop */ }
 })
 
 function blockCopyKeys(event: KeyboardEvent): void {
