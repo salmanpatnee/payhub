@@ -94,14 +94,31 @@ class SecurityHeaders
             $whopMethodFont = ' '.implode(' ', config('services.whop.payment_method_hosts.font'));
         }
 
+        // One tap wallets (Google Pay, Apple Pay, Cash App Pay, Revolut Pay): only the pay page of a
+        // Square or Revolut payment gets the extra wallet hosts. No unsafe-inline or unsafe-eval.
+        $walletProvider = in_array($route?->getName(), ['pay.show', 'pay.show.ref'], true) && $routePayment instanceof Payment
+            ? match ($routePayment->provider) {
+                PaymentProvider::Square => 'square',
+                PaymentProvider::Revolut => 'revolut',
+                default => null,
+            }
+        : null;
+        $walletHosts = fn (string $kind): string => $walletProvider
+            ? implode('', array_map(fn (string $host): string => " {$host}", config("services.wallet_hosts.{$walletProvider}.{$kind}", [])))
+            : '';
+        $walletScript = $walletHosts('script');
+        $walletFrame = $walletHosts('frame');
+        $walletConnect = $walletHosts('connect');
+        $walletFont = $walletHosts('font');
+
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
-            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$authorizenetScript}{$whopScript}{$whopMethodScript}{$vite}{$scriptInline}; ".
-            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}{$whopScript}{$whopMethodFrame}; ".
-            "connect-src 'self' https://api.stripe.com{$sentryConnect}{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$authorizenetConnect}{$whopConnect}{$whopMethodConnect}{$vite}{$viteWs}; ".
+            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$authorizenetScript}{$whopScript}{$whopMethodScript}{$walletScript}{$vite}{$scriptInline}; ".
+            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}{$whopScript}{$whopMethodFrame}{$walletFrame}; ".
+            "connect-src 'self' https://api.stripe.com{$sentryConnect}{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$authorizenetConnect}{$whopConnect}{$whopMethodConnect}{$walletConnect}{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
             "style-src 'self' 'unsafe-inline'{$square}{$vite}; ".
-            "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$whopMethodFont}{$vite}; ".
+            "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$whopMethodFont}{$walletFont}{$vite}; ".
             "worker-src 'self' blob:"
         );
 

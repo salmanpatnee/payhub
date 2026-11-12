@@ -43,6 +43,24 @@ return [
         'api_version' => env('REVOLUT_API_VERSION', '2024-09-01'),
     ],
 
+    // Extra CSP hosts for one tap wallets, added only on the pay page of that provider's payment.
+    // Square: Google Pay, Apple Pay and Cash App Pay (Web Payments SDK). Revolut: Google Pay and
+    // Revolut Pay (Merchant Web SDK; most of it runs inside merchant.revolut.com frames already allowed).
+    'wallet_hosts' => [
+        'square' => [
+            'script' => ['https://pay.google.com', 'https://applepay.cdn-apple.com', 'https://kit.cash.app'],
+            'frame' => ['https://pay.google.com', 'https://*.cash.app'],
+            'connect' => ['https://pay.google.com', 'https://google.com', 'https://www.google.com', 'https://api.cash.app', 'https://*.cash.app'],
+            'font' => ['https://applepay.cdn-apple.com'],
+        ],
+        'revolut' => [
+            'script' => ['https://pay.google.com'],
+            'frame' => ['https://pay.google.com', 'https://checkout.revolut.com', 'https://sandbox-checkout.revolut.com'],
+            'connect' => ['https://pay.google.com', 'https://google.com', 'https://www.google.com'],
+            'font' => [],
+        ],
+    ],
+
     'whop' => [
         // Constants, not secrets. API key and webhook secret live encrypted per account
         // on whop_accounts. Hosts are placeholders until the step 0 sandbox check (spec 0009, AC-13/AC-14).
