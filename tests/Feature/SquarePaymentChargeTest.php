@@ -46,9 +46,23 @@ function mockSquareClient(string $returnedPaymentId = 'sq_payment_mock_123', ?ca
     app()->bind(SquareClient::class, fn () => $mockSquare);
 }
 
-function chargeSquare(string $uuid, array $body): TestResponse
+function chargeSquare(string $uuid, array $body, bool $withConsent = true): TestResponse
 {
+    if ($withConsent) {
+        recordSquareConsent(Payment::where('uuid', $uuid)->firstOrFail());
+    }
+
     return test()->postJson("/pay/{$uuid}/square", $body);
+}
+
+function recordSquareConsent(Payment $payment): void
+{
+    $payment->consents()->create([
+        'policy_versions' => ['terms' => '1'],
+        'ip_address' => '127.0.0.1',
+        'user_agent' => 'test',
+        'accepted_at' => now(),
+    ]);
 }
 
 it('guest can charge a square payment without authentication', function () {
@@ -132,8 +146,21 @@ it('requires a source_id', function () {
         ->assertStatus(422);
 });
 
+it('rejects a charge when the client has not given consent, without calling Square', function () {
+    $payment = Payment::factory()->square()->create(['status' => 'pending']);
+    // No mock: a call to Square would fail the test.
+    app()->bind(SquareClient::class, fn () => throw new RuntimeException('Square must not be called'));
+
+    chargeSquare($payment->uuid, ['source_id' => 'cnon:ok'], withConsent: false)
+        ->assertStatus(422)
+        ->assertJson(['ok' => false, 'error' => 'This payment cannot be processed.']);
+
+    expect($payment->fresh()->square_payment_id)->toBeNull();
+});
+
 it('square charge route is CSRF-excluded', function () {
     $payment = Payment::factory()->square()->create(['status' => 'pending']);
+    recordSquareConsent($payment);
     mockSquareClient();
 
     // No CSRF token — must not 419.

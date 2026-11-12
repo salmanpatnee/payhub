@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
 import { Head, useHttp } from '@inertiajs/vue3'
-import { AlertCircle, LockIcon, X } from 'lucide-vue-next'
-import { StripeElements, StripeElement } from 'vue-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
-import PaymentLayout from '@/layouts/PaymentLayout.vue'
-import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Spinner } from '@/components/ui/spinner'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
+import { AlertCircle, LockIcon, X } from 'lucide-vue-next'
+import { ref, computed, onMounted } from 'vue'
+import { StripeElements, StripeElement } from 'vue-stripe-js'
 import { storeConsent } from '@/actions/App/Http/Controllers/ClientPaymentController'
-import SquarePaymentForm from './SquarePaymentForm.vue'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui/spinner'
+import PaymentLayout from '@/layouts/PaymentLayout.vue'
 import { withBase } from '@/lib/basePath'
+import SquarePaymentForm from './SquarePaymentForm.vue'
 
 type Policy = { key: string; title: string; version: string; html: string }
 
@@ -62,6 +62,7 @@ const policyScrolled = ref(false)
 
 function openPolicy(key: string): void {
     const found = props.policies.find((p) => p.key === key)
+
     if (found) {
         policyScrolled.value = false
         activePolicy.value = found
@@ -74,6 +75,32 @@ function onPolicyScroll(event: Event): void {
 
 function onConsentChange(): void {
     consentError.value = undefined
+}
+
+/**
+ * Consent gate shared by Stripe and Square (card and wallets): shows the consent error
+ * when the box is unticked, otherwise records consent for the audit trail.
+ * useHttp = standalone XHR (no Inertia visit) so entered card data is preserved.
+ */
+async function recordConsent(): Promise<boolean> {
+    if (!consent.value) {
+        consentError.value = 'You must agree to the Terms & Conditions, Refund Policy, and Privacy Policy before proceeding.'
+
+        return false
+    }
+
+    let consentRecorded = false
+    await useHttp({ accepted: true }).post(storeConsent(props.payment.uuid).url, {
+        onSuccess: () => {
+ consentRecorded = true 
+},
+    })
+
+    if (!consentRecorded) {
+        consentError.value = 'We could not record your acceptance. Please try again.'
+    }
+
+    return consentRecorded
 }
 
 // Discourage casual copying of policy text. Not DRM — degrades gracefully,
@@ -90,7 +117,9 @@ onMounted(async () => {
     if (props.provider !== 'stripe' || !props.stripeAccount) {
         return
     }
+
     const stripe = await loadStripe(props.stripeAccount.publishable_key)
+
     if (stripe !== null) {
         stripeLoaded.value = true
     }
@@ -101,10 +130,12 @@ function formatAmount(cents: number, currency: string): string {
         currency === 'gbp' ? 'en-GB' : 'en-US',
         { style: 'currency', currency: currency.toUpperCase() }
     )
+
     return formatter.formatToParts(cents / 100).map((part, i, parts) => {
         if (part.type === 'currency' && parts[i + 1]?.type !== 'literal') {
             return part.value + ' '
         }
+
         return part.value
     }).join('')
 }
@@ -149,34 +180,24 @@ async function submit(instance: any, elements: any): Promise<void> {
     // WR-02: Guard against null instance/elements
     if (!instance || !elements) {
         errorMessage.value = 'Payment system is unavailable. Please refresh and try again.'
+
         return
     }
 
     // Guard against submitting before the Payment Element has mounted (PAYHUB-BACKEND-N/J).
     if (!elementReady.value) {
         errorMessage.value = 'Payment form is still loading. Please wait a moment and try again.'
-        return
-    }
 
-    // Consent gate — block before any Stripe call if unchecked.
-    if (!consent.value) {
-        consentError.value = 'You must agree to the Terms & Conditions, Refund Policy, and Privacy Policy before proceeding.'
         return
     }
 
     processing.value = true
     errorMessage.value = null
 
-    // Record consent for the audit trail before confirming payment.
-    // useHttp = standalone XHR (no Inertia visit) so entered card data is preserved.
-    let consentRecorded = false
-    await useHttp({ accepted: true }).post(storeConsent(props.payment.uuid).url, {
-        onSuccess: () => { consentRecorded = true },
-    })
-
-    if (!consentRecorded) {
-        errorMessage.value = 'We could not record your acceptance. Please try again.'
+    // Consent gate: block before any Stripe call if unchecked or not recorded.
+    if (!(await recordConsent())) {
         processing.value = false
+
         return
     }
 
@@ -225,6 +246,9 @@ async function submit(instance: any, elements: any): Promise<void> {
                 :payment="{ uuid: payment.uuid, amount: payment.amount, currency: payment.currency }"
                 :brand="{ name: brand.name, primary_color: brand.primary_color }"
                 :square-account="squareAccount"
+                :reference-code="payment.reference_code"
+                :consent-given="consent"
+                :record-consent="recordConsent"
             />
 
             <!-- Stripe Elements — gated on stripeLoaded -->
@@ -259,35 +283,6 @@ async function submit(instance: any, elements: any): Promise<void> {
                                 <LockIcon class="size-3 shrink-0" />
                                 Your card details are never stored · 256-bit SSL
                             </p>
-
-                            <!-- Compliance footer — consent + policy links, intentionally low-emphasis boilerplate -->
-                            <div class="mt-8 space-y-2.5 border-t border-slate-100 pt-5">
-                                <div class="flex items-start gap-2">
-                                    <Checkbox
-                                        id="policy-consent"
-                                        v-model="consent"
-                                        :aria-invalid="!!consentError"
-                                        class="mt-px size-3.5 shrink-0 data-[state=checked]:!bg-slate-400 data-[state=checked]:!border-slate-400 data-[state=checked]:!text-white"
-                                        @update:model-value="onConsentChange"
-                                    />
-                                    <Label for="policy-consent" class="text-[11px] font-normal leading-relaxed text-slate-400">
-                                        I have read, understood, and agree to the Terms &amp; Conditions, Refund Policy, and Privacy Policy.
-                                    </Label>
-                                </div>
-
-                                <p v-if="consentError" class="flex items-start gap-1.5 pl-[1.35rem] text-[11px] font-medium text-red-600">
-                                    <AlertCircle class="mt-px size-3 shrink-0" />
-                                    <span>{{ consentError }}</span>
-                                </p>
-
-                                <div class="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
-                                    <button type="button" class="policy-link" @click="openPolicy('terms')">Terms &amp; Conditions</button>
-                                    <span aria-hidden="true">·</span>
-                                    <button type="button" class="policy-link" @click="openPolicy('refund')">Refund Policy</button>
-                                    <span aria-hidden="true">·</span>
-                                    <button type="button" class="policy-link" @click="openPolicy('privacy')">Privacy Policy</button>
-                                </div>
-                            </div>
                         </form>
                     </template>
                 </StripeElements>
@@ -303,6 +298,37 @@ async function submit(instance: any, elements: any): Promise<void> {
                     </div>
                     <div class="skeleton-row h-12 rounded-lg"></div>
                     <div class="skeleton-row h-12 rounded-lg mt-2 opacity-75"></div>
+                </div>
+            </template>
+
+            <!-- Compliance footer: consent + policy links for Stripe and Square (card and wallets) -->
+            <template v-if="(provider === 'square' && squareAccount) || (stripeLoaded && stripeAccount)">
+                <div class="mt-8 space-y-2.5 border-t border-slate-100 pt-5">
+                    <div class="flex items-start gap-2">
+                        <Checkbox
+                            id="policy-consent"
+                            v-model="consent"
+                            :aria-invalid="!!consentError"
+                            class="mt-px size-3.5 shrink-0 data-[state=checked]:!bg-slate-400 data-[state=checked]:!border-slate-400 data-[state=checked]:!text-white"
+                            @update:model-value="onConsentChange"
+                        />
+                        <Label for="policy-consent" class="text-[11px] font-normal leading-relaxed text-slate-400">
+                            I have read, understood, and agree to the Terms &amp; Conditions, Refund Policy, and Privacy Policy.
+                        </Label>
+                    </div>
+
+                    <p v-if="consentError" class="flex items-start gap-1.5 pl-[1.35rem] text-[11px] font-medium text-red-600">
+                        <AlertCircle class="mt-px size-3 shrink-0" />
+                        <span>{{ consentError }}</span>
+                    </p>
+
+                    <div class="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
+                        <button type="button" class="policy-link" @click="openPolicy('terms')">Terms &amp; Conditions</button>
+                        <span aria-hidden="true">·</span>
+                        <button type="button" class="policy-link" @click="openPolicy('refund')">Refund Policy</button>
+                        <span aria-hidden="true">·</span>
+                        <button type="button" class="policy-link" @click="openPolicy('privacy')">Privacy Policy</button>
+                    </div>
                 </div>
             </template>
 
