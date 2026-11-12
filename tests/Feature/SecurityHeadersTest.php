@@ -102,3 +102,22 @@ it('adds no wallet hosts outside the square and revolut pay pages', function () 
             ->not->toContain('https://pay.google.com');
     }
 });
+
+// The dark mode script in app.blade.php is inline, so it carries a per request nonce that the
+// policy allows; 'unsafe-inline' stays off outside local dev.
+it('allows the page\'s own inline script by nonce, not unsafe-inline', function () {
+    $response = $this->get('/login');
+    $scriptSrc = cspDirective($response->headers->get('Content-Security-Policy'), 'script-src');
+
+    preg_match("/'nonce-([^']+)'/", $scriptSrc, $match);
+
+    expect($match[1] ?? null)->not->toBeNull()
+        ->and($scriptSrc)->not->toContain('unsafe-inline')
+        ->and($response->getContent())->toContain('nonce="'.$match[1].'"');
+});
+
+it('uses a fresh nonce on every request', function () {
+    $nonceOf = fn () => preg_match("/'nonce-([^']+)'/", $this->get('/login')->headers->get('Content-Security-Policy'), $m) ? $m[1] : null;
+
+    expect($nonceOf())->not->toBe($nonceOf());
+});
