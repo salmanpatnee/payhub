@@ -237,6 +237,23 @@ Eighth provider (`payments.provider = whop`). Spec: `docs/specs/0009-whop-paymen
 - Success card `4242 4242 4242 4242`, decline `4000 0000 0000 0002` (the checkout stays open for a retry), 3D Secure `5385 3083 6013 5181` (password `Checkout1!`). Any future expiry, any CVC and billing address.
 - The webhook log (Developer → Webhooks in Whop's dashboard) shows each delivery body and has Replay delivery; a replay is re-signed with a fresh timestamp.
 
+## Kurv — Hosted Payment Page Provider
+
+Ninth provider (`payments.provider = kurv`). Spec: `docs/specs/0010-kurv-provider/`. The client pays on Kurv's own page, so PayHub never sees card values and adds no CSP hosts. USD only, and `client_email` is required.
+
+### Flow
+
+1. `POST /pay/{payment}/kurv/checkout` (`KurvPaymentController::checkout`, limiter `kurv-checkout`) checks the consent record, takes a cache lock and creates one Kurv payment request through `KurvClient::createPaymentRequest()` (amount from the `Payment` row, integer math). `kurv_request_id`, `kurv_payment_url` and `kurv_charge_started_at` are saved; later calls reuse the saved link and never recreate a dead one.
+2. `PayKurv.vue` sends the browser to the returned URL. Kurv returns the client to the pay page with `kurv_return=1`; the page shows "We are confirming your payment" and polls `GET /pay/{payment}/kurv/status`.
+3. Kurv's callback `POST /webhook/kurv/{kurvAccount}?payment=…&token=…` is unsigned: the token is an HMAC of the payment UUID keyed with `APP_KEY`. It always answers 200 and only triggers a lookup; the body is never trusted.
+4. `KurvChargeResolver` is the only status writer. It sets `completed` only when Kurv's API reports a successful sale with the same transaction id, amount and currency. Every lookup writes a `kurv_lookup_attempts` row, shown to admins on the payment page. v1 never sets `failed`.
+5. `KurvStalePaymentSweep` runs every 10 minutes for pending Kurv payments up to 72 hours old (`services.kurv.sweep_hours`).
+
+### Accounts
+
+- Admin CRUD at `admin/kurv-accounts` (test connection with an unsaved or the stored key, activate/deactivate). `api_key` uses the `encrypted` cast and is not mass-assignable. A `kp_test_` key only goes with `sandbox`, `kp_live_` only with `production`.
+- Once `kurv_charge_started_at` is set, the payment's amount, currency, account, brand and deletion are locked until Kurv reports the link closed (`kurv_link_closed_at`).
+
 ---
 
 ## Card attempt lock (MPGS + Authorize.net)
