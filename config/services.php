@@ -57,13 +57,14 @@ return [
     'wallet_hosts' => [
         'square' => [
             'script' => ['https://pay.google.com', 'https://applepay.cdn-apple.com', 'https://kit.cash.app'],
-            'frame' => ['https://pay.google.com', 'https://*.cash.app'],
+            'frame' => ['https://pay.google.com', 'https://*.cash.app', 'https://applepay.cdn-apple.com'],
             'connect' => ['https://pay.google.com', 'https://google.com', 'https://www.google.com', 'https://api.cash.app', 'https://*.cash.app', 'https://apple.com', 'https://www.apple.com', 'https://applepay.cdn-apple.com'],
             'font' => ['https://applepay.cdn-apple.com'],
         ],
         'revolut' => [
             'script' => ['https://pay.google.com', 'https://applepay.cdn-apple.com'],
-            'frame' => ['https://pay.google.com', 'https://checkout.revolut.com', 'https://sandbox-checkout.revolut.com'],
+            // applepay.cdn-apple.com: the Apple Pay QR code window in non Safari browsers is a frame from this host.
+            'frame' => ['https://pay.google.com', 'https://checkout.revolut.com', 'https://sandbox-checkout.revolut.com', 'https://applepay.cdn-apple.com'],
             // apple.com: Apple Pay's payment method id (https://apple.com/apple-pay) in non Safari browsers.
             'connect' => ['https://pay.google.com', 'https://google.com', 'https://www.google.com', 'https://apple.com', 'https://www.apple.com', 'https://applepay.cdn-apple.com'],
             'font' => ['https://applepay.cdn-apple.com'],
