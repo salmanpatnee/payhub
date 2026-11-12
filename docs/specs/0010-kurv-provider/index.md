@@ -1,7 +1,7 @@
 # 0010. Kurv as the ninth payment provider, using Kurv's hosted payment page
 
 **Date**: 2026-11-05
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 
