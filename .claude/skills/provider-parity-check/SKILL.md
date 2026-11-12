@@ -1,18 +1,18 @@
 ---
 name: provider-parity-check
-description: "Check that a payment-related change implements Stripe, Revolut, Square, and Viva in parallel rather than just one or two providers. Use after adding or modifying anything that touches Payment records, provider accounts, webhooks, pay pages, CSV exports, admin account CRUD, dashboard/filter surfaces, or client-facing receipt pages. Also use when explicitly asked to verify provider parity, check for missing Square/Viva/Revolut support, or audit multi-provider consistency."
+description: "Check that a payment-related change implements all nine providers (Stripe, Revolut, Square, Viva, Clover, MPGS, Authorize.net, Whop, Kurv) in parallel rather than just one or two. Use after adding or modifying anything that touches Payment records, provider accounts, webhooks, pay pages, CSV exports, admin account CRUD, dashboard/filter surfaces, or client-facing receipt pages. Also use when explicitly asked to verify provider parity, check for missing provider support, or audit multi-provider consistency."
 license: MIT
 ---
 
 # Provider Parity Check
 
-PayHub runs four payment providers behind the `PaymentProvider` enum: **Stripe, Revolut, Square, Viva**. History shows this is where features quietly break: Square landed after Stripe/Revolut and several read-side surfaces (dashboard filters, "Accounts Today" account resolution) were missed on first pass. Viva landed later still. Every payment feature is a candidate for the same mistake unless checked explicitly.
+PayHub runs nine payment providers behind the `PaymentProvider` enum: **Stripe, Revolut, Square, Viva, Clover, MPGS, Authorize.net, Whop, Kurv** (values `stripe`, `revolut`, `square`, `viva`, `clover`, `mpgs`, `authorizenet`, `whop`, `kurv`). History shows this is where features quietly break: Square landed after Stripe/Revolut and several read-side surfaces (dashboard filters, "Accounts Today" account resolution) were missed on first pass. Every later provider is a candidate for the same mistake unless checked explicitly. Always read the current list from `app/Enums/PaymentProvider.php`; if it has grown past nine, check the new ones too.
 
 This skill is a **verification pass**, not an implementation guide. Run it after a payment-touching change is written, before calling it done.
 
 ## The 6 surfaces that must stay in parallel
 
-For any feature that touches payments, all four providers should be represented on:
+For any feature that touches payments, every provider should be represented on:
 
 1. **Pay page** — client-facing payment collection UI/flow
 2. **CSV export** — admin export of payment/transaction data
@@ -31,21 +31,22 @@ For any feature that touches payments, all four providers should be represented 
    - Two/three-way ternaries keyed on provider (`$provider === 'stripe' ? ... : ...`)
    - Blade/Vue `v-if`/`v-else-if` chains keyed on `payment.provider`
 
-   For each hit, count how many of the four providers (`stripe`, `revolut`, `square`, `viva`) are actually covered. Flag any branch that lists fewer than 4 — a `default` fallback that silently does nothing for the missing provider is the exact shape of the historical Square bug.
+   For each hit, count how many of the nine providers are actually covered. Flag any branch that lists fewer than all of them — a `default` fallback that silently does nothing for the missing provider is the exact shape of the historical Square bug.
 
-3. **Check structural symmetry.** For each of the 4 providers, confirm the equivalent file/method exists wherever one provider has it:
-   - `App\Http\Controllers\{Stripe,Revolut,Square,Viva}WebhookController`
-   - `App\Jobs\Handle{Stripe,Revolut,Square,Viva}WebhookJob`
+3. **Check structural symmetry.** For each provider, confirm the equivalent file/method exists wherever one provider has it:
+   - Webhook controller and job (`App\Http\Controllers\*WebhookController`, `App\Jobs\Handle*WebhookJob`), or the provider's resolver where status comes from a lookup (`MpgsChargeResolver`, `AuthorizenetChargeResolver`, `KurvChargeResolver`, Clover's charge reply)
    - Provider-specific account model + admin CRUD views/routes
-   - Provider-specific client fields on `Payment` (e.g. `stripe_payment_intent_id` / `revolut_order_id` / `square_payment_id` / equivalent for Viva)
+   - Provider-specific columns on `Payment` (`*_account_id` plus the provider's id column, e.g. `stripe_payment_intent_id`, `revolut_order_id`, `square_payment_id`, `whop_checkout_configuration_id`, `kurv_request_id`)
 
-   If the diff added or changed one of these for one provider, check the same file exists (or was equivalently updated) for the other three.
+   If the diff added or changed one of these for one provider, check the same file exists (or was equivalently updated) for the others.
 
-4. **Confirm the new/changed surface is reachable for all 4 providers** — e.g. if a dashboard filter dropdown gained a new option, check it lists all 4 provider account types, not just the ones that existed when the filter was first built.
+4. **Confirm the new/changed surface is reachable for every provider** — e.g. if a dashboard filter dropdown gained a new option, check it lists all nine provider account types, not just the ones that existed when the filter was first built.
 
-5. **Don't flag intentional asymmetry.** Some differences are correct, not bugs:
-   - Square accounts are single-currency (`square_accounts.currency`) — `StorePaymentRequest`/`UpdatePaymentRequest` reject currency mismatches for Square only. This is documented, expected behavior, not a parity gap.
-   - Revolut webhooks carry no event id (idempotency via `order_id:event_type`); Square/Stripe do carry event ids. Different verification mechanics per provider are fine — the check is whether verification exists for all 4, not whether it's implemented identically.
+5. **Don't flag intentional asymmetry.** Some differences are correct, not bugs (root `AGENTS.md` lists them):
+   - Square accounts are single-currency (`square_accounts.currency`); Kurv takes USD only; Whop takes USD and GBP; PKR is MPGS only.
+   - Status sources differ: most providers use webhooks only, while Clover, MPGS, Authorize.net and Kurv read status from the gateway's own reply or a lookup through one resolver. Check that the guarantee exists for each, not that it is implemented identically.
+   - Revolut webhooks carry no event id (idempotency via `order_id:event_type`); others carry event ids or use their own scheme.
+   - One tap wallets exist only where the provider supports them on our integration (see root `AGENTS.md`).
 
 ## Output
 
@@ -53,10 +54,15 @@ Report as a short checklist, one line per provider per surface touched by the ch
 
 ```
 Surface: <name>
-  Stripe:  ✅ / ❌ (missing: <what>)
-  Revolut: ✅ / ❌
-  Square:  ✅ / ❌
-  Viva:    ✅ / ❌
+  Stripe:        ✅ / ❌ (missing: <what>)
+  Revolut:       ✅ / ❌
+  Square:        ✅ / ❌
+  Viva:          ✅ / ❌
+  Clover:        ✅ / ❌
+  MPGS:          ✅ / ❌
+  Authorize.net: ✅ / ❌
+  Whop:          ✅ / ❌
+  Kurv:          ✅ / ❌
 ```
 
-Only call the change complete when every touched surface is ✅ across all four providers, or the asymmetry is explicitly justified (e.g. currency lock, provider-specific verification mechanics).
+Only call the change complete when every touched surface is ✅ across all providers, or the asymmetry is explicitly justified (e.g. currency lock, provider-specific status source).

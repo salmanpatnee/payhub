@@ -14,6 +14,7 @@ The public pages a client sees when they open a payment link (`/pay/{payment}`).
 | `PayMpgs.vue` + `MpgsPaymentForm.vue` | MPGS hosted session fields and the 3DS step |
 | `PayAuthorizenet.vue` + `AuthorizenetCardForm.vue` | Authorize.net, PayHub's own card inputs plus Accept.js (`@/lib/acceptjs`, `@/lib/card`) |
 | `PayWhop.vue` | Whop: embed (`@whop/elements` checkout mounted on load) or redirect (Pay now), waiting state, polling |
+| `PayKurv.vue` | Kurv: consent, then Pay now redirects to Kurv's hosted page; after return, a waiting state that polls `/pay/{uuid}/kurv/status` |
 | `CardLockedNotice.vue` | "Payment paused, contact your representative" notice (MPGS and Authorize.net) |
 | `Success.vue`, `Failed.vue`, `Unavailable.vue` | Shared result pages |
 
@@ -32,6 +33,7 @@ The public pages a client sees when they open a payment link (`/pay/{payment}`).
 ## Gotchas
 
 - `Pay.vue` serves two providers; check the `provider` prop before changing it.
+- Revolut's `paymentRequest` draws one button for the first wallet it can use, so Apple Pay and Google Pay each get their own instance and target in `PayRevolut.vue`; with one shared button, Chrome shows only Apple Pay.
 - After any change here, run `npm run build`: compiled assets in `public/build` are committed and production serves them.
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
