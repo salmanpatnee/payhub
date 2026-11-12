@@ -319,5 +319,8 @@ it('adds no Content Security Policy host for the Kurv pay page', function () {
     $kurv = $this->get("/pay/{$payment->uuid}")->headers->get('Content-Security-Policy');
     $stripe = $this->get("/pay/{$other->uuid}")->headers->get('Content-Security-Policy');
 
-    expect($kurv)->not->toContain('kurv.app')->and($kurv)->toBe($stripe);
+    // The script nonce differs on every request, so compare the policies without it.
+    $withoutNonce = fn (string $csp): string => preg_replace("/ 'nonce-[^']+'/", '', $csp);
+
+    expect($kurv)->not->toContain('kurv.app')->and($withoutNonce($kurv))->toBe($withoutNonce($stripe));
 });

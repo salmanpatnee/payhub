@@ -6,12 +6,18 @@ use App\Enums\PaymentProvider;
 use App\Models\Payment;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Vite;
 use Symfony\Component\HttpFoundation\Response;
 
 class SecurityHeaders
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // A per request nonce lets PayHub's own inline script (the dark mode check in app.blade.php)
+        // run without 'unsafe-inline'. Vite adds the same nonce to its tags. Local dev keeps
+        // 'unsafe-inline' instead, because browsers ignore 'unsafe-inline' once a nonce is present.
+        $nonce = app()->environment('local') ? null : Vite::useCspNonce();
+
         $response = $next($request);
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
@@ -27,7 +33,7 @@ class SecurityHeaders
         $viteWs = app()->environment('local')
             ? " ws://127.0.0.1:5173 ws://localhost:5173 ws://{$viteHost}:5173 wss://{$viteHost}:5173"
             : '';
-        $scriptInline = app()->environment('local') ? " 'unsafe-inline'" : '';
+        $scriptInline = $nonce === null ? " 'unsafe-inline'" : " 'nonce-{$nonce}'";
 
         // Sentry browser SDK posts error envelopes to the ingest host. Its session replay (and the
         // Whop embed) start a web worker from a blob: URL, allowed through worker-src below.
