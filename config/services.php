@@ -43,6 +43,14 @@ return [
         'api_version' => env('REVOLUT_API_VERSION', '2024-09-01'),
     ],
 
+    // Which provider owns this site's Apple Pay domain verification file. Apple checks only one file
+    // per domain, so each deployment picks one: 'square' (default) or 'revolut'. The file is served by
+    // AppleDomainAssociationController from resources/apple-pay/{provider}, and only that provider's
+    // pay page offers Apple Pay.
+    'apple_pay' => [
+        'provider' => env('APPLE_PAY_PROVIDER', 'square'),
+    ],
+
     // Extra CSP hosts for one tap wallets, added only on the pay page of that provider's payment.
     // Square: Google Pay, Apple Pay and Cash App Pay (Web Payments SDK). Revolut: Google Pay and
     // Revolut Pay (Merchant Web SDK; most of it runs inside merchant.revolut.com frames already allowed).
@@ -54,10 +62,10 @@ return [
             'font' => ['https://applepay.cdn-apple.com'],
         ],
         'revolut' => [
-            'script' => ['https://pay.google.com'],
+            'script' => ['https://pay.google.com', 'https://applepay.cdn-apple.com'],
             'frame' => ['https://pay.google.com', 'https://checkout.revolut.com', 'https://sandbox-checkout.revolut.com'],
             'connect' => ['https://pay.google.com', 'https://google.com', 'https://www.google.com'],
-            'font' => [],
+            'font' => ['https://applepay.cdn-apple.com'],
         ],
     ],
 

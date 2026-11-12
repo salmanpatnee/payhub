@@ -354,6 +354,8 @@ class ClientPaymentController extends Controller
             'revolutAccount' => ['public_key' => $payment->revolutAccount->public_key],
             'orderToken' => $order['token'],
             'mode' => $mode,
+            // Apple Pay only when this site's Apple Pay file belongs to Revolut (services.apple_pay.provider).
+            'applePay' => config('services.apple_pay.provider') === 'revolut',
             // Revolut's Card Field requires a customer email + cardholder name on
             // submit. Prefill those captured at payment creation when present; the
             // customer can edit them on the page.
