@@ -120,8 +120,10 @@ function goToSuccess(): void {
 // One tap wallets (Revolut Payments module). Needs the account's public key; without it
 // the page stays card only. The order already exists on the server (orderToken), so
 // createOrder only records consent and hands back that same order.
+const showApplePay     = ref(false)
 const showGooglePay    = ref(false)
 const showRevolutPay   = ref(false)
+const applePayEl       = ref<HTMLElement | null>(null)
 const googlePayEl      = ref<HTMLElement | null>(null)
 const revolutPayEl     = ref<HTMLElement | null>(null)
 let walletsModule: { destroy: () => void } | null = null
@@ -147,14 +149,23 @@ async function initWallets(): Promise<void> {
         walletsModule = module
         const currency = props.payment.currency.toUpperCase()
 
-        // One button that shows Apple Pay or Google Pay, whichever the browser supports.
-        // Apple Pay only when this site's Apple Pay file belongs to Revolut (applePay prop);
-        // otherwise a Revolut Apple Pay button would fail, so only Google Pay is kept.
-        if (googlePayEl.value) {
-            const walletButton = module.paymentRequest(googlePayEl.value, {
+        // Revolut's payment request draws one button for the first wallet it can use, so
+        // Apple Pay and Google Pay each get their own button. A button is kept only when the
+        // browser offers exactly that wallet (Chrome on Windows can offer both: Apple Pay by
+        // scanning with an iPhone, and Google Pay). Apple Pay only when this site's Apple Pay
+        // file belongs to Revolut (applePay prop); otherwise its button would fail.
+        const mountWallet = async (
+            target: HTMLElement | null,
+            wallet: 'applePay' | 'googlePay',
+        ): Promise<boolean> => {
+            if (!target) {
+                return false
+            }
+
+            const button = module.paymentRequest(target, {
                 amount: props.payment.amount,
                 currency,
-                preferredPaymentMethod: props.applePay ? ['applePay', 'googlePay'] : 'googlePay',
+                preferredPaymentMethod: wallet,
                 createOrder,
                 buttonStyle: { height: '44px', radius: 'small', variant: 'dark', action: 'pay' },
                 onSuccess: goToSuccess,
@@ -163,15 +174,22 @@ async function initWallets(): Promise<void> {
                 },
             })
 
-            const method = await walletButton.canMakePayment()
+            if ((await button.canMakePayment()) === wallet) {
+                await button.render()
 
-            if (method === 'googlePay' || (method === 'applePay' && props.applePay)) {
-                await walletButton.render()
-                showGooglePay.value = true
-            } else {
-                walletButton.destroy()
+                return true
             }
+
+            button.destroy()
+
+            return false
         }
+
+        if (props.applePay) {
+            showApplePay.value = await mountWallet(applePayEl.value, 'applePay')
+        }
+
+        showGooglePay.value = await mountWallet(googlePayEl.value, 'googlePay')
 
         if (revolutPayEl.value) {
             module.revolutPay.mount(revolutPayEl.value, {
@@ -207,6 +225,7 @@ errorMessage.value = WALLET_FAILED
         }
     } catch {
         // Wallets are optional; the card field still works.
+        showApplePay.value = false
         showGooglePay.value = false
         showRevolutPay.value = false
     }
@@ -354,11 +373,12 @@ async function submit(): Promise<void> {
             <!-- One tap wallets. Both targets must exist before the SDK mounts into them;
                  they stay empty (no height) until a wallet renders. Faded while the
                  consent box is unticked: a tap then only shows the consent error. -->
-            <div class="space-y-3" :class="{ 'opacity-50': (showGooglePay || showRevolutPay) && !consent }">
+            <div class="space-y-3" :class="{ 'opacity-50': (showApplePay || showGooglePay || showRevolutPay) && !consent }">
+                <div ref="applePayEl"></div>
                 <div ref="googlePayEl"></div>
                 <div ref="revolutPayEl"></div>
 
-                <div v-if="showGooglePay || showRevolutPay" class="flex items-center gap-3 pt-1 text-xs text-slate-400">
+                <div v-if="showApplePay || showGooglePay || showRevolutPay" class="flex items-center gap-3 pt-1 text-xs text-slate-400">
                     <span class="h-px flex-1 bg-slate-200"></span>
                     <span>or pay with card</span>
                     <span class="h-px flex-1 bg-slate-200"></span>
