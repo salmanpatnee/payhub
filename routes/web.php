@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\StripeAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VivaAccountController;
 use App\Http\Controllers\Admin\WhopAccountController;
+use App\Http\Controllers\AppleDomainAssociationController;
 use App\Http\Controllers\AuthorizenetPaymentController;
 use App\Http\Controllers\AuthorizenetWebhookController;
 use App\Http\Controllers\BankAccountActivityLogController;
@@ -449,6 +450,10 @@ Route::post('/webhook/authorizenet/{authorizenetAccount}', [AuthorizenetWebhookC
 Route::post('/webhook/whop/{whopAccount}', [WhopWebhookController::class, 'handle'])
     ->name('webhook.whop')
     ->middleware('throttle:120,1');
+
+// Apple Pay domain verification file for this site's Apple Pay provider (services.apple_pay.provider).
+Route::get('/.well-known/apple-developer-merchantid-domain-association', AppleDomainAssociationController::class)
+    ->name('apple-pay.domain-association');
 
 // Kurv's unsigned callback (spec 0010, AC-8). {kurvAccount} is read as a raw id by hand (no model
 // binding, so an unknown id still answers 200). Token and limits are checked in the controller.

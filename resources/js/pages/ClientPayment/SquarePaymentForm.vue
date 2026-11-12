@@ -132,17 +132,17 @@ onMounted(async () => {
         // Mirror Square's internal focus/validity state onto our own wrapper so the
         // outline still reacts, even though Square's own border is now transparent.
         card.addEventListener('focusClassAdded', () => {
- cardFocused.value = true 
-})
+            cardFocused.value = true
+        })
         card.addEventListener('focusClassRemoved', () => {
- cardFocused.value = false 
-})
+            cardFocused.value = false
+        })
         card.addEventListener('errorClassAdded', () => {
- cardInvalid.value = true 
-})
+            cardInvalid.value = true
+        })
         card.addEventListener('errorClassRemoved', () => {
- cardInvalid.value = false 
-})
+            cardInvalid.value = false
+        })
         sdkLoaded.value = true
     } catch (e) {
         console.error('[Square] init failed:', e)
@@ -158,8 +158,8 @@ onBeforeUnmount(() => {
     for (const instance of [card, googlePay, applePay, cashAppPay]) {
         if (instance) {
             try {
- instance.destroy() 
-} catch { /* noop */ }
+                instance.destroy()
+            } catch { /* noop */ }
         }
     }
 })

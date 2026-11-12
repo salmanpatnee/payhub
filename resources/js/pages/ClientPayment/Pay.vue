@@ -92,8 +92,8 @@ async function recordConsent(): Promise<boolean> {
     let consentRecorded = false
     await useHttp({ accepted: true }).post(storeConsent(props.payment.uuid).url, {
         onSuccess: () => {
- consentRecorded = true 
-},
+            consentRecorded = true
+        },
     })
 
     if (!consentRecorded) {

@@ -88,6 +88,15 @@ class RevolutClient
         $this->request()->delete("/webhooks/{$webhookId}")->throw();
     }
 
+    /**
+     * Register a domain for Apple Pay with Revolut. Revolut's verification file must
+     * already be served at /.well-known/apple-developer-merchantid-domain-association.
+     */
+    public function registerApplePayDomain(string $domain): void
+    {
+        $this->request()->post('/apple-pay/domains/register', ['domain' => $domain])->throw();
+    }
+
     private function request(): PendingRequest
     {
         return Http::baseUrl($this->baseUrl())
