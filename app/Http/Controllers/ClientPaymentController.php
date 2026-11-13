@@ -40,8 +40,8 @@ class ClientPaymentController extends Controller
     {
         $payment->loadMissing('brand');
 
-        // Whop and Kurv: a webhook or lookup that lands before the client returns sends them to Success, ahead of the guard below.
-        if (in_array($payment->provider, [PaymentProvider::Whop, PaymentProvider::Kurv], true) && $payment->status === 'completed') {
+        // Whop, Kurv and NMI: a webhook or lookup that lands before the client returns sends them to Success, ahead of the guard below.
+        if (in_array($payment->provider, [PaymentProvider::Whop, PaymentProvider::Kurv, PaymentProvider::Nmi], true) && $payment->status === 'completed') {
             return redirect()->route('pay.success', $payment);
         }
 

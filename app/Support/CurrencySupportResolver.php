@@ -28,7 +28,7 @@ class CurrencySupportResolver
         return match ($provider) {
             'viva' => $currency === SupportedCurrency::GBP->value,
             'clover', 'kurv' => $currency === SupportedCurrency::USD->value,
-            'authorizenet', 'square' => $accountCurrency === null || $accountCurrency === $currency,
+            'authorizenet', 'square', 'nmi' => $accountCurrency === null || $accountCurrency === $currency,
             default => true,
         };
     }

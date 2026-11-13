@@ -14,6 +14,7 @@ const PROVIDER_LABELS: Record<string, string> = {
     authorizenet: 'Authorize.net',
     whop: 'Whop',
     kurv: 'Kurv',
+    nmi: 'NMI',
     mpgs: 'MPGS',
 };
 

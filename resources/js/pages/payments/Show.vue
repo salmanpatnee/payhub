@@ -58,6 +58,7 @@ type AttemptHistory =
         rows: AttemptRow[];
         summary: { kurv_request_id: string | null; kurv_payment_id: string | null; charge_started_at: string | null };
     }
+    | { provider: 'nmi'; rows: AttemptRow[] }
     | {
         provider: 'authorizenet';
         rows: AttemptRow[];
@@ -91,6 +92,8 @@ const attemptTone: Record<string, string> = {
     unclear: 'pending',
     check_details: 'failed',
     error: 'failed',
+    // NMI
+    '3ds_failed': 'failed',
 };
 
 const deleteOpen = ref(false);
@@ -174,6 +177,7 @@ const providerReferenceLabels: Record<string, string> = {
     authorizenet: 'Authorize.net Transaction ID',
     whop: 'Whop Payment ID',
     kurv: 'Kurv Payment ID',
+    nmi: 'NMI Transaction ID',
 };
 
 // Unknown providers fall back to Stripe's label, as the old inline ternary did.
@@ -386,7 +390,7 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                         <span class="rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">Admins only</span>
                     </div>
 
-                    <div v-if="attempts.rows.length || attempts.provider === 'mpgs' || attempts.provider === 'kurv'" class="overflow-x-auto">
+                    <div v-if="attempts.rows.length || attempts.provider === 'mpgs' || attempts.provider === 'kurv' || attempts.provider === 'nmi'" class="overflow-x-auto">
                         <table
                             v-if="attempts.rows.length"
                             class="w-full text-sm max-sm:block [&_tbody]:max-sm:block [&_tr]:max-sm:block"

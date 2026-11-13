@@ -414,3 +414,15 @@ it('settles an unclear charge from the queued lookup', function () {
         ->and($payment->nmiChargeAttempts()->first()->status)->toBe('approved')
         ->and($payment->nmiChargeAttempts()->first()->transaction_id)->toBe('8');
 });
+
+it('sends the billing email only for a production account', function () {
+    $sandbox = nmiPayment();
+    fakeNmi([['id' => '9010', 'response_code' => '200']]);
+    chargeNmi($sandbox)->assertOk();
+    Http::assertSent(fn (Request $r) => str_contains($r->url(), '/sale') && ! isset($r->data()['billing_address']['email']));
+
+    $production = nmiPayment(account: ['environment' => 'production']);
+    Http::fake(['secure.nmi.com/api/v5/payments/sale' => Http::response(['id' => '9011', 'response_code' => '200'])]);
+    chargeNmi($production)->assertOk();
+    Http::assertSent(fn (Request $r) => str_contains($r->url(), 'secure.nmi.com') && ($r->data()['billing_address']['email'] ?? null) === 'client@example.com');
+});

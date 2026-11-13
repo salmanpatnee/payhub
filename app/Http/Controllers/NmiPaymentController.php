@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\NmiEnvironment;
 use App\Enums\PaymentProvider;
 use App\Http\Requests\ChargeNmiRequest;
 use App\Jobs\ResolveNmiCharge;
@@ -127,7 +128,7 @@ class NmiPaymentController extends Controller
 
         // Written before the call so a timeout or crash still leaves a record.
         $attempt = $this->startAttempt($payment, $method, 'sent');
-        $reply = $this->sendSale($request, $payment, $client);
+        $reply = $this->sendSale($request, $payment, $client, $account);
 
         if ($reply->outcome === NmiSaleReply::APPROVED) {
             $reply = $this->readBack($payment, $reply);
@@ -156,7 +157,7 @@ class NmiPaymentController extends Controller
         };
     }
 
-    private function sendSale(ChargeNmiRequest $request, Payment $payment, NmiClient $client): NmiSaleReply
+    private function sendSale(ChargeNmiRequest $request, Payment $payment, NmiClient $client, NmiAccount $account): NmiSaleReply
     {
         [$first, $last] = $this->names($request, $payment);
 
@@ -168,7 +169,8 @@ class NmiPaymentController extends Controller
             'billing_address' => array_filter([
                 'first_name' => $first,
                 'last_name' => $last,
-                'email' => Str::limit((string) $payment->client_email, 255, ''),
+                // NMI sandbox accounts reject any email but the merchant's own, so a sandbox account sends none.
+                'email' => $account->environment === NmiEnvironment::Production ? Str::limit((string) $payment->client_email, 255, '') : '',
             ], fn (string $v): bool => $v !== ''),
         ];
 
@@ -278,6 +280,7 @@ class NmiPaymentController extends Controller
             'payment_id' => $payment->id,
             'response_code' => $reply->detail['response_code'] ?? null,
             'error_code' => $reply->detail['error_code'] ?? null,
+            'error_message' => $reply->detail['error_message'] ?? null,
         ]);
 
         return $this->outcomeResponse(NmiSaleReply::ERROR, 502);

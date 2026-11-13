@@ -103,3 +103,9 @@ it('redirects to the success page when the page load lookup finds the payment pa
     $this->get("/pay/{$payment->uuid}")->assertRedirect("/pay/{$payment->uuid}/success");
     expect($payment->fresh()->status)->toBe('completed');
 });
+
+it('sends a client to the success page when a webhook already completed the payment', function () {
+    $payment = nmiPagePayment(attributes: ['status' => 'completed', 'paid_at' => now()]);
+
+    $this->get("/pay/{$payment->uuid}")->assertRedirect("/pay/{$payment->uuid}/success");
+});

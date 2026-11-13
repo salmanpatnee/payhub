@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CloverAccountController;
 use App\Http\Controllers\Admin\KurvAccountController;
 use App\Http\Controllers\Admin\MpgsAccountController;
+use App\Http\Controllers\Admin\NmiAccountController;
 use App\Http\Controllers\Admin\RelationshipManagerController;
 use App\Http\Controllers\Admin\RevolutAccountController;
 use App\Http\Controllers\Admin\SquareAccountController;
@@ -200,6 +201,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'whop-accounts/{whop_account}/test-connection',
             [WhopAccountController::class, 'testStoredConnection']
         )->name('whop-accounts.test-stored-connection');
+
+        Route::resource('nmi-accounts', NmiAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'nmi-accounts/{nmi_account}/deactivate',
+            [NmiAccountController::class, 'deactivate']
+        )->name('nmi-accounts.deactivate');
+
+        Route::patch(
+            'nmi-accounts/{nmi_account}/activate',
+            [NmiAccountController::class, 'activate']
+        )->name('nmi-accounts.activate');
+
+        Route::post(
+            'nmi-accounts/test-connection',
+            [NmiAccountController::class, 'testKeyConnection']
+        )->name('nmi-accounts.test-connection');
+
+        Route::post(
+            'nmi-accounts/{nmi_account}/test-connection',
+            [NmiAccountController::class, 'testStoredConnection']
+        )->name('nmi-accounts.test-stored-connection');
 
         Route::resource('kurv-accounts', KurvAccountController::class)
             ->except(['show']);

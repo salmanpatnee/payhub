@@ -150,7 +150,8 @@ final class NmiSaleReply
                 'E_DUPLICATE' => 'Duplicate sale blocked by NMI',
                 'E_INVALID_SUBMISSION' => 'NMI rejected the request fields',
                 'E_GENERIC_ERROR' => 'NMI rejected the request',
-                default => 'NMI error '.$this->detail['error_code'],
+                // NMI's own message is for operators only (admin attempts panel); it holds no secrets.
+                default => trim('NMI error '.$this->detail['error_code'].': '.($this->detail['error_message'] ?? ''), ': '),
             };
         }
 
