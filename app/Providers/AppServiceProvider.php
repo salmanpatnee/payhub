@@ -87,6 +87,31 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
+        // NMI (spec 0012, AC-13): real sale requests only, 5 per payment and 20 per IP per hour. A 3DS failure
+        // report is limited by its own limiter and never counts here.
+        RateLimiter::for('nmi-charge', function (Request $request): array {
+            if ($request->boolean('three_ds_failed')) {
+                return [Limit::none()];
+            }
+
+            $tooMany = fn () => response()->json(['message' => 'Too many attempts. Please try again later.'], 429);
+
+            return [
+                Limit::perHour(5)->by('nmi-payment:'.($request->route('payment') ?? $request->ip()))->response($tooMany),
+                Limit::perHour(20)->by('nmi-ip:'.$request->ip())->response($tooMany),
+            ];
+        });
+
+        RateLimiter::for('nmi-3ds-report', function (Request $request): array {
+            if (! $request->boolean('three_ds_failed')) {
+                return [Limit::none()];
+            }
+
+            $tooMany = fn () => response()->json(['message' => 'Too many attempts. Please try again later.'], 429);
+
+            return [Limit::perHour(20)->by('nmi-3ds-payment:'.($request->route('payment') ?? $request->ip()))->response($tooMany)];
+        });
+
         RateLimiter::for('authorizenet-charge', function (Request $request): array {
             $tooMany = fn () => response()->json(['message' => 'Too many attempts. Please try again later.'], 429);
 

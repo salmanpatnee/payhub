@@ -61,6 +61,13 @@ return [
             'connect' => ['https://pay.google.com', 'https://google.com', 'https://www.google.com', 'https://api.cash.app', 'https://*.cash.app', 'https://apple.com', 'https://www.apple.com', 'https://applepay.cdn-apple.com'],
             'font' => ['https://applepay.cdn-apple.com'],
         ],
+        // NMI Google Pay (spec 0012, AC-16): the starting set; the browser run in step 6 confirms or widens it.
+        'google_pay' => [
+            'script' => ['https://pay.google.com'],
+            'frame' => ['https://pay.google.com'],
+            'connect' => ['https://pay.google.com', 'https://google.com', 'https://www.google.com'],
+            'font' => [],
+        ],
         'revolut' => [
             'script' => ['https://pay.google.com', 'https://applepay.cdn-apple.com'],
             // applepay.cdn-apple.com: the Apple Pay QR code window in non Safari browsers is a frame from this host.
@@ -162,6 +169,26 @@ return [
         'duplicate_window_seconds' => (int) env('AUTHORIZENET_DUPLICATE_WINDOW_SECONDS', 300),
         // How long new charges are refused after an unclear outcome while the lookup runs.
         'unclear_pause_seconds' => (int) env('AUTHORIZENET_UNCLEAR_PAUSE_SECONDS', 120),
+    ],
+
+    'nmi' => [
+        // Constants per environment, not secrets (spec 0012). Per-account private key, public tokenization key
+        // and webhook signing key live on the nmi_accounts table. A white label host is only an env change.
+        'hosts' => [
+            'sandbox' => env('NMI_SANDBOX_HOST', 'https://sandbox.nmi.com'),
+            'production' => env('NMI_PRODUCTION_HOST', 'https://secure.nmi.com'),
+        ],
+        'connect_timeout' => 10,
+        'timeout' => 30,
+        'lookup_timeout' => 10,
+        // How long new charges are refused after an unclear outcome while the lookup runs.
+        'unclear_pause_seconds' => (int) env('NMI_UNCLEAR_PAUSE_SECONDS', 120),
+        'poll_lookup_seconds' => 5,
+        // The sweep looks back this far and stops after this many minutes with no transaction found.
+        'sweep_hours' => 48,
+        'give_up_minutes' => 30,
+        // 3DS challenge frame hosts for the CSP: confirmed in the browser run (spec 0012, step 0).
+        'three_ds_hosts' => [],
     ],
 
     // Card attempt lock (MPGS and Authorize.net): this many failed attempts pause the pay page.

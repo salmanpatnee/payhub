@@ -1,7 +1,7 @@
 # 0012. NMI as the tenth payment provider, using the Payment Component and the v5 REST API
 
 **Date**: 2026-11-12
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
@@ -36,16 +36,18 @@ This spec adds NMI, the gateway behind Beyond Bancard, as PayHub's tenth provide
   - no `nmi_charge_attempts` row for this payment has status `approved`
   - when 3DS is on and the method is `card`, `cavv` and `eci` are present
 
-  The resolver, the sweep and the webhook ignore `is_active`. Only new charges need an active account. The amount and currency always come from the `Payment` record (cents to a decimal string with integer math). The server calls `POST {host}/api/v5/payments/sale` with header `Authorization: <private key>` and sends `amount`, `currency`, `payment_details.payment_token`, `order_id` = `nmi_order_id`, `first_name`, `last_name`, `email` = `client_email`, `ip_address` from the request, and `cardholder_auth` when present. Just before sending, it sets `nmi_order_id` (a new UUID, only if empty), `nmi_first_attempt_at` (only if empty) and `nmi_last_attempt_at`. The token and the request body are never stored or logged.
+  The resolver, the sweep and the webhook ignore `is_active`. Only new charges need an active account. The amount and currency always come from the `Payment` record (cents to a decimal string with integer math). The server calls `POST {host}/api/v5/payments/sale` with header `Authorization: <private key>` and sends `amount`, `currency`, `payment_details.payment_token`, `order_details.id` = `nmi_order_id`, `order_details.ip_address` from the request, `billing_address.first_name`, `billing_address.last_name`, `billing_address.email` = `client_email`, and `cardholder_auth` when present. A top level `order_id` is rejected by v5. `query.php` returns `order_details.id` as `order_id`. The sandbox only accepts `billing_address.email` equal to the merchant's own email address (otherwise 400 "Sandbox accounts can only send emails to their own email address"), so sandbox test accounts need the test payment's `client_email` set to that address. Just before sending, it sets `nmi_order_id` (a new UUID, only if empty), `nmi_first_attempt_at` (only if empty) and `nmi_last_attempt_at`. The token and the request body are never stored or logged.
 - **AC-8**: One charge runs at a time per payment (`Cache::lock` `nmi-charge:{payment id}`, 60 seconds; a second caller gets 409). Inside the lock, and **before** the sale call, PayHub sets the pause key `nmi:pause:{payment id}` (120 seconds). It clears the key only on a clear outcome (declined, check_details, error, or approved and settled by the resolver). That way a timed out sale still in flight at NMI can never be sent twice. The reply is classified into one of these outcomes:
-  - **approved**: `response_code` 100, a transaction id, and a sale type.
-  - **declined**: a clear card decline, so the status doesn't change.
+  - **approved**: HTTP 200, `response_code` 100, a transaction id, and a sale type.
+  - **declined**: HTTP 200 with `response_code` 200 to 299 (a clear card decline), so the status doesn't change.
   - **check_details**: one of the card detail codes in the reply mapping.
-  - **unclear**: a timeout, connection error, 5xx or unreadable reply.
-  - **error**: any other rejection of the request itself. It's logged and returns 502.
+  - **unclear**: a timeout, connection error, 5xx or unreadable reply, **or an HTTP 400 with `error_code` `E_DUPLICATE`** ("Duplicate transaction": NMI saw an identical sale a moment ago, so one may already exist).
+  - **error**: any other HTTP 400 (`E_INVALID_SUBMISSION`, `E_GENERIC_ERROR` such as "Invalid payment token", or a rejected currency). It's logged and returns 502.
+
+  NMI has no idempotency key on v5 (a repeated `Idempotency-Key` is just another sale), so the pause key and the `E_DUPLICATE` check are the double charge guard.
 
   An approved reply is never applied on its own. PayHub stores the transaction id on the attempt row only (never on `payments`). It then runs a `query.php` lookup by that `transaction_id` inline, and only `NmiChargeResolver` writes the status. If that lookup doesn't settle the payment as `completed` (NMI lags, or the result is unclear), the endpoint returns outcome `unclear` and the AC-10 path takes over.
-- **AC-9**: `NmiChargeResolver` is the only status writer, and the only writer of `payments.nmi_transaction_id`. A lookup by `order_id` can return several transactions, because retries reuse the same `nmi_order_id`. The resolver keeps only the sale rows, ignores the declined ones, and needs exactly one approved row (more than one is logged at error level and never applied). It sets `completed` only for a sale whose condition is `pendingsettlement` or `complete`, whose `order_id` equals `nmi_order_id`, and whose amount exactly matches the `Payment`. It also checks the currency against the `Payment` when `query.php` returns one. When it doesn't, the account's single currency lock (AC-3) is the guarantee. Step 0 records which case applies. It uses the guarded update `whereIn('status', ['pending','failed'])` and sets `paid_at` and `nmi_transaction_id` in the same update. It dispatches `SendPaymentNotification` only when a row changed. It handles the other cases like this:
+- **AC-9**: `NmiChargeResolver` is the only status writer, and the only writer of `payments.nmi_transaction_id`. A lookup by `order_id` can return several transactions, because retries reuse the same `nmi_order_id`. The resolver keeps only the sale rows, ignores the declined ones, and needs exactly one approved row (more than one is logged at error level and never applied). It sets `completed` only for a sale whose condition is `pendingsettlement` or `complete`, whose `order_id` equals `nmi_order_id`, and whose amount exactly matches the `Payment`. It also checks the `<currency>` that `query.php` returns against the `Payment` (confirmed in step 0: it is returned), and a mismatch counts as a mismatched amount or currency below. It uses the guarded update `whereIn('status', ['pending','failed'])` and sets `paid_at` and `nmi_transaction_id` in the same update. It dispatches `SendPaymentNotification` only when a row changed. It handles the other cases like this:
   - A mismatched amount or currency: nothing changes and it's logged at error level.
   - A second approved sale with another id on a `completed` payment, or any sale on a `cancelled` payment: nothing changes and it's logged at error level.
   - A plain decline: never sets `failed` (the status stays `pending`).
@@ -69,7 +71,7 @@ This spec adds NMI, the gateway behind Beyond Bancard, as PayHub's tenth provide
 - **AC-13**: The `nmi-charge` limiter counts real sale requests only. It allows 5 per payment UUID per hour and 20 per IP per hour. `nmi-3ds-report` allows 20 per payment UUID per hour. When it's hit, the endpoint returns 429 with "Too many attempts. Please try again later." and makes no gateway call. Once `nmi_first_attempt_at` is set, `UpdatePaymentRequest` rejects any change to the amount, currency, account or brand of the payment, and the payment can't be deleted.
 - **AC-14**: `POST webhook/nmi/{nmiAccount}` is CSRF excluded and keeps the raw body. It reads `Webhook-Signature: t=<nonce>,s=<sig>` and checks `hash_equals(hash_hmac('sha256', nonce.'.'.rawBody, signingKey), sig)`. A request with a bad or missing signature, or for an account with no signing key, gets 401 and does nothing. A good request is answered 200 quickly and dispatches `HandleNmiWebhookJob`. The job skips an `event_id` that's already in `processed_nmi_events`, and writes that row only after it succeeds, so a failed job can still be retried. For `transaction.sale.*` events, the payment is found by `event_body.order_id` within the route's account, and the job runs a lookup through the resolver. An unknown or empty `order_id` is logged and ignored. The body is never trusted for status. Any other event type is logged and ignored.
 - **AC-15**: `NmiStalePaymentSweep` runs every 10 minutes (`withoutOverlapping`). It looks up `pending` NMI payments whose `nmi_last_attempt_at` is within the last 48 hours, by `order_id`, through the resolver. It ignores `is_active`. If a lookup still finds no transaction 30 minutes after `nmi_last_attempt_at`, the sweep stops looking at that payment: it logs a warning, marks the last `unclear` attempt row `error` with reason "No transaction found at NMI", and clears the pause key. The sweep makes at most one call per second per account.
-- **AC-16**: On the NMI pay page only, the CSP adds `https://secure.nmi.com` to `script-src`, `style-src`, `connect-src` and `frame-src`. If step 0 shows the sandbox uses another host, that host is added too, from config. When `google_pay_enabled` is on, it also adds the Google Pay hosts from `services.wallet_hosts.google_pay`. When `three_ds_enabled` is on, it also adds the 3DS challenge hosts that step 0 finds, from `services.nmi.three_ds_hosts`. Every other page keeps its policy, and no `unsafe-inline` or `unsafe-eval` is added.
+- **AC-16**: On the NMI pay page only, the CSP adds `https://secure.nmi.com` to `script-src`, `style-src`, `connect-src` and `frame-src`. The sandbox host `https://sandbox.nmi.com` is added the same way on a sandbox account, from config (`secure.nmi.com` answers a sandbox key with "Sandbox accounts must use a sandbox domain"). When `google_pay_enabled` is on, it also adds the Google Pay hosts from `services.wallet_hosts.google_pay`. When `three_ds_enabled` is on, it also adds the 3DS challenge hosts that step 0 finds, from `services.nmi.three_ds_hosts`. Every other page keeps its policy, and no `unsafe-inline` or `unsafe-eval` is added.
 - **AC-17**: A sandbox check (Build plan step 0) confirms or corrects each item in **Open questions**. The answers go in `## Follow-up`. Any field name that differs is fixed in `NmiClient`, `NmiSaleReply` or `NmiQueryReply`, which are the only classes that know NMI field names.
 
 ## Decision
@@ -106,8 +108,10 @@ The reasoning and the options are in `rationale.md`.
 | Source | Field | Meaning |
 |---|---|---|
 | v5 sale reply | `response_code` 100 | approved |
-| v5 sale reply | `response_code` 200 to 299 | declined. The card detail codes (expired, invalid card number, CVV mismatch) map to `check_details`; step 0 lists them |
-| v5 sale reply | `response_code` 300+ | `error` (a gateway or request problem) |
+| v5 sale reply | HTTP 200, `response_code` 200 to 299 (`response_text` `DECLINE`, `status` `failed`) | declined. The card detail codes (expired, invalid card number, CVV mismatch) map to `check_details`; still to be listed in step 0 |
+| v5 sale reply | HTTP 200, `response_code` 300+ | `error` (a gateway problem) |
+| v5 sale reply | HTTP 400 `E_DUPLICATE` | `unclear` (a sale may already exist) |
+| v5 sale reply | HTTP 400 any other `error_code` | `error` (a request problem; the body has `type`, `error_code`, `message`, `ref_id`) |
 | v5 sale reply | `id`, `auth_code`, `avs_response`, `cvv_response` | stored in the attempt row |
 | `query.php` | `condition` `pendingsettlement` or `complete`, `transaction_type` `cc` or wallet, action `sale` success | approved |
 | `query.php` | `failed`, `canceled`, `abandoned` | not approved (logged, the status stays `pending`) |
@@ -132,9 +136,9 @@ There is no "held" outcome in v1. If step 0 finds a review or held condition, ad
 |---|---|---|
 | charge | amount, currency | `payments.amount` (cents to decimal) and `payments.currency` |
 | charge | private key, host | `nmi_accounts.private_key`; `config('services.nmi.hosts.{environment}')` |
-| charge | order id | `payments.nmi_order_id` (UUID made on the first charge) |
-| charge | first and last name | the "Name on card" field, prefilled from `payments.client_name` and split on the last space (a single word is used for both) |
-| charge | email, IP | `payments.client_email`; `$request->ip()` |
+| charge | order id | `payments.nmi_order_id` (UUID made on the first charge), sent as `order_details.id` |
+| charge | first and last name (`billing_address`) | the "Name on card" field, prefilled from `payments.client_name` and split on the last space (a single word is used for both) |
+| charge | email, IP | `payments.client_email` as `billing_address.email`; `$request->ip()` as `order_details.ip_address` |
 | charge | 3DS values | `mountNmiThreeDSecure` `onComplete` result, sent by the page |
 | pay page | tokenization key, 3DS and Google Pay switches | `nmi_accounts` columns |
 | 3DS start | amount, currency | page props from the `Payment` record (display only; the server never reads an amount from the client) |
@@ -158,7 +162,7 @@ There is no "held" outcome in v1. If step 0 finds a review or held condition, ad
 **Security model**: Admins manage accounts. Agents only see the NMI accounts assigned to them. Clients reach only their own payment by UUID, behind the consent gate. Compliance: this is PCI DSS scope. Card data stays in NMI's frames (likely SAQ A, but confirm with the acquirer before production). Every charge is logged in `nmi_charge_attempts`, which is the money audit trail. Webhooks are HMAC checked and deduped. Public endpoints are rate limited.
 
 **Configuration required**:
-- `services.nmi.hosts.sandbox` and `services.nmi.hosts.production` (env `NMI_SANDBOX_HOST`, `NMI_PRODUCTION_HOST`, both defaulting to `https://secure.nmi.com` until step 0 confirms the sandbox host): the API, `query.php` and CSP host. A white label host from Beyond Bancard is only an env change.
+- `services.nmi.hosts.sandbox` (env `NMI_SANDBOX_HOST`, default `https://sandbox.nmi.com`, confirmed in step 0) and `services.nmi.hosts.production` (env `NMI_PRODUCTION_HOST`, default `https://secure.nmi.com`): the API, `query.php` and CSP host. A white label host from Beyond Bancard is only an env change.
 - `services.wallet_hosts.google_pay`: the Google Pay CSP hosts (confirmed in step 0).
 - `services.nmi.three_ds_hosts`: the 3DS challenge CSP hosts (confirmed in step 0).
 - Named limiters `nmi-charge` and `nmi-3ds-report` in `AppServiceProvider`.
@@ -166,18 +170,20 @@ There is no "held" outcome in v1. If step 0 finds a review or held condition, ad
 - Before you build: in the NMI merchant portal, create a webhook endpoint for `transaction.sale.success`, `transaction.sale.failure` and `transaction.sale.unknown` on the staging URL, then paste the signing key into the account form.
 
 **Open questions** (answered by the step 0 sandbox check):
-1. Is the sandbox API host `secure.nmi.com` or `sandbox.nmi.com`? And does `query.php` work with the v5 private key?
-2. What is the exact v5 sale reply shape (`id`, `response_code`, the AVS and CVV fields), and which codes mean a card detail decline?
-3. What do the `query.php` XML fields look like for a sale (condition, amount, currency, order id), and is the currency returned?
-4. Does the tokenization key always match the dashed format?
+Answered on 2026-11-13 (see `docs/research/nmi-sandbox-check.md` and Follow-up): 1, 2 (card detail decline codes still open), 3, 4, 8, 9 and 12. Still open and needing a browser run of the Payment Component: 5, 6, 7, 10, 11 and the card detail decline codes.
+
+1. ~~Sandbox host~~ Answered: `sandbox.nmi.com`; `query.php` accepts the v5 key.
+2. ~~Sale reply shape~~ Answered; which `response_code` values mean a card detail decline is still open.
+3. ~~`query.php` fields~~ Answered: `condition`, `order_id`, `currency`, `amount`, `transaction_id` and more; the currency is returned.
+4. ~~Tokenization key format~~ Answered: dashed format confirmed.
 5. Which hosts does Google Pay load inside the Payment Component, and does it work in the sandbox?
 6. What does the 3DS `onComplete` result look like with Test 3DS, and how does the sale reply show a 3DS result?
 7. Does the webhook `event_body` carry `order_id` as we sent it?
-8. **Double charge guard:** does the v5 sale reject or flag a repeated `order_id`, or accept an idempotency key? If it accepts a key, send `nmi_order_id` plus the attempt sequence as that key.
-9. What are the v5 request field names for the 3DS values (`cardholder_auth` and its children)?
+8. ~~Double charge guard~~ Answered: no idempotency key; an identical repeat sale gets HTTP 400 `E_DUPLICATE` (treated as unclear, AC-8).
+9. ~~3DS request field names~~ Answered: `cardholder_auth` with `cavv`, `xid`, `eci`, `cardholder_auth`, `three_ds_version`, `directory_server_id`.
 10. Do 3DS or the merchant's AVS rules need a ZIP or an address? If they do, add a ZIP field (the same risk as Authorize.net's AVS B setting), or record the portal setting to change.
 11. Which hosts does the 3DS challenge frame load (for the CSP)?
-12. Does `query.php` tell a bad key apart from an empty result? If it can't use the v5 key at all, which read path is the fallback (a v5 transaction GET, if one exists)?
+12. ~~Bad key vs empty result~~ Answered: a bad key returns `<error_response>Specified API key not found</error_response>`; an unknown order returns an empty `<nm_response>`.
 
 **Critical test scenarios**:
 - Happy path: a card in the sandbox, 3DS passes, the sale is approved, the lookup matches, the payment is `completed` and one notification is sent. Verifies **AC-7**, **AC-8**, **AC-9**.
@@ -196,7 +202,7 @@ There is no "held" outcome in v1. If step 0 finds a review or held condition, ad
 
 Build approach: none is recorded in `AGENTS.md`, so end to end Tracer Bullet slices are assumed. The first thread is a sandbox card charge that goes all the way to `completed`.
 
-0. Sandbox check with the keys you already have: answer every Open question, write the answers in Follow-up, and fix the field names. This is a hard gate: nothing below starts until it's recorded. Satisfies **AC-17**.
+0. Sandbox check with the keys you already have: answer every Open question, write the answers in Follow-up, and fix the field names. Done in part on 2026-11-13 (server side questions answered). The browser questions (5, 6, 7, 10, 11, card detail codes) are answered during steps 4 to 6 and 7 as each page piece exists, and recorded in Follow-up before the matching step is ticked. Steps 1 to 3 may start now. Satisfies **AC-17**.
 1. Migrations (the four tables), `PaymentProvider::Nmi`, `NmiEnvironment`, models, factories, `config/services.php`. Satisfies **AC-1**, **AC-11**.
 2. `NmiClient` (sale, query, ping), `NmiSaleReply`, `NmiQueryReply`, `NmiChargeResolver` with its guarded update. Satisfies **AC-8**, **AC-9**.
 3. Charge endpoint, `nmi-charge` limiter, cache lock and pause, attempt rows, `ResolveNmiCharge` job. Satisfies **AC-7**, **AC-8**, **AC-10**, **AC-11**, **AC-13**.
@@ -232,7 +238,8 @@ Build approach: none is recorded in `AGENTS.md`, so end to end Tracer Bullet sli
 
 ## Follow-up
 
-- [ ] Step 0 answers (Open questions 1 to 12) go here.
+- [ ] Step 0 answers: 2026-11-13 server side run recorded in `docs/research/nmi-sandbox-check.md` (open questions 1, 3, 4, 8, 9, 12 and most of 2). Still to record here: 5, 6, 7, 10, 11 and the card detail decline codes.
+- Sandbox facts for testing: the dummy token `00000000-000000-000000-000000000000` works for server side sale tests; amounts 0.01 and 0.99 decline; this sandbox processor refuses GBP ("cc payment type [Visa] and/or currency [GBP] is not accepted"), so only USD can be tested until GBP is enabled; the sandbox only accepts the merchant's own email in `billing_address.email`.
 - [ ] Cross check on 2026-11-12 (another model): 14 gaps found, all fixed in this spec on the engineer's pick.
 - [ ] Later: rotating the webhook signing key (today it's a manual paste in the form).
 - [ ] Ask Beyond Bancard to confirm the production host (secure.nmi.com or a white label domain), whether GBP is available on the processor, and whether Payer Authentication and Google Pay work on the live account.

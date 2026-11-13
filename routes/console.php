@@ -5,6 +5,7 @@ use App\Models\CloverChargeAttempt;
 use App\Services\Authorizenet\AuthorizenetStalePaymentSweep;
 use App\Services\Kurv\KurvStalePaymentSweep;
 use App\Services\Mpgs\MpgsStaleAttemptSweep;
+use App\Services\Nmi\NmiStalePaymentSweep;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -36,6 +37,11 @@ Schedule::call(new MpgsStaleAttemptSweep)
 // the last 24 hours by invoice number, one list pass per account. Read only.
 Schedule::call(new AuthorizenetStalePaymentSweep)
     ->name('authorizenet:sweep-stale-payments')->everyTenMinutes()->withoutOverlapping();
+
+// Backstop for NMI payments (spec 0012, AC-15): looks again at pending payments charged in the last 48 hours.
+// Read only, never creates a charge, works with the sync queue.
+Schedule::call(new NmiStalePaymentSweep)
+    ->name('nmi:sweep-stale-payments')->everyTenMinutes()->withoutOverlapping();
 
 // Backstop for Kurv payments (spec 0010, AC-10): looks again at pending payments whose link is 2 minutes
 // to 72 hours old. Read only, never creates a Kurv request, works with the sync queue.

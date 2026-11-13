@@ -100,12 +100,31 @@ class SecurityHeaders
             $whopMethodFont = ' '.implode(' ', config('services.whop.payment_method_hosts.font'));
         }
 
+        // NMI Payment Component (spec 0012, AC-16): only the pay page of an NMI payment gets the NMI hosts
+        // (script, style, connect and frame), the environment's host from config plus the production host the
+        // component's frames may still load from, and the 3DS challenge hosts when 3DS is on. Google Pay hosts
+        // come from the wallet block below. No unsafe-inline or unsafe-eval is added.
+        $isNmiPayPage = in_array($route?->getName(), ['pay.show', 'pay.show.ref'], true)
+            && $routePayment instanceof Payment
+            && $routePayment->provider === PaymentProvider::Nmi;
+        $nmiAccount = $isNmiPayPage ? $routePayment->loadMissing('nmiAccount')->nmiAccount : null;
+        $nmi = '';
+        if ($nmiAccount !== null) {
+            $nmiHosts = array_unique(array_filter([
+                (string) config("services.nmi.hosts.{$nmiAccount->environment->value}"),
+                'https://secure.nmi.com',
+                ...($nmiAccount->three_ds_enabled ? (array) config('services.nmi.three_ds_hosts', []) : []),
+            ]));
+            $nmi = ' '.implode(' ', $nmiHosts);
+        }
+
         // One tap wallets (Google Pay, Apple Pay, Cash App Pay, Revolut Pay): only the pay page of a
         // Square or Revolut payment gets the extra wallet hosts. No unsafe-inline or unsafe-eval.
         $walletProvider = in_array($route?->getName(), ['pay.show', 'pay.show.ref'], true) && $routePayment instanceof Payment
             ? match ($routePayment->provider) {
                 PaymentProvider::Square => 'square',
                 PaymentProvider::Revolut => 'revolut',
+                PaymentProvider::Nmi => $nmiAccount?->google_pay_enabled ? 'google_pay' : null,
                 default => null,
             }
         : null;
@@ -119,11 +138,11 @@ class SecurityHeaders
 
         $response->headers->set('Content-Security-Policy',
             "default-src 'self'; ".
-            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$authorizenetScript}{$whopScript}{$whopMethodScript}{$walletScript}{$vite}{$scriptInline}; ".
-            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}{$whopScript}{$whopMethodFrame}{$walletFrame}; ".
-            "connect-src 'self' https://api.stripe.com{$sentryConnect}{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$authorizenetConnect}{$whopConnect}{$whopMethodConnect}{$walletConnect}{$vite}{$viteWs}; ".
+            "script-src 'self' https://js.stripe.com{$revolut}{$square}{$clover}{$mpgsHost}{$authorizenetScript}{$nmi}{$whopScript}{$whopMethodScript}{$walletScript}{$vite}{$scriptInline}; ".
+            "frame-src https://js.stripe.com{$revolut}{$square}{$squareFrames}{$clover}{$mpgsHost}{$mpgsFrames}{$nmi}{$whopScript}{$whopMethodFrame}{$walletFrame}; ".
+            "connect-src 'self' https://api.stripe.com{$sentryConnect}{$revolut}{$squareConnect}{$clover}{$mpgsHost}{$authorizenetConnect}{$nmi}{$whopConnect}{$whopMethodConnect}{$walletConnect}{$vite}{$viteWs}; ".
             "img-src 'self' data: blob: https:; ".
-            "style-src 'self' 'unsafe-inline'{$square}{$vite}; ".
+            "style-src 'self' 'unsafe-inline'{$square}{$nmi}{$vite}; ".
             "font-src 'self' data: https://*.squarecdn.com{$squareFonts}{$whopMethodFont}{$walletFont}{$vite}; ".
             "worker-src 'self' blob:"
         );

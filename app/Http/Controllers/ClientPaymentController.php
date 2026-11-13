@@ -12,6 +12,7 @@ use App\Services\Authorizenet\AuthorizenetInvoiceLookup;
 use App\Services\Clover\CloverChargeClassifier;
 use App\Services\Clover\CloverChargeResolver;
 use App\Services\Clover\CloverClient;
+use App\Services\Nmi\NmiChargeResolver;
 use App\Services\Revolut\RevolutClient;
 use App\Services\Viva\VivaClient;
 use Illuminate\Http\JsonResponse;
@@ -69,6 +70,7 @@ class ClientPaymentController extends Controller
             PaymentProvider::Authorizenet => $this->showAuthorizenet($payment),
             PaymentProvider::Whop => $this->showWhop($request, $payment),
             PaymentProvider::Kurv => $this->showKurv($request, $payment),
+            PaymentProvider::Nmi => $this->showNmi($payment),
             default => $this->showStripe($payment),
         };
     }
@@ -202,6 +204,52 @@ class ClientPaymentController extends Controller
             'hasLink' => $payment->kurv_request_id !== null,
             // Display only: Kurv appends other query values, which are ignored. Never changes status.
             'returnStatus' => $request->query('kurv_return') === '1' ? 'returned' : null,
+        ]);
+    }
+
+    /**
+     * NMI Payment Component (spec 0012, AC-5, AC-10). The public tokenization key is a public
+     * identifier; the private key and webhook signing key never leave the server. The amount and
+     * currency are props for display and for 3DS only: the server never reads them back from the browser.
+     */
+    private function showNmi(Payment $payment): Response|RedirectResponse
+    {
+        $payment->loadMissing('nmiAccount');
+
+        $account = $payment->nmiAccount;
+
+        if (! $account?->is_active) {
+            return Inertia::render('ClientPayment/Unavailable', [
+                'status' => $payment->status,
+                'payment' => $this->paymentProps($payment),
+                'brand' => $this->brandProps($payment->brand),
+                'provider' => $payment->provider->value,
+            ]);
+        }
+
+        // A returning client whose payment finished at NMI sees the right page at once.
+        app(NmiChargeResolver::class)->resolveGuarded($payment);
+        $payment->refresh();
+
+        if ($payment->status === 'completed') {
+            return redirect()->route('pay.success', $payment);
+        }
+
+        return Inertia::render('ClientPayment/PayNmi', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'nmiAccount' => [
+                'tokenization_key' => $account->public_tokenization_key,
+                'three_ds_enabled' => (bool) $account->three_ds_enabled,
+                'google_pay_enabled' => (bool) $account->google_pay_enabled,
+                'environment' => $account->environment->value,
+            ],
+            'clientName' => (string) $payment->client_name,
+            'hasConsent' => $payment->consents()->exists(),
+            // A charge that is still being confirmed: the page polls instead of showing the form.
+            'confirming' => $payment->nmi_first_attempt_at !== null && Cache::has("nmi:pause:{$payment->id}"),
+            'lockedUntil' => $payment->isCardLocked() ? $payment->card_locked_until->toIso8601String() : null,
+            'policies' => $this->policyProps(),
         ]);
     }
 
