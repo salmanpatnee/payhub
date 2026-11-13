@@ -95,6 +95,11 @@ php artisan revolut:register-webhook {account?} --url=https://...    # Register 
 php artisan whop:register-webhook {account?} --url=https://...       # Register Whop webhook (payment.succeeded, payment.failed), store signing secret
 php artisan square:register-apple-pay-domain {account?} --domain=... # Register the pay domain for Apple Pay with Square (every active account by default)
 php artisan revolut:register-apple-pay-domain {account?} --domain=... # Same for Revolut, only on a site with APPLE_PAY_PROVIDER=revolut
+php artisan viva:register-webhook {account?}                         # Fetch and store the Viva webhook verification key, print dashboard setup details
+php artisan stripe:check-health {account?}                           # Check each Stripe account can still take payments (scheduled every 15 minutes)
+php artisan central:make-token                                       # Print a new central dashboard token and its .env hash line (nothing is stored)
+php artisan mpgs:backfill-attempt-reasons                            # Fill in reasons on finished MPGS attempts that have none (read only lookups)
+# Scheduled in routes/console.php: MPGS, Authorize.net and Kurv stale payment sweeps, plus stripe:check-health
 ```
 
 ## Specs
