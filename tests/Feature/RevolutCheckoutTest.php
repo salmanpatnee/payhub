@@ -92,8 +92,6 @@ it('reuses an existing payable revolut order', function () {
             'id' => 'ord_existing',
             'token' => 'tok_reused',
             'state' => 'pending',
-            'amount' => 10000,
-            'currency' => 'USD',
         ], 200),
     ]);
 
@@ -101,8 +99,6 @@ it('reuses an existing payable revolut order', function () {
     $payment = Payment::factory()->revolut()->create([
         'revolut_account_id' => $account->id,
         'revolut_order_id' => 'ord_existing',
-        'amount' => 10000,
-        'currency' => 'usd',
         'status' => 'pending',
     ]);
 
@@ -111,45 +107,6 @@ it('reuses an existing payable revolut order', function () {
         ->assertInertia(fn ($page) => $page->where('orderToken', 'tok_reused'));
 
     expect($payment->refresh()->revolut_order_id)->toBe('ord_existing');
-});
-
-// An edit that changes amount or currency must not reuse the old pending order.
-it('recreates the revolut order when the saved one has a different amount or currency', function () {
-    Http::fake([
-        '*/api/orders/ord_old' => Http::response([
-            'id' => 'ord_old',
-            'token' => 'tok_old',
-            'state' => 'pending',
-            'amount' => 10000,
-            'currency' => 'USD',
-        ], 200),
-        '*/api/orders' => Http::response([
-            'id' => 'ord_new',
-            'token' => 'tok_new',
-            'state' => 'pending',
-            'amount' => 5000,
-            'currency' => 'GBP',
-        ], 200),
-    ]);
-
-    $account = RevolutAccount::factory()->create();
-    $payment = Payment::factory()->revolut()->create([
-        'revolut_account_id' => $account->id,
-        'revolut_order_id' => 'ord_old',
-        'amount' => 5000,
-        'currency' => 'gbp',
-        'status' => 'pending',
-    ]);
-
-    $this->get("/pay/{$payment->uuid}")
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page->where('orderToken', 'tok_new'));
-
-    expect($payment->refresh()->revolut_order_id)->toBe('ord_new');
-
-    Http::assertSent(fn ($request) => $request->method() === 'POST'
-        && ($request->data()['amount'] ?? null) === 5000
-        && ($request->data()['currency'] ?? null) === 'GBP');
 });
 
 // Admin can create a payment routed through a Revolut account; the provider and

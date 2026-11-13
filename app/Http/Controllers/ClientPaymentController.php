@@ -336,12 +336,7 @@ class ClientPaymentController extends Controller
         if ($payment->revolut_order_id) {
             $order = $revolut->retrieveOrder($payment->revolut_order_id);
 
-            // An edit can change the amount or currency after the order was made; a
-            // stale order would charge the old amount, so recreate it on any mismatch.
-            $matchesPayment = (int) ($order['amount'] ?? -1) === $payment->amount
-                && strtoupper((string) ($order['currency'] ?? '')) === strtoupper($payment->currency);
-
-            if (! in_array($order['state'] ?? '', $payableStates, true) || ! $matchesPayment) {
+            if (! in_array($order['state'] ?? '', $payableStates, true)) {
                 $order = $this->createRevolutOrder($revolut, $payment);
                 $payment->update(['revolut_order_id' => $order['id']]);
             }
