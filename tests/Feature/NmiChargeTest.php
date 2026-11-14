@@ -297,11 +297,14 @@ it('sends the 3DS result as cardholder_auth', function () {
     $payment = nmiPayment(account: ['three_ds_enabled' => true]);
     fakeNmi([['id' => '9005', 'response_code' => '200']]);
 
-    chargeNmi($payment, ['cavv' => 'AAA=', 'eci' => '05', 'three_ds_version' => '2.2.0'])->assertOk();
+    chargeNmi($payment, ['cavv' => 'AAA=', 'eci' => '5', 'card_holder_auth' => 'verified', 'three_ds_version' => '2.2.0'])->assertOk();
 
+    // NMI v5 wants status + cavv; the ECI is derived from the status, so no eci or cardholder_auth key goes out.
     Http::assertSent(fn (Request $r) => str_contains($r->url(), '/sale')
         && $r->data()['cardholder_auth']['cavv'] === 'AAA='
-        && $r->data()['cardholder_auth']['eci'] === '05');
+        && $r->data()['cardholder_auth']['status'] === 'verified'
+        && ! array_key_exists('eci', $r->data()['cardholder_auth'])
+        && ! array_key_exists('cardholder_auth', $r->data()['cardholder_auth']));
 });
 
 it('refuses a charge without consent, for an inactive account, or a paid payment', function () {

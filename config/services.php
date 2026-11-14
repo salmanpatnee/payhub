@@ -188,7 +188,8 @@ return [
         'sweep_hours' => 48,
         'give_up_minutes' => 30,
         // 3DS challenge frame hosts for the CSP: confirmed in the browser run (spec 0012, step 0).
-        'three_ds_hosts' => [],
+        // Browser run 2026-11-14: the component loads Gateway.js from this host when 3DS is on.
+        'three_ds_hosts' => ['https://secure.networkmerchants.com'],
     ],
 
     // Card attempt lock (MPGS and Authorize.net): this many failed attempts pause the pay page.

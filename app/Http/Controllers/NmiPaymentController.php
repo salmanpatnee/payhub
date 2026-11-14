@@ -174,11 +174,13 @@ class NmiPaymentController extends Controller
             ], fn (string $v): bool => $v !== ''),
         ];
 
+        // NMI v5 cardholder_auth: `status` ("verified" or "attempted") and `cavv` are required, the ECI is derived
+        // from the status, so no eci key is sent (browser run 2026-11-14: eci and cardholder_auth keys gave
+        // E_INVALID_SUBMISSION).
         $auth = array_filter([
+            'status' => $request->validated('card_holder_auth'),
             'cavv' => $request->validated('cavv'),
             'xid' => $request->validated('xid'),
-            'eci' => $request->validated('eci'),
-            'cardholder_auth' => $request->validated('card_holder_auth'),
             'three_ds_version' => $request->validated('three_ds_version'),
             'directory_server_id' => $request->validated('directory_server_id'),
         ], fn (mixed $v): bool => filled($v));

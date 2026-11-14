@@ -98,12 +98,14 @@ async function charge(token: string, method: Method, first: string, last: string
                 last_name: last,
                 ...(auth
                     ? {
-                          cavv: auth.cavv,
-                          eci: auth.eci,
-                          xid: auth.xid ?? undefined,
-                          card_holder_auth: auth.cardHolderAuth,
-                          three_ds_version: auth.threeDsVersion,
-                          directory_server_id: auth.directoryServerId,
+                          // The component's types say string, but the sandbox sends eci as a number (5), which the
+                          // server rule rejects. Send every 3DS value as text.
+                          cavv: String(auth.cavv ?? ''),
+                          eci: String(auth.eci ?? ''),
+                          xid: auth.xid == null ? undefined : String(auth.xid),
+                          card_holder_auth: String(auth.cardHolderAuth ?? ''),
+                          three_ds_version: String(auth.threeDsVersion ?? ''),
+                          directory_server_id: String(auth.directoryServerId ?? ''),
                       }
                     : {}),
             }),
