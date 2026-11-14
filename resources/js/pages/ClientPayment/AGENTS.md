@@ -15,6 +15,7 @@ The public pages a client sees when they open a payment link (`/pay/{payment}`).
 | `PayAuthorizenet.vue` + `AuthorizenetCardForm.vue` | Authorize.net, PayHub's own card inputs plus Accept.js (`@/lib/acceptjs`, `@/lib/card`) |
 | `PayWhop.vue` | Whop: embed (`@whop/elements` checkout mounted on load) or redirect (Pay now), waiting state, polling |
 | `PayKurv.vue` | Kurv: consent, then Pay now redirects to Kurv's hosted page; after return, a waiting state that polls `/pay/{uuid}/kurv/status` |
+| `PayNmi.vue` + `NmiPaymentForm.vue` | NMI Payment Component (card, Google Pay), 3DS step, unclear outcome waiting state that polls `/pay/{uuid}/nmi/status` |
 | `CardLockedNotice.vue` | "Payment paused, contact your representative" notice (MPGS and Authorize.net) |
 | `Success.vue`, `Failed.vue`, `Unavailable.vue` | Shared result pages |
 
