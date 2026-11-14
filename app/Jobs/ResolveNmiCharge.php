@@ -15,9 +15,15 @@ class ResolveNmiCharge implements ShouldQueue
 {
     use Queueable;
 
-    public int $tries = 2;
+    public int $tries = 5;
 
     public function __construct(public readonly int $paymentId) {}
+
+    /** @return array<int, int> seconds to wait before each retry of a failed lookup */
+    public function backoff(): array
+    {
+        return [15, 60, 180, 600];
+    }
 
     public function handle(NmiChargeResolver $resolver): void
     {

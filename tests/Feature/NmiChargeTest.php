@@ -331,6 +331,68 @@ it('refuses a second charge once an attempt row says approved', function () {
     Http::assertNothingSent();
 });
 
+/** NMI sale calls made so far in this test. */
+function nmiSaleCount(): int
+{
+    return Http::recorded(fn (Request $r) => str_contains($r->url(), '/api/v5/payments/sale'))->count();
+}
+
+it('blocks a second sale after an approved sale whose read back found nothing', function () {
+    Queue::fake();
+    $payment = nmiPayment();
+    fakeNmi(nmiApproved('9101')); // sale approved, lookup returns no rows
+
+    chargeNmi($payment)->assertOk()->assertJson(['outcome' => 'unclear']);
+
+    $attempt = $payment->nmiChargeAttempts()->first();
+    expect($payment->fresh()->status)->toBe('pending')
+        ->and($attempt->status)->toBe('unclear')
+        ->and($attempt->transaction_id)->toBe('9101');
+
+    // The 120 second pause runs out: the payer must still not be charged again.
+    Cache::forget("nmi:pause:{$payment->id}");
+    chargeNmi($payment)->assertStatus(422);
+
+    expect(nmiSaleCount())->toBe(1);
+});
+
+it('blocks a second sale after an approved sale whose read back threw', function () {
+    Queue::fake();
+    $payment = nmiPayment();
+    Http::fake([
+        'sandbox.nmi.com/api/v5/payments/sale' => Http::response(nmiApproved('9102')[0]),
+        'sandbox.nmi.com/api/query.php' => fn () => throw new ConnectionException('timeout'),
+    ]);
+
+    chargeNmi($payment)->assertOk()->assertJson(['outcome' => 'unclear']);
+
+    Cache::forget("nmi:pause:{$payment->id}");
+    chargeNmi($payment)->assertStatus(422);
+
+    expect($payment->fresh()->status)->toBe('pending')
+        ->and(nmiSaleCount())->toBe(1);
+});
+
+it('still allows a retry after a sale that timed out with no transaction id', function () {
+    Queue::fake();
+    $payment = nmiPayment();
+    $calls = 0;
+    fakeNmi(function () use (&$calls) {
+        if (++$calls === 1) {
+            throw new ConnectionException('timeout');
+        }
+
+        return Http::response(['id' => '9103', 'response_code' => '200']);
+    });
+
+    chargeNmi($payment)->assertOk()->assertJson(['outcome' => 'unclear']);
+    expect($payment->nmiChargeAttempts()->first()->transaction_id)->toBeNull();
+
+    Cache::forget("nmi:pause:{$payment->id}");
+
+    chargeNmi($payment)->assertOk()->assertJson(['outcome' => 'declined']);
+});
+
 it('rate limits real sales at 5 per payment per hour but not 3DS reports', function () {
     config(['services.card_lock.max_attempts' => 99]); // keep the card lock out of this limiter test
     $payment = nmiPayment(account: ['three_ds_enabled' => false]);

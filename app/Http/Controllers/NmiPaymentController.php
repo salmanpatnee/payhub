@@ -318,11 +318,25 @@ class NmiPaymentController extends Controller
 
         $account = $payment->nmiAccount;
 
-        if (! $account?->is_active || $payment->nmiChargeAttempts()->where('status', 'approved')->exists()) {
+        if (! $account?->is_active || $this->hasPossibleCharge($payment)) {
             return null;
         }
 
         return $account;
+    }
+
+    /**
+     * True when money may already have moved: an attempt row says approved, or it is unclear but NMI
+     * named a transaction (an approved sale the read back could not settle). A new sale must wait for
+     * the lookup to settle that one, or the payer could be charged twice. An unclear row with no
+     * transaction id (a plain timeout) is only held back by the short pause.
+     */
+    private function hasPossibleCharge(Payment $payment): bool
+    {
+        return $payment->nmiChargeAttempts()
+            ->where(fn ($q) => $q->where('status', 'approved')
+                ->orWhere(fn ($q) => $q->where('status', 'unclear')->whereNotNull('transaction_id')))
+            ->exists();
     }
 
     /**
