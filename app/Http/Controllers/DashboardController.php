@@ -19,7 +19,7 @@ class DashboardController extends Controller
             'to' => ['nullable', 'date'],
             'brand_id' => ['nullable', 'integer'],
             'relationship_manager_id' => ['nullable', 'integer'],
-            'provider' => ['nullable', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop,kurv'],
+            'provider' => ['nullable', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop,kurv,nmi'],
             'account' => ['nullable', 'string'],
             'currency' => ['nullable', 'in:usd,gbp,pkr'],
         ]);

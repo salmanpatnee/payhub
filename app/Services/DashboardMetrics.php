@@ -8,6 +8,7 @@ use App\Models\Brand;
 use App\Models\CloverAccount;
 use App\Models\KurvAccount;
 use App\Models\MpgsAccount;
+use App\Models\NmiAccount;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
@@ -91,6 +92,7 @@ class DashboardMetrics
             ->when($accountProvider === 'authorizenet', fn ($q) => $q->where('authorizenet_account_id', $accountId))
             ->when($accountProvider === 'whop', fn ($q) => $q->where('whop_account_id', $accountId))
             ->when($accountProvider === 'kurv', fn ($q) => $q->where('kurv_account_id', $accountId))
+            ->when($accountProvider === 'nmi', fn ($q) => $q->where('nmi_account_id', $accountId))
             ->when($this->filters['currency'] ?? null, fn ($q, $v) => $q->where('currency', $v));
     }
 
@@ -145,7 +147,7 @@ class DashboardMetrics
 
         [$provider, $id] = explode(':', $value, 2);
 
-        return in_array($provider, ['stripe', 'revolut', 'square', 'viva', 'clover', 'mpgs', 'authorizenet', 'whop', 'kurv'], true) && ctype_digit($id)
+        return in_array($provider, ['stripe', 'revolut', 'square', 'viva', 'clover', 'mpgs', 'authorizenet', 'whop', 'kurv', 'nmi'], true) && ctype_digit($id)
             ? [$provider, (int) $id]
             : [null, null];
     }
@@ -424,9 +426,10 @@ class DashboardMetrics
         $authorizenetNames = AuthorizenetAccount::query()->pluck('account_name', 'id');
         $whopNames = WhopAccount::query()->pluck('account_name', 'id');
         $kurvNames = KurvAccount::query()->pluck('account_name', 'id');
+        $nmiNames = NmiAccount::query()->pluck('account_name', 'id');
 
         return collect(array_keys($accepted + $pending))
-            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames, $vivaNames, $cloverNames, $mpgsNames, $authorizenetNames, $whopNames, $kurvNames) {
+            ->map(function (string $key) use ($accepted, $pending, $stripeNames, $revolutNames, $squareNames, $vivaNames, $cloverNames, $mpgsNames, $authorizenetNames, $whopNames, $kurvNames, $nmiNames) {
                 [$provider, $id] = explode(':', $key);
                 $id = (int) $id;
                 $name = match ($provider) {
@@ -438,6 +441,7 @@ class DashboardMetrics
                     'authorizenet' => $authorizenetNames[$id] ?? "Account #{$id}",
                     'whop' => $whopNames[$id] ?? "Account #{$id}",
                     'kurv' => $kurvNames[$id] ?? "Account #{$id}",
+                    'nmi' => $nmiNames[$id] ?? "Account #{$id}",
                     default => $stripeNames[$id] ?? "Account #{$id}",
                 };
 
@@ -464,8 +468,8 @@ class DashboardMetrics
     {
         $totals = [];
 
-        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, viva_account_id, clover_account_id, mpgs_account_id, authorizenet_account_id, whop_account_id, kurv_account_id, currency, sum(amount) as s')
-            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id', 'mpgs_account_id', 'authorizenet_account_id', 'whop_account_id', 'kurv_account_id', 'currency')
+        $query->selectRaw('provider, stripe_account_id, revolut_account_id, square_account_id, viva_account_id, clover_account_id, mpgs_account_id, authorizenet_account_id, whop_account_id, kurv_account_id, nmi_account_id, currency, sum(amount) as s')
+            ->groupBy('provider', 'stripe_account_id', 'revolut_account_id', 'square_account_id', 'viva_account_id', 'clover_account_id', 'mpgs_account_id', 'authorizenet_account_id', 'whop_account_id', 'kurv_account_id', 'nmi_account_id', 'currency')
             ->get()
             ->each(function ($r) use (&$totals) {
                 $provider = $r->provider instanceof PaymentProvider ? $r->provider->value : (string) $r->provider;
@@ -478,6 +482,7 @@ class DashboardMetrics
                     'authorizenet' => $r->authorizenet_account_id,
                     'whop' => $r->whop_account_id,
                     'kurv' => $r->kurv_account_id,
+                    'nmi' => $r->nmi_account_id,
                     default => $r->stripe_account_id,
                 };
 
@@ -723,6 +728,13 @@ class DashboardMetrics
                 'provider' => 'kurv',
             ]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->concat($kurv)->values()->all();
+        $nmi = NmiAccount::query()->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (NmiAccount $a) => [
+                'value' => "nmi:{$a->id}",
+                'name' => $a->account_name,
+                'provider' => 'nmi',
+            ]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->concat($kurv)->concat($nmi)->values()->all();
     }
 }

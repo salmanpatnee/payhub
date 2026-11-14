@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CloverAccountController;
 use App\Http\Controllers\Admin\KurvAccountController;
 use App\Http\Controllers\Admin\MpgsAccountController;
+use App\Http\Controllers\Admin\NmiAccountController;
 use App\Http\Controllers\Admin\RelationshipManagerController;
 use App\Http\Controllers\Admin\RevolutAccountController;
 use App\Http\Controllers\Admin\SquareAccountController;
@@ -23,6 +24,8 @@ use App\Http\Controllers\KurvPaymentController;
 use App\Http\Controllers\KurvWebhookController;
 use App\Http\Controllers\MpgsPaymentController;
 use App\Http\Controllers\MpgsWebhookController;
+use App\Http\Controllers\NmiPaymentController;
+use App\Http\Controllers\NmiWebhookController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RevolutWebhookController;
 use App\Http\Controllers\SquareWebhookController;
@@ -198,6 +201,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             'whop-accounts/{whop_account}/test-connection',
             [WhopAccountController::class, 'testStoredConnection']
         )->name('whop-accounts.test-stored-connection');
+
+        Route::resource('nmi-accounts', NmiAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'nmi-accounts/{nmi_account}/deactivate',
+            [NmiAccountController::class, 'deactivate']
+        )->name('nmi-accounts.deactivate');
+
+        Route::patch(
+            'nmi-accounts/{nmi_account}/activate',
+            [NmiAccountController::class, 'activate']
+        )->name('nmi-accounts.activate');
+
+        Route::post(
+            'nmi-accounts/test-connection',
+            [NmiAccountController::class, 'testKeyConnection']
+        )->name('nmi-accounts.test-connection');
+
+        Route::post(
+            'nmi-accounts/{nmi_account}/test-connection',
+            [NmiAccountController::class, 'testStoredConnection']
+        )->name('nmi-accounts.test-stored-connection');
 
         Route::resource('kurv-accounts', KurvAccountController::class)
             ->except(['show']);
@@ -410,6 +436,15 @@ Route::get('/pay/{payment}/whop/status', [WhopPaymentController::class, 'status'
     ->name('pay.whop.status')
     ->middleware('throttle:60,1');
 
+// NMI Payment Component pay thread (spec 0012), public (scoped by the payment UUID). The charge POST stays
+// behind CSRF; a real sale and a 3DS failure report use separate limiters (each returns no limit for the
+// other kind of request). Status is bounded by the lookup guard in NmiPaymentController.
+Route::post('/pay/{payment}/nmi/charge', [NmiPaymentController::class, 'charge'])
+    ->name('pay.nmi.charge')
+    ->middleware(['throttle:nmi-charge', 'throttle:nmi-3ds-report']);
+Route::get('/pay/{payment}/nmi/status', [NmiPaymentController::class, 'status'])
+    ->name('pay.nmi.status');
+
 // Kurv hosted payment page pay thread (spec 0010), public (scoped by the payment UUID). The limiter keys
 // use the raw route string because throttle runs before route model binding.
 Route::post('/pay/{payment}/kurv/checkout', [KurvPaymentController::class, 'checkout'])
@@ -444,6 +479,11 @@ Route::post('/webhook/mpgs/{mpgsAccount}', [MpgsWebhookController::class, 'handl
 // {authorizenetAccount} resolves by integer id. Protected by the X-ANET-Signature HMAC (spec 0006, AC-8).
 Route::post('/webhook/authorizenet/{authorizenetAccount}', [AuthorizenetWebhookController::class, 'handle'])
     ->name('webhook.authorizenet')
+    ->middleware('throttle:120,1');
+
+// {nmiAccount} resolves by integer id. Protected by the Webhook-Signature HMAC (spec 0012, AC-14).
+Route::post('/webhook/nmi/{nmiAccount}', [NmiWebhookController::class, 'handle'])
+    ->name('webhook.nmi')
     ->middleware('throttle:120,1');
 
 // {whopAccount} resolves by integer id. Standard Webhooks signature, verified in the controller (spec 0009, AC-9).

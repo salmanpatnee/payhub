@@ -72,14 +72,16 @@ class CardLockGuard
 
     private function applies(Payment $payment): bool
     {
-        return in_array($payment->provider, [PaymentProvider::Mpgs, PaymentProvider::Authorizenet], true);
+        return in_array($payment->provider, [PaymentProvider::Mpgs, PaymentProvider::Authorizenet, PaymentProvider::Nmi], true);
     }
 
     private function failedCount(Payment $payment): int
     {
-        $query = $payment->provider === PaymentProvider::Mpgs
-            ? $payment->mpgsChargeAttempts()->where('status', 'declined')
-            : $payment->authorizenetChargeAttempts()->whereIn('status', self::ANET_FAILED);
+        $query = match ($payment->provider) {
+            PaymentProvider::Mpgs => $payment->mpgsChargeAttempts()->where('status', 'declined'),
+            PaymentProvider::Nmi => $payment->nmiChargeAttempts()->whereIn('status', self::ANET_FAILED),
+            default => $payment->authorizenetChargeAttempts()->whereIn('status', self::ANET_FAILED),
+        };
 
         if ($payment->card_attempts_since !== null) {
             $query->where('created_at', '>', $payment->card_attempts_since);

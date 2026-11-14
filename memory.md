@@ -1,50 +1,48 @@
-# Memory — Authorize.net Accept.js (spec 0007), sandbox checks and polish
+# Memory — NMI provider (spec 0012), tenth payment provider
 
-Last updated: 2026-10-21
+Last updated: 2026-11-13
 
 ## What was built
 
-Branch `feat/authorizenet-accept-hosted` (not pushed). Commits since the spec 0007 build (`90e3979`):
+Branch `feature/nmi-provider` (from staging, not pushed). Commits: `6816619` spec and research, `8cb8a7e` AGENTS.md skills, `4e812f4` steps 1 to 8, `d58c1d6` steps 9 to 13.
 
-- `1c2e09b` `AuthorizenetCardForm.vue` restyled to match MPGS and Clover: no labels, placeholders (`Card number`, `MM/YY`, `CVV`, `ZIP`), rounded-xl wrapper boxes, brand focus ring, shimmer skeleton, red ring plus short error text.
-- `7d0e34f` `AuthorizenetChargeReply`: gateway response 3 with error 6 (bad card) or 8 (expired) now maps to `check_details` (was `error`). Test added. Spec 0007 `## Follow-up` filled with sandbox answers.
-- `63e3dc4` Held reload fix: `ClientPaymentController::showAuthorizenet` passes a `held` prop (transaction id present); `PayAuthorizenet.vue` starts in the waiting state and polls. Test added.
-- `0e7b40a` A card field's error clears as soon as that field is edited.
-- `80a9bc7` Rebuilt `public/build` (the repo tracks built assets, with `build:` commits).
+- **Spec and research:** `docs/specs/0012-nmi-provider/` (`index.md` status In Progress, `rationale.md`, `verify.md`), `docs/research/nmi.md`, `docs/research/nmi-sandbox-check.md`, `docs/research/beyond-bancard.md`.
+- **Backend:** `app/Services/Nmi/` (`NmiClient`, `NmiSaleReply`, `NmiQueryReply`, `NmiChargeResolver`, `NmiAmount`, `NmiStalePaymentSweep`); `NmiPaymentController` (charge, status), `NmiWebhookController`, `Admin/NmiAccountController`; jobs `ResolveNmiCharge`, `HandleNmiWebhookJob`; models `NmiAccount`, `NmiChargeAttempt`, `ProcessedNmiEvent`; 4 migrations dated 2026_11_13; limiters `nmi-charge` and `nmi-3ds-report`; route `pay/{payment}/nmi/charge|status`, `webhook/nmi/{nmiAccount}`, `admin/nmi-accounts`.
+- **Frontend:** `ClientPayment/PayNmi.vue` + `NmiPaymentForm.vue` (package `@nmipayments/nmi-pay` 1.1.1), admin pages `admin/nmi-accounts/*`, plus NMI added to badge, filters, sidebar, payments and user forms, Show attempts panel.
+- **Parity:** request rules, CurrencySupportResolver, ProviderAccountTable, CardLockGuard, DashboardMetrics, PaymentController, export, central summary all cover NMI.
+- **Tests:** 65 NMI tests pass (`NmiChargeTest`, `NmiPayPageTest`, `NmiWebhookAndSweepTest`, `NmiAdminAndParityTest`). `public/build` rebuilt and committed.
 
 ## Decisions made
 
-- `public/build` is committed by convention; after frontend changes run `npm run build` and commit it as `build: ...`.
-- Held state is derived from "pending with an authorizenet transaction id". An unclear payment (no transaction id) still shows the card form on reload; the 120 second server pause blocks a second charge.
-- Kept the short red error text under invalid fields (Clover and MPGS show only the ring).
+- Order id goes in v5 sale field `order_details.id` (not `order_id`); names and email in `billing_address`. `query.php` returns it as `order_id`.
+- NMI has no idempotency key; `E_DUPLICATE` (HTTP 400) is treated as unclear. The pause key `nmi:pause:{id}` is set before the sale call.
+- Sandbox host is `https://sandbox.nmi.com`; production `https://secure.nmi.com`. CSP adds both on the NMI pay page only.
+- Sandbox accounts send no billing email (NMI sandbox only accepts the merchant's own email). Production sends `client_email`. This differs slightly from spec text; the spec was not updated.
+- Google Pay is the component's express checkout (`onExpressCheckout`), card is `onPay`. Google Pay never runs 3DS.
+- Resolver outcome `not_found` (no sale at NMI) drives the sweep give up after 30 minutes.
 
 ## Problems solved
 
-- Real sandbox payments work end to end (4 completed). Gateway read-back showed response code 1, status `capturedPendingSettlement`.
-- Sandbox is NOT in Test Mode: the "amount equals error code" trick with card `4222 2222 2222 2` does not work (everything approves). Force errors another way: card code `901` gives error 65 (`check_details`); ZIP `46282` gives error 2 (`declined`); a Luhn-bad number gives 6; an old expiry gives 8.
-- A second identical charge (same card, amount, invoice, 300 second window) returns response 3, error 11 and the first transaction id, mapped to `unclear`.
-- Vite "Unable to locate file in Vite manifest" on the pay page just means the dev server was not running.
-- Browser check: the Chrome extension works on `https://payhub.test` once the page has loaded; wait a few seconds for the entrance animation.
+- Sandbox rejected the sale with `E_ACCESS_DENIED: Sandbox accounts can only send emails to their own email address`; fixed by skipping the email on sandbox accounts. NMI's error message is now kept in the attempt `reason` (admin only) and the log.
+- GBP is refused by this sandbox processor, so only USD can be tested.
+- Sandbox test cards: Visa 4111111111111111, exp 10/29; 3DS frictionless 4100000000000100, challenge 4100000000005000 (code 12345 passes); amounts under 1.00 decline.
+- Tool quirk: inline Python edits mangle backslashes (PHP namespaces); use the Edit tool for those. Auto mode denied `php artisan migrate` on the dev DB, so the user runs migrations.
 
 ## Current state
 
-- 82 Authorize.net Pest tests pass; eslint and `vue-tsc` clean for the touched files; `npm run build` succeeds.
-- Verified in the browser: restyled form, empty-submit errors, card formatting, brand focus ring, error clears on typing.
-- Known small issue: the form shifts a few pixels vertically when errors appear or clear (page content is centred). Optional fix is a reserved error line under each field.
-- Spec 0007 status is still `In Progress`; no `verify.md`; no JS test runner for `card.ts`.
-- Payment 31 in the local DB is `pending` with no transaction id (probably from the missing-column error before the local DB fix). Not confirmed.
-- Uncommitted: `memory.md`, `docs/research/`.
+- Steps 0 (server side), 1 to 13 done and committed. Card payment flow works against the sandbox after the email fix (user was about to retry).
+- Browser untested: 3DS, Google Pay, webhook delivery, CSP completeness.
+- Step 0 open questions still unanswered: Google Pay hosts, 3DS `onComplete` shape and challenge hosts (`services.nmi.three_ds_hosts` is empty), webhook `event_body.order_id`, ZIP/AVS need, card detail decline codes (220 to 225 are guesses).
+- Full suite: 1 known order dependent error (`NotificationTest` calls `stripePost()` from another file); passes alone.
+- Uncommitted and unrelated: `memory.md`, `docs/integrations/central-dashboard-brief.md`, `docs/research/mpgs-failed-payments-*.md`, `docs/research/zen-payments.md`.
+- Keys live only in local `.env` (`NMI_SANDBOX_PRIVATE_KEY`, `NMI_SANDBOX_PUBLIC_KEY`) and encrypted on the dev `nmi_accounts` row. Never paste or commit them.
 
 ## Next session starts with
 
-1. Webhook test on the staging server (open questions 9 and 10): deploy the branch, run its migrations (branch migrations were edited in place), set the account keys, change the webhook URL in Authorize.net to `https://<staging-host>/webhook/authorizenet/<account id>`, make a payment, then check `processed_authorizenet_events` and the status update, the `X-ANET-Signature` header format and the delay.
-2. Held transaction test (Q7): needs a holding fraud filter or Test Mode in the sandbox. Also still untested: declines in the unsettled list (Q6) and retry after a decline with the same invoice.
-3. `/check verify`, `/sync` (update `AGENTS.md` and `docs/agent.md` for the seventh provider and PCI note, refresh the provider-parity agent and skill text from four to seven providers), mark the spec Accepted.
+Retry a sandbox card payment, then work the browser run (verify.md list): 3DS pass and fail, Google Pay, webhook registered in the NMI portal for the staging URL, and fill the three_ds and google_pay CSP hosts from what the browser blocks. Record answers in the spec Follow-up (via /architect). Then step 14 (staging run), `/sync` for AGENTS.md (tenth provider, NMI section, hookdeck declined line), `/check verify nmi-provider`.
 
 ## Open questions
 
-- Reserve a fixed error line under each field to stop the layout shift, or keep the tight spacing?
-- PCI: ask the bank or assessor to confirm SAQ A-EP.
-- Production account needs its own API login, transaction key, signature key and public client key.
-- The rate limits and pause timings (5 charges per payment, 20 per IP per hour, 120 second unclear pause) are unreviewed defaults.
-- One full-suite test, `NotificationTest` (`stripePost()` undefined), fails with or without this work.
+- Does GBP get enabled on Beyond Bancard's processor, and what is the production host (secure.nmi.com or white label)?
+- Confirm the PCI SAQ level with the acquirer before production.
+- Should the spec text be updated for the sandbox no email rule and the CSP always including secure.nmi.com?

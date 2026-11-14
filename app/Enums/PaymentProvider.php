@@ -13,6 +13,7 @@ enum PaymentProvider: string
     case Authorizenet = 'authorizenet';
     case Whop = 'whop';
     case Kurv = 'kurv';
+    case Nmi = 'nmi';
 
     public function label(): string
     {
@@ -26,6 +27,7 @@ enum PaymentProvider: string
             self::Authorizenet => 'Authorize.net',
             self::Whop => 'Whop',
             self::Kurv => 'Kurv',
+            self::Nmi => 'NMI',
         };
     }
 }

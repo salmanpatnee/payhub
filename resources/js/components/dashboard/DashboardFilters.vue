@@ -124,6 +124,7 @@ watch(
                         <SelectItem value="authorizenet">Authorize.net</SelectItem>
                         <SelectItem value="whop">Whop</SelectItem>
                         <SelectItem value="kurv">Kurv</SelectItem>
+                        <SelectItem value="nmi">NMI</SelectItem>
                     </SelectContent>
                 </Select>
             </div>

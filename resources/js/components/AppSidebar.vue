@@ -45,6 +45,7 @@ const mainNavItems = computed((): NavItem[] => [
                 { title: 'Authorize.net',     href: '/admin/authorizenet-accounts', icon: CreditCard },
                 { title: 'Whop Accounts',     href: '/admin/whop-accounts',         icon: CreditCard },
                 { title: 'Kurv Accounts',     href: '/admin/kurv-accounts',         icon: CreditCard },
+                { title: 'NMI Accounts',      href: '/admin/nmi-accounts',          icon: CreditCard },
             ],
         } as NavItem,
     ] : []),
