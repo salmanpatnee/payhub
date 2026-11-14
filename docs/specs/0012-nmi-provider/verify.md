@@ -1,4 +1,4 @@
-# Verify: NMI provider · spec 0012 · updated 2026-11-13
+# Verify: NMI provider · spec 0012 · updated 2026-11-14
 _Steps derived from spec 0012 acceptance criteria. `/check verify` runs these; `/test` locks the durable ones._
 
 ## UI / manual (sandbox, staging)
@@ -20,7 +20,8 @@ _Steps derived from spec 0012 acceptance criteria. `/check verify` runs these; `
 - [x] Payment page (admin) shows the attempts panel with sequence, status, reason, transaction id → AC-11
 - [x] CSV export, dashboard "Accounts Today", filters, provider badge and sidebar all show NMI → AC-4
 - [x] After one charge attempt, edit amount/currency/account → rejected; delete → refused → AC-13
-- [ ] Register the staging webhook in the NMI portal, pay → webhook arrives, Payment completes once; replay the same event → no change → AC-14
+- [x] Register the staging webhook in the NMI portal, pay → webhook arrives, Payment completes once (staging run 2026-11-14: `processed_nmi_events` has 6 rows matching the 3 declines and 3 approvals, signing key accepted, no 401) → AC-14
+- [ ] Replay the same webhook event from the NMI portal → no change (not run yet) → AC-14
 - [x] Break the lookup (wrong key on the account) after a charge → sweep stops after 30 minutes with a warning and the attempt row says "No transaction found at NMI" → AC-15
 
 ## Value sourcing (one step per row of the spec's table)
@@ -32,8 +33,9 @@ _Steps derived from spec 0012 acceptance criteria. `/check verify` runs these; `
 
 ## Commands
 - [x] `php artisan test --parallel --filter=Nmi` → all pass → AC-1 to AC-16
-- [x] `php artisan test --parallel` → one known order dependent failure (`NotificationTest` calls `stripePost()` defined in another file); passes alone → AC-4
+- [x] `php artisan test --parallel` → all pass (1191 passed, 15 skipped on 2026-11-14; the `stripePost()` helper now lives in `tests/Pest.php`, so `NotificationTest` no longer depends on file order) → AC-4
 - [x] `npm run build` then `git status public/build` → new hashed files present → AC-5
 
 ## Acceptance-criteria coverage
+- Staging run 2026-11-14: approve, decline, card lock, 3DS fail/cancel and webhook delivery confirmed on payments NMI-001112 to NMI-001116. Open: the 3DS challenge frame is a fixed 600px tall, so on a short window the code input is below the fold; Google Pay and event replay not run.
 - AC-1 · AC-2 admin steps above and `NmiAdminAndParityTest` · AC-3 currency steps · AC-4 export, dashboard, list, badge, sidebar · AC-5 pay page steps · AC-6 3DS steps · AC-7 to AC-9 charge and value steps (`NmiChargeTest`) · AC-10 close tab step · AC-11 attempts panel · AC-12 messages and card lock · AC-13 lock and limiter (`NmiChargeTest`) · AC-14 webhook steps (`NmiWebhookAndSweepTest`) · AC-15 sweep step · AC-16 CSP (`NmiPayPageTest`, plus the browser host check) · AC-17 Open questions 5, 6, 7, 10, 11 and the card detail decline codes, still to answer in a browser run
