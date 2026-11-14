@@ -7,6 +7,7 @@ use App\Models\Brand;
 use App\Models\CloverAccount;
 use App\Models\KurvAccount;
 use App\Models\MpgsAccount;
+use App\Models\NmiAccount;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
@@ -162,6 +163,21 @@ class PaymentFactory extends Factory
             'stripe_account_id' => null,
             'client_email' => 'client@example.com',
             'kurv_account_id' => KurvAccount::factory(),
+        ]);
+    }
+
+    /**
+     * NMI payment: nulls the Stripe account and attaches an NMI account. A client email is
+     * always set (NMI sends it as the billing email).
+     */
+    public function nmi(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'provider' => 'nmi',
+            'currency' => 'usd',
+            'stripe_account_id' => null,
+            'client_email' => 'client@example.com',
+            'nmi_account_id' => NmiAccount::factory(),
         ]);
     }
 }

@@ -11,6 +11,7 @@ use App\Models\Brand;
 use App\Models\CloverAccount;
 use App\Models\KurvAccount;
 use App\Models\MpgsAccount;
+use App\Models\NmiAccount;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
@@ -135,6 +136,7 @@ class UserController extends Controller
             'authorizenet' => AuthorizenetAccount::pluck('account_name', 'id')->all(),
             'whop' => WhopAccount::pluck('account_name', 'id')->all(),
             'kurv' => KurvAccount::pluck('account_name', 'id')->all(),
+            'nmi' => NmiAccount::pluck('account_name', 'id')->all(),
         ];
     }
 
@@ -173,7 +175,10 @@ class UserController extends Controller
         $kurv = KurvAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
             ->map(fn (KurvAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'kurv', 'currency' => null]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->concat($kurv)->values();
+        $nmi = NmiAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'currency'])
+            ->map(fn (NmiAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'nmi', 'currency' => $a->currency]);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->concat($kurv)->concat($nmi)->values();
     }
 
     /**

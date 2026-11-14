@@ -15,6 +15,7 @@ class ProviderAccountTable
             'authorizenet' => 'authorizenet_accounts',
             'whop' => 'whop_accounts',
             'kurv' => 'kurv_accounts',
+            'nmi' => 'nmi_accounts',
             default => 'stripe_accounts',
         };
     }

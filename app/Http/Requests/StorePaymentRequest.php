@@ -6,6 +6,7 @@ use App\Enums\SupportedCurrency;
 use App\Http\Requests\Concerns\ResolvesWhopPayment;
 use App\Models\AuthorizenetAccount;
 use App\Models\MpgsAccount;
+use App\Models\NmiAccount;
 use App\Models\Payment;
 use App\Models\SquareAccount;
 use App\Models\User;
@@ -43,7 +44,7 @@ class StorePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop,kurv'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop,kurv,nmi'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -64,6 +65,7 @@ class StorePaymentRequest extends FormRequest
                     $accountCurrency = match ($provider) {
                         'square' => SquareAccount::find($this->input('account_id'))?->currency,
                         'authorizenet' => AuthorizenetAccount::find($this->input('account_id'))?->currency,
+                        'nmi' => NmiAccount::find($this->input('account_id'))?->currency,
                         default => null,
                     };
 
@@ -85,6 +87,7 @@ class StorePaymentRequest extends FormRequest
                         'clover' => 'This Clover account only accepts USD payments.',
                         'kurv' => 'This Kurv account only accepts USD payments.',
                         'authorizenet' => "This Authorize.net account only accepts {$accountCurrency} payments.",
+                        'nmi' => 'This NMI account only accepts '.strtoupper((string) $accountCurrency).' payments.',
                         default => "This Square account only accepts {$accountCurrency} payments.",
                     });
                 },
@@ -149,6 +152,7 @@ class StorePaymentRequest extends FormRequest
         $data['authorizenet_account_id'] = $provider === 'authorizenet' ? $accountId : null;
         $data['whop_account_id'] = $provider === 'whop' ? $accountId : null;
         $data['kurv_account_id'] = $provider === 'kurv' ? $accountId : null;
+        $data['nmi_account_id'] = $provider === 'nmi' ? $accountId : null;
 
         return $data;
     }

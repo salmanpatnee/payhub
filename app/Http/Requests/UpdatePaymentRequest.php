@@ -7,6 +7,7 @@ use App\Enums\SupportedCurrency;
 use App\Http\Requests\Concerns\ResolvesWhopPayment;
 use App\Models\AuthorizenetAccount;
 use App\Models\MpgsAccount;
+use App\Models\NmiAccount;
 use App\Models\Payment;
 use App\Models\SquareAccount;
 use App\Models\User;
@@ -47,7 +48,7 @@ class UpdatePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop,kurv'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop,kurv,nmi'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -68,6 +69,7 @@ class UpdatePaymentRequest extends FormRequest
                     $accountCurrency = match ($provider) {
                         'square' => SquareAccount::find($this->input('account_id'))?->currency,
                         'authorizenet' => AuthorizenetAccount::find($this->input('account_id'))?->currency,
+                        'nmi' => NmiAccount::find($this->input('account_id'))?->currency,
                         default => null,
                     };
 
@@ -89,6 +91,7 @@ class UpdatePaymentRequest extends FormRequest
                         'clover' => 'This Clover account only accepts USD payments.',
                         'kurv' => 'This Kurv account only accepts USD payments.',
                         'authorizenet' => "This Authorize.net account only accepts {$accountCurrency} payments.",
+                        'nmi' => 'This NMI account only accepts '.strtoupper((string) $accountCurrency).' payments.',
                         default => "This Square account only accepts {$accountCurrency} payments.",
                     });
                 },
@@ -116,7 +119,7 @@ class UpdatePaymentRequest extends FormRequest
     /**
      * Once a charge may have started the client may already be paying the old values,
      * so amount, currency and account become read-only: Authorize.net after the first
-     * token (spec 0006, AC-10), Whop after the first charge call (spec 0009, AC-6), Kurv once its payment link exists (spec 0010, AC-6).
+     * token (spec 0006, AC-10), Whop after the first charge call (spec 0009, AC-6), Kurv once its payment link exists (spec 0010, AC-6), NMI after the first charge attempt (spec 0012, AC-13).
      */
     public function after(): array
     {
@@ -132,6 +135,8 @@ class UpdatePaymentRequest extends FormRequest
                 $payment->provider === PaymentProvider::Whop && $payment->whop_charge_started_at !== null => ['whop', 'whop_account_id'],
                 // Kurv (spec 0010, AC-6): locked from the first saved link until Kurv reports it closed.
                 $payment->provider === PaymentProvider::Kurv && $payment->kurv_charge_started_at !== null && $payment->kurv_link_closed_at === null => ['kurv', 'kurv_account_id'],
+                // NMI (spec 0012, AC-13): locked from the first charge attempt.
+                $payment->provider === PaymentProvider::Nmi && $payment->nmi_first_attempt_at !== null => ['nmi', 'nmi_account_id'],
                 default => [null, null],
             };
 
@@ -139,7 +144,7 @@ class UpdatePaymentRequest extends FormRequest
                 return;
             }
 
-            $brandChanged = in_array($provider, ['whop', 'kurv'], true) && $this->input('brand_id') !== null
+            $brandChanged = in_array($provider, ['whop', 'kurv', 'nmi'], true) && $this->input('brand_id') !== null
                 && (int) $this->input('brand_id') !== $payment->brand_id;
 
             $changed = $brandChanged || (int) round(((float) $this->input('amount')) * 100) !== $payment->amount
@@ -191,6 +196,7 @@ class UpdatePaymentRequest extends FormRequest
         $data['authorizenet_account_id'] = $provider === 'authorizenet' ? $accountId : null;
         $data['whop_account_id'] = $provider === 'whop' ? $accountId : null;
         $data['kurv_account_id'] = $provider === 'kurv' ? $accountId : null;
+        $data['nmi_account_id'] = $provider === 'nmi' ? $accountId : null;
 
         return $data;
     }
