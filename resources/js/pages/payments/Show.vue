@@ -44,6 +44,8 @@ type AttemptRow = {
     status: string;
     reason: string | null;
     started_at: string;
+    /** NMI only: the customer's browser and device, for support. */
+    client_info?: string | null;
     /** Kurv only: Kurv's status and result code for the lookup. */
     status_detail?: string | null;
     /** Kurv only: what triggered the lookup (callback, poll or sweep). */
@@ -94,6 +96,7 @@ const attemptTone: Record<string, string> = {
     error: 'failed',
     // NMI
     '3ds_failed': 'failed',
+    page_issue: 'failed',
 };
 
 const deleteOpen = ref(false);
@@ -421,7 +424,10 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                                         />
                                         <div v-if="row.status_detail" class="mt-1 text-xs text-muted-foreground">{{ row.status_detail }}</div>
                                     </td>
-                                    <td class="px-4 py-3.5 align-top sm:max-w-[34ch] max-sm:p-0">{{ row.reason ?? '—' }}</td>
+                                    <td class="px-4 py-3.5 align-top sm:max-w-[34ch] max-sm:p-0">
+                                        {{ row.reason ?? '—' }}
+                                        <div v-if="row.client_info" class="mt-1 text-xs text-muted-foreground">{{ row.client_info }}</div>
+                                    </td>
                                     <td v-if="attempts.provider === 'kurv'" class="px-4 py-3.5 align-top capitalize max-sm:p-0">{{ row.source ?? '—' }}</td>
                                 </tr>
                             </tbody>

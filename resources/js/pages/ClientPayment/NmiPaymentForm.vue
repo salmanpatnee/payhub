@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { mountNmiPayments, mountNmiThreeDSecure } from '@nmipayments/nmi-pay'
-import type { PaymentEvent, ThreeDSecureCompleteEvent } from '@nmipayments/nmi-pay'
+import type { PaymentEvent, ThreeDSecureCompleteEvent, ThreeDSecureFailureEvent } from '@nmipayments/nmi-pay'
 import { AlertCircle } from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -23,13 +23,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{ outcome: [outcome: 'approved' | 'unclear'] }>()
 
-type Outcome = 'approved' | 'declined' | 'check_details' | 'unclear' | 'error' | '3ds_failed'
+type Outcome = 'approved' | 'declined' | 'check_details' | 'unclear' | 'error' | '3ds_failed' | 'duplicate'
 type Method = 'card' | 'google_pay'
 
 const FIXED: Record<string, string> = {
     declined: 'Your card was declined. Please try a different card.',
     check_details: 'Please check your card details and try again.',
     error: 'Your payment could not be processed. Please try again or use a different card.',
+    duplicate: 'This card was just tried for the same amount. Please wait a few minutes or use a different card.',
     '3ds_failed': 'We could not verify your card. Please try again or use a different card.',
     name: 'Please enter the name on your card.',
     rate: 'Too many attempts. Please wait a while, or contact your representative for help.',
@@ -39,11 +40,16 @@ const name = ref(props.clientName)
 const nameError = ref<string | undefined>(undefined)
 const message = ref<string | null>(null)
 const ready = ref(false)
+const busy = ref(false)
+let inFlight: Promise<true | string> | null = null
 
 const paymentEl = ref<HTMLElement | null>(null)
 const threeDsEl = ref<HTMLElement | null>(null)
 let widget: ReturnType<typeof mountNmiPayments> | null = null
 let threeDs: ReturnType<typeof mountNmiThreeDSecure> | null = null
+const THREE_DS_NOTICE = 'nmi-3ds-failed'
+let threeDsWatchdog: ReturnType<typeof setTimeout> | null = null
+let fieldsTimer: ReturnType<typeof setTimeout> | null = null
 // Settles the Payment Component's pay button once the charge (or the 3DS step) is over.
 let settlePay: ((result: true | string) => void) | null = null
 let pendingToken = ''
@@ -149,20 +155,58 @@ async function charge(token: string, method: Method, first: string, last: string
     }
 }
 
-async function reportThreeDsFailure(method: Method, first: string, last: string): Promise<void> {
+type PageEvent = 'fields_not_loaded' | 'mount_failed' | 'three_ds_failed' | 'three_ds_timeout' | 'three_ds_error'
+
+const reportedEvents = new Set<PageEvent>()
+
+/**
+ * Tells PayHub what went wrong on this page so support can see it in the attempts panel (the customer cannot
+ * share a console log). Only an event name and NMI's own error code and message: never a card value, the
+ * token, the name or the amount. Sent once per kind per page load; `keepalive` lets it survive a reload.
+ */
+async function reportEvent(event: PageEvent, code?: string, text?: string): Promise<void> {
+    if (reportedEvents.has(event)) {
+        return
+    }
+
+    reportedEvents.add(event)
+
     try {
-        await fetch(`/pay/${props.payment.uuid}/nmi/charge`, {
+        await fetch(`/pay/${props.payment.uuid}/nmi/event`, {
             method: 'POST',
             headers: csrfHeaders(),
-            body: JSON.stringify({ three_ds_failed: true, method, first_name: first, last_name: last }),
+            keepalive: true,
+            body: JSON.stringify({
+                event,
+                ...(code && /^[A-Za-z0-9_.:-]{1,40}$/.test(code) ? { code } : {}),
+                ...(text ? { message: String(text).slice(0, 500) } : {}),
+            }),
         })
     } catch {
         // Diagnostic only: the customer still sees the fixed failure message.
     }
 }
 
+/**
+ * The widget has no way to disable its Pay button, so a second click during a payment gets the first one's
+ * result instead of starting another charge. `busy` also blocks clicks on the widget while it runs.
+ */
+function onPay(event: PaymentEvent): Promise<true | string> {
+    if (inFlight) {
+        return inFlight
+    }
+
+    busy.value = true
+    inFlight = payOnce(event).finally(() => {
+        inFlight = null
+        busy.value = false
+    })
+
+    return inFlight
+}
+
 /** The card path: consent, name, then 3DS (when on) before the server charge. */
-async function onPay(event: PaymentEvent): Promise<true | string> {
+async function payOnce(event: PaymentEvent): Promise<true | string> {
     message.value = null
     nameError.value = undefined
 
@@ -187,37 +231,80 @@ async function onPay(event: PaymentEvent): Promise<true | string> {
 
     return new Promise<true | string>((resolve) => {
         settlePay = resolve
-        threeDs?.startThreeDSecure({
-            paymentToken: event.token,
-            currency: props.payment.currency.toUpperCase(),
-            amount: decimalAmount(props.payment.amount),
-            firstName: first,
-            lastName: last,
-        })
+        // The 3DS widget can fail without calling onFailure (for example a rejected lookup), which would leave
+        // the spinner on forever. If nothing happens, and no challenge opened, treat it as a failed check.
+        clearThreeDsWatchdog()
+        threeDsWatchdog = setTimeout(() => void failThreeDs('three_ds_timeout'), 10000)
+
+        try {
+            threeDs?.startThreeDSecure({
+                paymentToken: event.token,
+                currency: props.payment.currency.toUpperCase(),
+                amount: decimalAmount(props.payment.amount),
+                firstName: first,
+                lastName: last,
+            })
+        } catch (e) {
+            void failThreeDs('three_ds_error', undefined, e instanceof Error ? e.message : undefined)
+        }
     })
 }
 
+function clearThreeDsWatchdog(): void {
+    if (threeDsWatchdog) {
+        clearTimeout(threeDsWatchdog)
+        threeDsWatchdog = null
+    }
+}
+
 async function onThreeDsComplete(result: ThreeDSecureCompleteEvent): Promise<void> {
+    clearThreeDsWatchdog()
     const outcome = await charge(pendingToken, 'card', pendingName[0], pendingName[1], result)
 
     settlePay?.(outcome)
     settlePay = null
 }
 
-async function onThreeDsFailure(): Promise<void> {
+/** NMI's own failure callback, with its code and message when it gives them. */
+function onThreeDsFailure(e?: ThreeDSecureFailureEvent): Promise<void> {
+    return failThreeDs('three_ds_failed', e?.code, e?.message)
+}
+
+async function failThreeDs(kind: 'three_ds_failed' | 'three_ds_timeout' | 'three_ds_error', code?: string, text?: string): Promise<void> {
+    clearThreeDsWatchdog()
+
+    if (!settlePay) {
+        return // already settled (a late event after the watchdog)
+    }
+
     // No charge is sent when 3DS fails or is cancelled; only a report so the attempt shows to admins.
-    await reportThreeDsFailure('card', pendingName[0], pendingName[1])
-    resetForm()
+    await reportEvent(kind, code, text)
+
+    // NMI's 3DS widget cannot be started twice and has no public unmount, so a second card on the same page
+    // would hang. Start clean with a reload and show the message again afterwards.
+    try {
+        sessionStorage.setItem(THREE_DS_NOTICE, '1')
+    } catch {
+        // No storage: the reload still happens, only the message is lost.
+    }
+
     settlePay?.(FIXED['3ds_failed'])
     settlePay = null
+    window.location.reload()
 }
 
 /** Google Pay: the wallet token is charged without 3DS (AC-6). Consent is recorded first. */
 async function onExpressCheckout(event: PaymentEvent): Promise<void> {
+    if (busy.value) {
+        return
+    }
+
+    busy.value = true
     message.value = null
 
     if (!(await props.beforeCharge())) {
         message.value = 'Please agree to the policies below before paying.'
+        busy.value = false
         resetForm()
 
         return
@@ -225,6 +312,7 @@ async function onExpressCheckout(event: PaymentEvent): Promise<void> {
 
     const [first, last] = splitName(name.value || props.clientName || 'Customer')
     const result = await charge(event.token, 'google_pay', first, last)
+    busy.value = false
 
     if (result !== true) {
         message.value = result
@@ -232,6 +320,15 @@ async function onExpressCheckout(event: PaymentEvent): Promise<void> {
 }
 
 onMounted(() => {
+    try {
+        if (sessionStorage.getItem(THREE_DS_NOTICE) === '1') {
+            sessionStorage.removeItem(THREE_DS_NOTICE)
+            message.value = FIXED['3ds_failed']
+        }
+    } catch {
+        // Storage blocked: no notice.
+    }
+
     if (!paymentEl.value) {
         return
     }
@@ -247,6 +344,11 @@ onMounted(() => {
             payButtonText: `Pay ${formatAmount(props.payment.amount, props.payment.currency)}`,
             onFieldsAvailable: () => {
                 ready.value = true
+
+                if (fieldsTimer) {
+                    clearTimeout(fieldsTimer)
+                    fieldsTimer = null
+                }
             },
             onPay,
             ...(wallets
@@ -266,16 +368,31 @@ onMounted(() => {
             threeDs = mountNmiThreeDSecure(threeDsEl.value, {
                 tokenizationKey: props.nmiAccount.tokenization_key,
                 modal: true,
+                onChallenge: clearThreeDsWatchdog,
                 onComplete: onThreeDsComplete,
                 onFailure: onThreeDsFailure,
             })
         }
-    } catch {
+
+        // If NMI's fields never appear (script blocked, offline, an extension), tell PayHub so it is not invisible.
+        fieldsTimer = setTimeout(() => {
+            if (!ready.value) {
+                void reportEvent('fields_not_loaded')
+            }
+        }, 15000)
+    } catch (e) {
         message.value = FIXED.error
+        void reportEvent('mount_failed', undefined, e instanceof Error ? e.message : undefined)
     }
 })
 
 onBeforeUnmount(() => {
+    clearThreeDsWatchdog()
+
+    if (fieldsTimer) {
+        clearTimeout(fieldsTimer)
+    }
+
     widget?.destroy()
     threeDs?.destroy()
 })
@@ -305,7 +422,7 @@ onBeforeUnmount(() => {
         <div v-if="!ready && !message" class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3" role="status" aria-label="Loading card fields">
             <div class="h-2.5 w-2/5 animate-pulse rounded-full bg-slate-200"></div>
         </div>
-        <div ref="paymentEl" class="sentry-block" :class="consentGiven ? '' : 'opacity-60'"></div>
+        <div ref="paymentEl" class="sentry-block" :class="[consentGiven ? '' : 'opacity-60', busy ? 'pointer-events-none opacity-60' : '']" :aria-busy="busy"></div>
         <div ref="threeDsEl" class="sentry-block"></div>
 
         <Alert v-if="message" variant="destructive">

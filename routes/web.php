@@ -444,6 +444,9 @@ Route::post('/pay/{payment}/nmi/charge', [NmiPaymentController::class, 'charge']
     ->middleware(['throttle:nmi-charge', 'throttle:nmi-3ds-report']);
 Route::get('/pay/{payment}/nmi/status', [NmiPaymentController::class, 'status'])
     ->name('pay.nmi.status');
+Route::post('/pay/{payment}/nmi/event', [NmiPaymentController::class, 'event'])
+    ->name('pay.nmi.event')
+    ->middleware('throttle:nmi-page-event');
 
 // Kurv hosted payment page pay thread (spec 0010), public (scoped by the payment UUID). The limiter keys
 // use the raw route string because throttle runs before route model binding.
