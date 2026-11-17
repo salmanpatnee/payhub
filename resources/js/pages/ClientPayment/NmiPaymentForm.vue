@@ -234,7 +234,7 @@ async function payOnce(event: PaymentEvent): Promise<true | string> {
         // The 3DS widget can fail without calling onFailure (for example a rejected lookup), which would leave
         // the spinner on forever. If nothing happens, and no challenge opened, treat it as a failed check.
         clearThreeDsWatchdog()
-        threeDsWatchdog = setTimeout(() => void failThreeDs('three_ds_timeout'), 10000)
+        threeDsWatchdog = setTimeout(() => void failThreeDs('three_ds_timeout'), 20000)
 
         try {
             threeDs?.startThreeDSecure({
