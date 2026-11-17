@@ -105,7 +105,7 @@ class NmiPaymentController extends Controller
         'fields_not_loaded' => 'Card fields did not load on the pay page',
         'mount_failed' => 'The card form could not start on the pay page',
         'three_ds_failed' => 'Customer failed or cancelled 3D Secure',
-        'three_ds_timeout' => '3D Secure gave no answer in 10 seconds',
+        'three_ds_timeout' => '3D Secure gave no answer in 20 seconds',
         'three_ds_error' => '3D Secure reported an error',
     ];
 
