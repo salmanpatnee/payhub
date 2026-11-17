@@ -112,6 +112,12 @@ class AppServiceProvider extends ServiceProvider
             return [Limit::perHour(20)->by('nmi-3ds-payment:'.($request->route('payment') ?? $request->ip()))->response($tooMany)];
         });
 
+        // Page diagnostics from the NMI pay page: a few per payment per hour is plenty.
+        RateLimiter::for('nmi-page-event', function (Request $request): array {
+            return [Limit::perHour(20)->by('nmi-event-payment:'.($request->route('payment') ?? $request->ip()))
+                ->response(fn () => response()->noContent())];
+        });
+
         RateLimiter::for('authorizenet-charge', function (Request $request): array {
             $tooMany = fn () => response()->json(['message' => 'Too many attempts. Please try again later.'], 429);
 

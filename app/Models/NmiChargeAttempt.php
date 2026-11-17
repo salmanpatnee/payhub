@@ -17,7 +17,7 @@ class NmiChargeAttempt extends Model
 
     protected $fillable = [
         'payment_id', 'sequence', 'method', 'status', 'response_code', 'reason',
-        'transaction_id', 'avs_result', 'cvv_result', 'three_ds_result',
+        'transaction_id', 'avs_result', 'cvv_result', 'three_ds_result', 'client_info',
     ];
 
     protected function casts(): array

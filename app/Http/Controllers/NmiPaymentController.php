@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\NmiEnvironment;
 use App\Enums\PaymentProvider;
 use App\Http\Requests\ChargeNmiRequest;
+use App\Http\Requests\NmiPageEventRequest;
 use App\Jobs\ResolveNmiCharge;
 use App\Models\NmiAccount;
 use App\Models\NmiChargeAttempt;
@@ -14,8 +15,10 @@ use App\Services\Nmi\NmiAmount;
 use App\Services\Nmi\NmiChargeResolver;
 use App\Services\Nmi\NmiClient;
 use App\Services\Nmi\NmiSaleReply;
+use App\Support\ClientInfo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -97,6 +100,59 @@ class NmiPaymentController extends Controller
         return response()->json(['status' => $payment->status]);
     }
 
+    /** Plain words for each page event, shown to operators only. */
+    private const EVENT_LABELS = [
+        'fields_not_loaded' => 'Card fields did not load on the pay page',
+        'mount_failed' => 'The card form could not start on the pay page',
+        'three_ds_failed' => 'Customer failed or cancelled 3D Secure',
+        'three_ds_timeout' => '3D Secure gave no answer in 10 seconds',
+        'three_ds_error' => '3D Secure reported an error',
+    ];
+
+    /**
+     * A diagnostic report from the pay page (a stalled form, a 3DS failure with NMI's own code). One
+     * attempt row, no payment change, never a lock: it only helps support see why a payer is stuck.
+     * Always answers 204 so the page never waits on it.
+     */
+    public function event(NmiPageEventRequest $request, Payment $payment): Response
+    {
+        if ($payment->provider !== PaymentProvider::Nmi || $payment->status !== 'pending') {
+            return response()->noContent();
+        }
+
+        $event = (string) $request->validated('event');
+
+        // The same event for the same payment within a minute is written once.
+        if (! Cache::add("nmi:event:{$payment->id}:{$event}", 1, 60)) {
+            return response()->noContent();
+        }
+
+        $code = $request->validated('code');
+        $detail = trim(implode(' ', array_filter([
+            $code ? "[{$code}]" : null,
+            $this->cleanText($request->validated('message')),
+        ])));
+        $reason = self::EVENT_LABELS[$event].($detail !== '' ? ': '.$detail : '');
+
+        $this->startAttempt(
+            $payment,
+            'card',
+            str_starts_with($event, 'three_ds') ? '3ds_failed' : 'page_issue',
+            Str::limit($reason, 250, ''),
+        );
+
+        return response()->noContent();
+    }
+
+    /** Text sent by the browser is untrusted: no control characters, no long digit runs, short. */
+    private function cleanText(?string $text): string
+    {
+        $text = (string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', (string) $text);
+        $text = (string) preg_replace('/\d{12,}/', '[number removed]', $text);
+
+        return trim(Str::limit($text, 200, ''));
+    }
+
     /**
      * A failed or cancelled 3DS check: only an attempt row is written. No lock, no gateway call,
      * no card lock count (AC-7, AC-11).
@@ -132,6 +188,8 @@ class NmiPaymentController extends Controller
 
         if ($reply->outcome === NmiSaleReply::APPROVED) {
             $reply = $this->readBack($payment, $reply);
+        } elseif ($reply->isDuplicateRefusal()) {
+            $reply = $this->settleDuplicate($payment, $reply);
         }
 
         $this->recordAttempt($attempt, $reply);
@@ -222,6 +280,35 @@ class NmiPaymentController extends Controller
     }
 
     /**
+     * NMI refused a repeat of the same card and amount (E_DUPLICATE). One lookup of this order decides:
+     * an approved sale means the payment is paid; no sale, or only a declined one, means nothing was charged
+     * and the customer gets a clear "wait or use another card" (the repeat was of another payment or a
+     * declined try). Anything else (a sale still pending, a lookup that failed) stays unclear.
+     */
+    private function settleDuplicate(Payment $payment, NmiSaleReply $reply): NmiSaleReply
+    {
+        try {
+            $outcome = app(NmiChargeResolver::class)->resolve($payment);
+        } catch (Throwable $e) {
+            Log::warning('NMI duplicate lookup failed', ['payment_id' => $payment->id, 'exception' => $e::class]);
+
+            return $reply;
+        }
+
+        $payment->refresh();
+
+        if ($outcome === NmiChargeResolver::OUTCOME_PAID && $payment->status === 'completed' && $payment->nmi_transaction_id !== null) {
+            return $reply->asApprovedTransaction((string) $payment->nmi_transaction_id);
+        }
+
+        if (in_array($outcome, [NmiChargeResolver::OUTCOME_NOT_FOUND, NmiChargeResolver::OUTCOME_DECLINED], true)) {
+            return $reply->withOutcome(NmiSaleReply::DUPLICATE);
+        }
+
+        return $reply;
+    }
+
+    /**
      * The attempt row for this call, or null when it could not be written. Diagnostic only: a failure
      * here must never stop a payer from paying.
      */
@@ -233,6 +320,7 @@ class NmiPaymentController extends Controller
                 'method' => $method,
                 'status' => $status,
                 'reason' => $reason,
+                'client_info' => ClientInfo::describe(request()->userAgent()),
             ]);
         } catch (Throwable $e) {
             Log::warning('NMI attempt row could not be created', ['payment_id' => $payment->id, 'exception' => $e::class]);
