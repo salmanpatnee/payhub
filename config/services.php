@@ -192,6 +192,48 @@ return [
         'three_ds_hosts' => ['https://secure.networkmerchants.com'],
     ],
 
+    'worldpay' => [
+        // Constants per environment, not secrets (spec 0014). Username, password, entity and the optional
+        // webhook secret live encrypted on worldpay_accounts. Hosts and values below come from step 0.
+        'hosts' => [
+            'try' => 'https://try.access.worldpay.com',
+            'live' => 'https://access.worldpay.com',
+        ],
+        // The hosted page may only be on one of these hosts (a bad reply must not become an open redirect).
+        // Try returned both for identical requests; the live host is still to confirm.
+        'hpp_hosts' => [
+            'try' => ['payments-test.worldpay.com', 'hpp-sandbox.worldpay.com'],
+            'live' => ['payments.worldpay.com'],
+        ],
+        'connect_timeout' => 10,
+        'timeout' => 30,
+        'lookup_timeout' => 10,
+        'checkout_lock_seconds' => 120,
+        'lookup_lock_seconds' => 60,
+        'resolver_deadline_seconds' => 45,
+        // Worldpay accepts 300 to 2592000 seconds. 72 hours, so one page normally lasts the whole payment.
+        'page_expiry_seconds' => 259200,
+        'page_grace_seconds' => 120,
+        // Raise only if a refusal turns out to kill the page (spec 0014 Follow-up).
+        'max_pages' => 1,
+        // Set true if the staging run shows the client can retry on the same page after a refusal.
+        'reuse_after_decline' => false,
+        'poll_lookup_seconds' => 10,
+        'min_age_seconds' => 120,
+        'lookup_gap_seconds' => 300,
+        'sweep_hours' => 72,
+        // Worldpay rejects more than 24 characters and anything outside a-z A-Z 0-9 - . , and space.
+        'narrative_max' => 24,
+        'narrative_pattern' => '/[^A-Za-z0-9\-., ]/',
+        // lastEvent spellings. Paid spellings are NOT proven yet (no Try payment has succeeded): check at the staging run.
+        'paid_events' => ['sentForSettlement', 'settled'],
+        'pending_events' => ['sentForAuthorization', 'authorized'],
+        'declined_events' => ['authorizationFailed', 'refused', 'cancelled', 'cancelledByCustomer'],
+        'closed_events' => ['expired', 'requestExpired'],
+        'error_events' => ['error', 'settlementFailed'],
+        'refund_events' => ['refunded', 'sentForRefund', 'chargedBack'],
+    ],
+
     // Card attempt lock (MPGS and Authorize.net): this many failed attempts pause the pay page.
     'card_lock' => [
         'max_attempts' => (int) env('CARD_LOCK_MAX_ATTEMPTS', 3),

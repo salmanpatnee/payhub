@@ -6,6 +6,7 @@ use App\Services\Authorizenet\AuthorizenetStalePaymentSweep;
 use App\Services\Kurv\KurvStalePaymentSweep;
 use App\Services\Mpgs\MpgsStaleAttemptSweep;
 use App\Services\Nmi\NmiStalePaymentSweep;
+use App\Services\Worldpay\WorldpayStalePaymentSweep;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -50,3 +51,8 @@ Schedule::call(new KurvStalePaymentSweep)
 
 // Ask Stripe whether each account can still take payments (spec 0004).
 Schedule::command('stripe:check-health')->everyFifteenMinutes()->withoutOverlapping();
+
+// Backstop for Worldpay payments (spec 0014, AC-11): looks again at payments whose newest hosted page is 2 minutes
+// to 72 hours old. Read only, never creates a page, works with the sync queue.
+Schedule::call(new WorldpayStalePaymentSweep)
+    ->name('worldpay:sweep-stale-payments')->everyTenMinutes()->withoutOverlapping();

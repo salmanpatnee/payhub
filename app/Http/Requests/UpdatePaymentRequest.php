@@ -48,7 +48,7 @@ class UpdatePaymentRequest extends FormRequest
             // Non-agents pick the account explicitly, which implies the provider.
             // Agents are routed server-side by currency (see agentAccountData()) so
             // neither field is required from them.
-            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop,kurv,nmi'],
+            'provider' => [Rule::requiredIf(! $isAgent), 'nullable', 'string', 'in:stripe,revolut,square,viva,clover,mpgs,authorizenet,whop,kurv,nmi,worldpay'],
             'account_id' => [
                 Rule::requiredIf(! $isAgent),
                 'nullable',
@@ -80,7 +80,7 @@ class UpdatePaymentRequest extends FormRequest
                         return;
                     }
 
-                    if ($value === SupportedCurrency::PKR->value && $provider !== 'kurv') {
+                    if ($value === SupportedCurrency::PKR->value && ! in_array($provider, ['kurv', 'worldpay'], true)) {
                         $fail('PKR is only supported on MPGS accounts that accept PKR.');
 
                         return;
@@ -90,6 +90,7 @@ class UpdatePaymentRequest extends FormRequest
                         'viva' => 'Viva payments must be in GBP.',
                         'clover' => 'This Clover account only accepts USD payments.',
                         'kurv' => 'This Kurv account only accepts USD payments.',
+                        'worldpay' => 'This Worldpay account only accepts GBP payments.',
                         'authorizenet' => "This Authorize.net account only accepts {$accountCurrency} payments.",
                         'nmi' => 'This NMI account only accepts '.strtoupper((string) $accountCurrency).' payments.',
                         default => "This Square account only accepts {$accountCurrency} payments.",
@@ -137,6 +138,8 @@ class UpdatePaymentRequest extends FormRequest
                 $payment->provider === PaymentProvider::Kurv && $payment->kurv_charge_started_at !== null && $payment->kurv_link_closed_at === null => ['kurv', 'kurv_account_id'],
                 // NMI (spec 0012, AC-13): locked from the first charge attempt.
                 $payment->provider === PaymentProvider::Nmi && $payment->nmi_first_attempt_at !== null => ['nmi', 'nmi_account_id'],
+                // Worldpay (spec 0014, AC-7): locked for good from the first hosted page.
+                $payment->provider === PaymentProvider::Worldpay && $payment->worldpay_charge_started_at !== null => ['worldpay', 'worldpay_account_id'],
                 default => [null, null],
             };
 
@@ -144,7 +147,7 @@ class UpdatePaymentRequest extends FormRequest
                 return;
             }
 
-            $brandChanged = in_array($provider, ['whop', 'kurv', 'nmi'], true) && $this->input('brand_id') !== null
+            $brandChanged = in_array($provider, ['whop', 'kurv', 'nmi', 'worldpay'], true) && $this->input('brand_id') !== null
                 && (int) $this->input('brand_id') !== $payment->brand_id;
 
             $changed = $brandChanged || (int) round(((float) $this->input('amount')) * 100) !== $payment->amount
@@ -197,6 +200,7 @@ class UpdatePaymentRequest extends FormRequest
         $data['whop_account_id'] = $provider === 'whop' ? $accountId : null;
         $data['kurv_account_id'] = $provider === 'kurv' ? $accountId : null;
         $data['nmi_account_id'] = $provider === 'nmi' ? $accountId : null;
+        $data['worldpay_account_id'] = $provider === 'worldpay' ? $accountId : null;
 
         return $data;
     }

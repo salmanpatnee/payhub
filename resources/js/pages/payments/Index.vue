@@ -407,6 +407,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                             <SelectItem value="whop">Whop</SelectItem>
                             <SelectItem value="kurv">Kurv</SelectItem>
                             <SelectItem value="nmi">NMI</SelectItem>
+                            <SelectItem value="worldpay">Worldpay</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>

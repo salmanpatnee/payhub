@@ -13,6 +13,7 @@ use App\Models\CloverAccount;
 use App\Models\KurvAccount;
 use App\Models\MpgsAccount;
 use App\Models\NmiAccount;
+use App\Models\WorldpayAccount;
 use App\Models\Payment;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
@@ -92,7 +93,7 @@ class PaymentController extends Controller
     {
         $canViewAll = $user->hasRole('admin') || $user->hasRole('account');
 
-        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'kurvAccount', 'nmiAccount', 'user', 'relationshipManager'])
+        $query = Payment::with(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'kurvAccount', 'nmiAccount', 'worldpayAccount', 'user', 'relationshipManager'])
             ->orderByDesc('created_at');
 
         if (! $canViewAll) {
@@ -292,7 +293,10 @@ class PaymentController extends Controller
         $nmi = NmiAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name', 'currency'])
             ->map(fn (NmiAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'nmi', 'currency' => $a->currency]);
 
-        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->concat($kurv)->concat($nmi)->values();
+        $worldpay = WorldpayAccount::where('is_active', true)->orderBy('account_name')->get(['id', 'account_name'])
+            ->map(fn (WorldpayAccount $a) => ['id' => $a->id, 'account_name' => $a->account_name, 'provider' => 'worldpay', 'currency' => 'gbp']);
+
+        return $stripe->concat($revolut)->concat($square)->concat($viva)->concat($clover)->concat($mpgs)->concat($authorizenet)->concat($whop)->concat($kurv)->concat($nmi)->concat($worldpay)->values();
     }
 
     /**
@@ -308,7 +312,7 @@ class PaymentController extends Controller
      * whichever branch happens to be last — see CLAUDE.md's warning about the
      * two Square CSV export bugs caused by exactly this pattern.
      *
-     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int, mpgs_account_id: ?int, authorizenet_account_id: ?int, whop_account_id: ?int, kurv_account_id: ?int, nmi_account_id: ?int}|null
+     * @return array{provider: string, stripe_account_id: ?int, revolut_account_id: ?int, square_account_id: ?int, viva_account_id: ?int, clover_account_id: ?int, mpgs_account_id: ?int, authorizenet_account_id: ?int, whop_account_id: ?int, kurv_account_id: ?int, nmi_account_id: ?int, worldpay_account_id: ?int}|null
      */
     private function agentAccountData(User $user, string $currency): ?array
     {
@@ -338,6 +342,7 @@ class PaymentController extends Controller
             'whop_account_id' => $provider === 'whop' ? $account->account_id : null,
             'kurv_account_id' => $provider === 'kurv' ? $account->account_id : null,
             'nmi_account_id' => $provider === 'nmi' ? $account->account_id : null,
+            'worldpay_account_id' => $provider === 'worldpay' ? $account->account_id : null,
         ];
     }
 
@@ -406,7 +411,7 @@ class PaymentController extends Controller
                 'uuid' => $payment->uuid,
                 'brand_id' => $payment->brand_id,
                 'provider' => $payment->provider->value,
-                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id ?? $payment->mpgs_account_id ?? $payment->authorizenet_account_id ?? $payment->whop_account_id ?? $payment->kurv_account_id ?? $payment->nmi_account_id,
+                'account_id' => $payment->stripe_account_id ?? $payment->revolut_account_id ?? $payment->square_account_id ?? $payment->viva_account_id ?? $payment->clover_account_id ?? $payment->mpgs_account_id ?? $payment->authorizenet_account_id ?? $payment->whop_account_id ?? $payment->kurv_account_id ?? $payment->nmi_account_id ?? $payment->worldpay_account_id,
                 'relationship_manager_id' => $payment->relationship_manager_id,
                 'currency' => $payment->currency,
                 // Cents → decimal string for the amount input.
@@ -483,6 +488,8 @@ class PaymentController extends Controller
             'kurv_account_id' => ['kurv_request_id', 'kurv_payment_url', 'kurv_payment_id', 'kurv_charge_started_at', 'kurv_last_lookup_at', 'kurv_link_closed_at'],
             // NMI's order id, transaction id and attempt times belong to the account that made them.
             'nmi_account_id' => ['nmi_order_id', 'nmi_transaction_id', 'nmi_first_attempt_at', 'nmi_last_attempt_at'],
+            // Worldpay's payment id and lookup times belong to the account that made them.
+            'worldpay_account_id' => ['worldpay_payment_id', 'worldpay_charge_started_at', 'worldpay_last_lookup_at'],
         ];
 
         $cleared = [];
@@ -532,6 +539,13 @@ class PaymentController extends Controller
     {
         Gate::authorize('delete', $payment);
 
+        // A Worldpay payment that has a hosted page can no longer be removed, for good (spec 0014, AC-7).
+        if ($payment->provider === PaymentProvider::Worldpay && $payment->worldpay_charge_started_at !== null) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => 'This payment has a Worldpay payment page and cannot be deleted.']);
+
+            return redirect()->back();
+        }
+
         // A payment NMI may already have charged cannot be removed (spec 0012, AC-13).
         if ($payment->provider === PaymentProvider::Nmi && $payment->nmi_first_attempt_at !== null) {
             Inertia::flash('toast', ['type' => 'error', 'message' => 'This payment has been tried at NMI and cannot be deleted.']);
@@ -574,7 +588,7 @@ class PaymentController extends Controller
     public function show(Payment $payment): Response
     {
         Gate::authorize('view', $payment);
-        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'kurvAccount', 'nmiAccount', 'relationshipManager']);
+        $payment->loadMissing(['brand', 'stripeAccount', 'revolutAccount', 'squareAccount', 'vivaAccount', 'cloverAccount', 'mpgsAccount', 'authorizenetAccount', 'whopAccount', 'kurvAccount', 'nmiAccount', 'worldpayAccount', 'relationshipManager']);
 
         $user = auth()->user();
         $canViewStripeAccount = $user->hasRole('admin') || $user->hasRole('account');
@@ -614,6 +628,7 @@ class PaymentController extends Controller
                     PaymentProvider::Whop => $payment->whop_payment_id,
                     PaymentProvider::Kurv => $payment->kurv_payment_id ?? $payment->kurv_request_id,
                     PaymentProvider::Nmi => $payment->nmi_transaction_id ?? $payment->nmi_order_id,
+                    PaymentProvider::Worldpay => $payment->worldpay_payment_id ?? $payment->worldpayPages()->orderByDesc('sequence')->value('transaction_reference'),
                 },
                 'paid_at' => $payment->paid_at?->toISOString(),
                 'expires_at' => $payment->expires_at?->toISOString(),
@@ -710,6 +725,31 @@ class PaymentController extends Controller
                     'kurv_request_id' => $payment->kurv_request_id,
                     'kurv_payment_id' => $payment->kurv_payment_id,
                     'charge_started_at' => $payment->kurv_charge_started_at?->toISOString(),
+                ],
+            ],
+            // Worldpay (spec 0014, AC-9): one row per page per lookup, newest first, with where it came from.
+            PaymentProvider::Worldpay => [
+                'provider' => 'worldpay',
+                'rows' => $payment->worldpayLookupAttempts()
+                    ->with('page:id,transaction_reference')
+                    ->orderByDesc('last_checked_at')
+                    ->orderByDesc('id')
+                    ->limit(100)
+                    ->get()
+                    ->map(fn ($attempt) => [
+                        'sequence' => $attempt->id,
+                        'reference' => $attempt->page?->transaction_reference,
+                        'status' => $attempt->outcome,
+                        'status_detail' => $attempt->last_event,
+                        'reason' => $attempt->reason,
+                        'source' => $attempt->source,
+                        'started_at' => ($attempt->last_checked_at ?? $attempt->created_at)?->toISOString(),
+                    ])
+                    ->all(),
+                'summary' => [
+                    'worldpay_payment_id' => $payment->worldpay_payment_id,
+                    'page_count' => $payment->worldpayPages()->count(),
+                    'charge_started_at' => $payment->worldpay_charge_started_at?->toISOString(),
                 ],
             ],
             default => null,
