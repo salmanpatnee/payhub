@@ -39,6 +39,8 @@ const name = ref(props.clientName)
 const nameError = ref<string | undefined>(undefined)
 const message = ref<string | null>(null)
 const ready = ref(false)
+const busy = ref(false)
+let inFlight: Promise<true | string> | null = null
 
 const paymentEl = ref<HTMLElement | null>(null)
 const threeDsEl = ref<HTMLElement | null>(null)
@@ -163,8 +165,26 @@ async function reportThreeDsFailure(method: Method, first: string, last: string)
     }
 }
 
+/**
+ * The widget has no way to disable its Pay button, so a second click during a payment gets the first one's
+ * result instead of starting another charge. `busy` also blocks clicks on the widget while it runs.
+ */
+function onPay(event: PaymentEvent): Promise<true | string> {
+    if (inFlight) {
+        return inFlight
+    }
+
+    busy.value = true
+    inFlight = payOnce(event).finally(() => {
+        inFlight = null
+        busy.value = false
+    })
+
+    return inFlight
+}
+
 /** The card path: consent, name, then 3DS (when on) before the server charge. */
-async function onPay(event: PaymentEvent): Promise<true | string> {
+async function payOnce(event: PaymentEvent): Promise<true | string> {
     message.value = null
     nameError.value = undefined
 
@@ -192,7 +212,7 @@ async function onPay(event: PaymentEvent): Promise<true | string> {
         // The 3DS widget can fail without calling onFailure (for example a rejected lookup), which would leave
         // the spinner on forever. If nothing happens, and no challenge opened, treat it as a failed check.
         clearThreeDsWatchdog()
-        threeDsWatchdog = setTimeout(() => void onThreeDsFailure(), 30000)
+        threeDsWatchdog = setTimeout(() => void onThreeDsFailure(), 10000)
 
         try {
             threeDs?.startThreeDSecure({
@@ -248,10 +268,16 @@ async function onThreeDsFailure(): Promise<void> {
 
 /** Google Pay: the wallet token is charged without 3DS (AC-6). Consent is recorded first. */
 async function onExpressCheckout(event: PaymentEvent): Promise<void> {
+    if (busy.value) {
+        return
+    }
+
+    busy.value = true
     message.value = null
 
     if (!(await props.beforeCharge())) {
         message.value = 'Please agree to the policies below before paying.'
+        busy.value = false
         resetForm()
 
         return
@@ -259,6 +285,7 @@ async function onExpressCheckout(event: PaymentEvent): Promise<void> {
 
     const [first, last] = splitName(name.value || props.clientName || 'Customer')
     const result = await charge(event.token, 'google_pay', first, last)
+    busy.value = false
 
     if (result !== true) {
         message.value = result
@@ -350,7 +377,7 @@ onBeforeUnmount(() => {
         <div v-if="!ready && !message" class="flex h-[44px] items-center rounded-xl border border-slate-200 bg-white px-3" role="status" aria-label="Loading card fields">
             <div class="h-2.5 w-2/5 animate-pulse rounded-full bg-slate-200"></div>
         </div>
-        <div ref="paymentEl" class="sentry-block" :class="consentGiven ? '' : 'opacity-60'"></div>
+        <div ref="paymentEl" class="sentry-block" :class="[consentGiven ? '' : 'opacity-60', busy ? 'pointer-events-none opacity-60' : '']" :aria-busy="busy"></div>
         <div ref="threeDsEl" class="sentry-block"></div>
 
         <Alert v-if="message" variant="destructive">
