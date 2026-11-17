@@ -19,6 +19,9 @@ final class NmiSaleReply
 
     public const ERROR = 'error';
 
+    /** NMI refused a repeat of the same card and amount and no sale exists for this order. Nothing was charged. */
+    public const DUPLICATE = 'duplicate';
+
     /** Decline codes that mean the typed card details were wrong (NMI response codes, to confirm in the sandbox). */
     private const CHECK_DETAIL_CODES = [220, 221, 222, 223, 224, 225];
 
@@ -59,6 +62,7 @@ final class NmiSaleReply
         self::CHECK_DETAILS => 'Please check your card details and try again.',
         self::UNCLEAR => 'We are confirming your payment. Please do not pay again.',
         self::ERROR => 'Your payment could not be processed. Please try again or use a different card.',
+        self::DUPLICATE => 'This card was just tried for the same amount. Please wait a few minutes or use a different card.',
     ];
 
     /**
@@ -134,6 +138,18 @@ final class NmiSaleReply
     public function asUnclear(): self
     {
         return $this->withOutcome(self::UNCLEAR);
+    }
+
+    /** True when NMI answered E_DUPLICATE: an identical sale was seen a moment ago, so one may exist. */
+    public function isDuplicateRefusal(): bool
+    {
+        return ($this->detail['error_code'] ?? null) === 'E_DUPLICATE';
+    }
+
+    /** The duplicate refusal is settled: a lookup found the order's approved sale. */
+    public function asApprovedTransaction(string $transactionId): self
+    {
+        return new self(self::APPROVED, $transactionId, $this->detail);
     }
 
     /** A plain operator reason for the attempt row. Never shown to the client. */

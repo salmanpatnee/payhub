@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { mountNmiPayments, mountNmiThreeDSecure } from '@nmipayments/nmi-pay'
-import type { PaymentEvent, ThreeDSecureCompleteEvent } from '@nmipayments/nmi-pay'
+import type { PaymentEvent, ThreeDSecureCompleteEvent, ThreeDSecureFailureEvent } from '@nmipayments/nmi-pay'
 import { AlertCircle } from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -23,13 +23,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{ outcome: [outcome: 'approved' | 'unclear'] }>()
 
-type Outcome = 'approved' | 'declined' | 'check_details' | 'unclear' | 'error' | '3ds_failed'
+type Outcome = 'approved' | 'declined' | 'check_details' | 'unclear' | 'error' | '3ds_failed' | 'duplicate'
 type Method = 'card' | 'google_pay'
 
 const FIXED: Record<string, string> = {
     declined: 'Your card was declined. Please try a different card.',
     check_details: 'Please check your card details and try again.',
     error: 'Your payment could not be processed. Please try again or use a different card.',
+    duplicate: 'This card was just tried for the same amount. Please wait a few minutes or use a different card.',
     '3ds_failed': 'We could not verify your card. Please try again or use a different card.',
     name: 'Please enter the name on your card.',
     rate: 'Too many attempts. Please wait a while, or contact your representative for help.',
@@ -48,6 +49,7 @@ let widget: ReturnType<typeof mountNmiPayments> | null = null
 let threeDs: ReturnType<typeof mountNmiThreeDSecure> | null = null
 const THREE_DS_NOTICE = 'nmi-3ds-failed'
 let threeDsWatchdog: ReturnType<typeof setTimeout> | null = null
+let fieldsTimer: ReturnType<typeof setTimeout> | null = null
 // Settles the Payment Component's pay button once the charge (or the 3DS step) is over.
 let settlePay: ((result: true | string) => void) | null = null
 let pendingToken = ''
@@ -153,12 +155,32 @@ async function charge(token: string, method: Method, first: string, last: string
     }
 }
 
-async function reportThreeDsFailure(method: Method, first: string, last: string): Promise<void> {
+type PageEvent = 'fields_not_loaded' | 'mount_failed' | 'three_ds_failed' | 'three_ds_timeout' | 'three_ds_error'
+
+const reportedEvents = new Set<PageEvent>()
+
+/**
+ * Tells PayHub what went wrong on this page so support can see it in the attempts panel (the customer cannot
+ * share a console log). Only an event name and NMI's own error code and message: never a card value, the
+ * token, the name or the amount. Sent once per kind per page load; `keepalive` lets it survive a reload.
+ */
+async function reportEvent(event: PageEvent, code?: string, text?: string): Promise<void> {
+    if (reportedEvents.has(event)) {
+        return
+    }
+
+    reportedEvents.add(event)
+
     try {
-        await fetch(`/pay/${props.payment.uuid}/nmi/charge`, {
+        await fetch(`/pay/${props.payment.uuid}/nmi/event`, {
             method: 'POST',
             headers: csrfHeaders(),
-            body: JSON.stringify({ three_ds_failed: true, method, first_name: first, last_name: last }),
+            keepalive: true,
+            body: JSON.stringify({
+                event,
+                ...(code && /^[A-Za-z0-9_.:-]{1,40}$/.test(code) ? { code } : {}),
+                ...(text ? { message: String(text).slice(0, 500) } : {}),
+            }),
         })
     } catch {
         // Diagnostic only: the customer still sees the fixed failure message.
@@ -212,7 +234,7 @@ async function payOnce(event: PaymentEvent): Promise<true | string> {
         // The 3DS widget can fail without calling onFailure (for example a rejected lookup), which would leave
         // the spinner on forever. If nothing happens, and no challenge opened, treat it as a failed check.
         clearThreeDsWatchdog()
-        threeDsWatchdog = setTimeout(() => void onThreeDsFailure(), 10000)
+        threeDsWatchdog = setTimeout(() => void failThreeDs('three_ds_timeout'), 10000)
 
         try {
             threeDs?.startThreeDSecure({
@@ -222,8 +244,8 @@ async function payOnce(event: PaymentEvent): Promise<true | string> {
                 firstName: first,
                 lastName: last,
             })
-        } catch {
-            void onThreeDsFailure()
+        } catch (e) {
+            void failThreeDs('three_ds_error', undefined, e instanceof Error ? e.message : undefined)
         }
     })
 }
@@ -243,7 +265,12 @@ async function onThreeDsComplete(result: ThreeDSecureCompleteEvent): Promise<voi
     settlePay = null
 }
 
-async function onThreeDsFailure(): Promise<void> {
+/** NMI's own failure callback, with its code and message when it gives them. */
+function onThreeDsFailure(e?: ThreeDSecureFailureEvent): Promise<void> {
+    return failThreeDs('three_ds_failed', e?.code, e?.message)
+}
+
+async function failThreeDs(kind: 'three_ds_failed' | 'three_ds_timeout' | 'three_ds_error', code?: string, text?: string): Promise<void> {
     clearThreeDsWatchdog()
 
     if (!settlePay) {
@@ -251,7 +278,7 @@ async function onThreeDsFailure(): Promise<void> {
     }
 
     // No charge is sent when 3DS fails or is cancelled; only a report so the attempt shows to admins.
-    await reportThreeDsFailure('card', pendingName[0], pendingName[1])
+    await reportEvent(kind, code, text)
 
     // NMI's 3DS widget cannot be started twice and has no public unmount, so a second card on the same page
     // would hang. Start clean with a reload and show the message again afterwards.
@@ -317,6 +344,11 @@ onMounted(() => {
             payButtonText: `Pay ${formatAmount(props.payment.amount, props.payment.currency)}`,
             onFieldsAvailable: () => {
                 ready.value = true
+
+                if (fieldsTimer) {
+                    clearTimeout(fieldsTimer)
+                    fieldsTimer = null
+                }
             },
             onPay,
             ...(wallets
@@ -341,13 +373,26 @@ onMounted(() => {
                 onFailure: onThreeDsFailure,
             })
         }
-    } catch {
+
+        // If NMI's fields never appear (script blocked, offline, an extension), tell PayHub so it is not invisible.
+        fieldsTimer = setTimeout(() => {
+            if (!ready.value) {
+                void reportEvent('fields_not_loaded')
+            }
+        }, 15000)
+    } catch (e) {
         message.value = FIXED.error
+        void reportEvent('mount_failed', undefined, e instanceof Error ? e.message : undefined)
     }
 })
 
 onBeforeUnmount(() => {
     clearThreeDsWatchdog()
+
+    if (fieldsTimer) {
+        clearTimeout(fieldsTimer)
+    }
+
     widget?.destroy()
     threeDs?.destroy()
 })

@@ -677,6 +677,7 @@ class PaymentController extends Controller
                         'reference' => $attempt->transaction_id,
                         'status' => $attempt->status,
                         'reason' => $attempt->reason,
+                        'client_info' => $attempt->client_info,
                         'started_at' => $attempt->created_at->toISOString(),
                     ])
                     ->all(),

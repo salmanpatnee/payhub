@@ -158,16 +158,78 @@ it('maps card detail codes to check_details', function () {
     chargeNmi($payment)->assertOk()->assertJson(['outcome' => 'check_details']);
 });
 
-it('treats a duplicate sale as unclear, keeps the pause and queues a lookup', function () {
+it('keeps a duplicate sale unclear when the lookup cannot settle it, keeps the pause and queues a lookup', function () {
     Queue::fake();
     $payment = nmiPayment();
-    fakeNmi([['type' => 'inputError', 'error_code' => 'E_DUPLICATE', 'message' => 'Duplicate transaction'], 400]);
+    // The lookup answers with a sale that is still processing, so PayHub cannot say nothing was charged.
+    Http::fake([
+        'sandbox.nmi.com/api/v5/payments/sale' => Http::response(['type' => 'inputError', 'error_code' => 'E_DUPLICATE', 'message' => 'Duplicate transaction'], 400),
+        'sandbox.nmi.com/api/query.php' => function () use ($payment) {
+            $order = Payment::find($payment->id)->nmi_order_id;
+
+            return Http::response(nmiXml(nmiXmlTransaction('9001', $order, 'pending')));
+        },
+    ]);
 
     chargeNmi($payment)->assertOk()->assertJson(['outcome' => 'unclear']);
 
     expect(Cache::has("nmi:pause:{$payment->id}"))->toBeTrue();
     Queue::assertPushed(ResolveNmiCharge::class);
     chargeNmi($payment)->assertStatus(409)->assertJson(['outcome' => 'unclear']);
+});
+
+it('ends a duplicate refusal with a clear message when NMI has no sale for the order', function () {
+    Queue::fake();
+    $payment = nmiPayment();
+    fakeNmi([['type' => 'inputError', 'error_code' => 'E_DUPLICATE', 'message' => 'Duplicate transaction'], 400]);
+
+    chargeNmi($payment)->assertOk()->assertJson([
+        'outcome' => 'duplicate',
+        'message' => 'This card was just tried for the same amount. Please wait a few minutes or use a different card.',
+    ]);
+
+    expect(Cache::has("nmi:pause:{$payment->id}"))->toBeFalse()
+        ->and($payment->fresh()->status)->toBe('pending')
+        ->and($payment->nmiChargeAttempts()->first()->status)->toBe('duplicate')
+        ->and(app(CardLockGuard::class)->isLocked($payment->fresh()))->toBeFalse();
+    Queue::assertNotPushed(ResolveNmiCharge::class);
+
+    // The customer can try again straight away: the pause is gone, so this is not answered with a 409.
+    chargeNmi($payment)->assertOk()->assertJson(['outcome' => 'duplicate']);
+});
+
+it('ends a duplicate refusal as duplicate when the only sale for the order was declined', function () {
+    Queue::fake();
+    $payment = nmiPayment();
+    Http::fake([
+        'sandbox.nmi.com/api/v5/payments/sale' => Http::response(['type' => 'inputError', 'error_code' => 'E_DUPLICATE', 'message' => 'Duplicate transaction'], 400),
+        'sandbox.nmi.com/api/query.php' => function () use ($payment) {
+            $order = Payment::find($payment->id)->nmi_order_id;
+
+            return Http::response(nmiXml(nmiXmlTransaction('9003', $order, 'failed', success: false)));
+        },
+    ]);
+
+    chargeNmi($payment)->assertOk()->assertJson(['outcome' => 'duplicate']);
+
+    expect($payment->fresh()->status)->toBe('pending');
+});
+
+it('completes the payment when a duplicate refusal finds the order already approved', function () {
+    $payment = nmiPayment();
+    Http::fake([
+        'sandbox.nmi.com/api/v5/payments/sale' => Http::response(['type' => 'inputError', 'error_code' => 'E_DUPLICATE', 'message' => 'Duplicate transaction'], 400),
+        'sandbox.nmi.com/api/query.php' => function () use ($payment) {
+            $order = Payment::find($payment->id)->nmi_order_id;
+
+            return Http::response(nmiXml(nmiXmlTransaction('9004', $order)));
+        },
+    ]);
+
+    chargeNmi($payment)->assertOk()->assertJson(['outcome' => 'approved']);
+
+    expect($payment->fresh()->status)->toBe('completed')
+        ->and($payment->fresh()->nmi_transaction_id)->toBe('9004');
 });
 
 it('sets the pause before the sale call so a timed out sale cannot be sent twice', function () {
