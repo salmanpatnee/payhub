@@ -207,6 +207,25 @@ async function onPay(event: PaymentEvent): Promise<true | string> {
     })
 }
 
+/**
+ * NMI allows one 3DS instance at a time: a second start on the same one fails ("You may not start another
+ * 3DS instance") and shows nothing. So the widget is mounted fresh on load and again after every result.
+ */
+function mountThreeDs(): void {
+    if (!props.nmiAccount.three_ds_enabled || !threeDsEl.value) {
+        return
+    }
+
+    threeDs?.destroy()
+    threeDs = mountNmiThreeDSecure(threeDsEl.value, {
+        tokenizationKey: props.nmiAccount.tokenization_key,
+        modal: true,
+        onChallenge: clearThreeDsWatchdog,
+        onComplete: onThreeDsComplete,
+        onFailure: onThreeDsFailure,
+    })
+}
+
 function clearThreeDsWatchdog(): void {
     if (threeDsWatchdog) {
         clearTimeout(threeDsWatchdog)
@@ -217,6 +236,7 @@ function clearThreeDsWatchdog(): void {
 async function onThreeDsComplete(result: ThreeDSecureCompleteEvent): Promise<void> {
     clearThreeDsWatchdog()
     const outcome = await charge(pendingToken, 'card', pendingName[0], pendingName[1], result)
+    mountThreeDs()
 
     settlePay?.(outcome)
     settlePay = null
@@ -232,6 +252,7 @@ async function onThreeDsFailure(): Promise<void> {
     // No charge is sent when 3DS fails or is cancelled; only a report so the attempt shows to admins.
     await reportThreeDsFailure('card', pendingName[0], pendingName[1])
     resetForm()
+    mountThreeDs()
     settlePay?.(FIXED['3ds_failed'])
     settlePay = null
 }
@@ -286,15 +307,7 @@ onMounted(() => {
                 : {}),
         })
 
-        if (props.nmiAccount.three_ds_enabled && threeDsEl.value) {
-            threeDs = mountNmiThreeDSecure(threeDsEl.value, {
-                tokenizationKey: props.nmiAccount.tokenization_key,
-                modal: true,
-                onChallenge: clearThreeDsWatchdog,
-                onComplete: onThreeDsComplete,
-                onFailure: onThreeDsFailure,
-            })
-        }
+        mountThreeDs()
     } catch {
         message.value = FIXED.error
     }
