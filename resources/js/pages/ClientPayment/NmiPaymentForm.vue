@@ -44,6 +44,7 @@ const paymentEl = ref<HTMLElement | null>(null)
 const threeDsEl = ref<HTMLElement | null>(null)
 let widget: ReturnType<typeof mountNmiPayments> | null = null
 let threeDs: ReturnType<typeof mountNmiThreeDSecure> | null = null
+const THREE_DS_NOTICE = 'nmi-3ds-failed'
 let threeDsWatchdog: ReturnType<typeof setTimeout> | null = null
 // Settles the Payment Component's pay button once the charge (or the 3DS step) is over.
 let settlePay: ((result: true | string) => void) | null = null
@@ -207,25 +208,6 @@ async function onPay(event: PaymentEvent): Promise<true | string> {
     })
 }
 
-/**
- * NMI allows one 3DS instance at a time: a second start on the same one fails ("You may not start another
- * 3DS instance") and shows nothing. So the widget is mounted fresh on load and again after every result.
- */
-function mountThreeDs(): void {
-    if (!props.nmiAccount.three_ds_enabled || !threeDsEl.value) {
-        return
-    }
-
-    threeDs?.destroy()
-    threeDs = mountNmiThreeDSecure(threeDsEl.value, {
-        tokenizationKey: props.nmiAccount.tokenization_key,
-        modal: true,
-        onChallenge: clearThreeDsWatchdog,
-        onComplete: onThreeDsComplete,
-        onFailure: onThreeDsFailure,
-    })
-}
-
 function clearThreeDsWatchdog(): void {
     if (threeDsWatchdog) {
         clearTimeout(threeDsWatchdog)
@@ -236,7 +218,6 @@ function clearThreeDsWatchdog(): void {
 async function onThreeDsComplete(result: ThreeDSecureCompleteEvent): Promise<void> {
     clearThreeDsWatchdog()
     const outcome = await charge(pendingToken, 'card', pendingName[0], pendingName[1], result)
-    mountThreeDs()
 
     settlePay?.(outcome)
     settlePay = null
@@ -251,10 +232,18 @@ async function onThreeDsFailure(): Promise<void> {
 
     // No charge is sent when 3DS fails or is cancelled; only a report so the attempt shows to admins.
     await reportThreeDsFailure('card', pendingName[0], pendingName[1])
-    resetForm()
-    mountThreeDs()
+
+    // NMI's 3DS widget cannot be started twice and has no public unmount, so a second card on the same page
+    // would hang. Start clean with a reload and show the message again afterwards.
+    try {
+        sessionStorage.setItem(THREE_DS_NOTICE, '1')
+    } catch {
+        // No storage: the reload still happens, only the message is lost.
+    }
+
     settlePay?.(FIXED['3ds_failed'])
     settlePay = null
+    window.location.reload()
 }
 
 /** Google Pay: the wallet token is charged without 3DS (AC-6). Consent is recorded first. */
@@ -277,6 +266,15 @@ async function onExpressCheckout(event: PaymentEvent): Promise<void> {
 }
 
 onMounted(() => {
+    try {
+        if (sessionStorage.getItem(THREE_DS_NOTICE) === '1') {
+            sessionStorage.removeItem(THREE_DS_NOTICE)
+            message.value = FIXED['3ds_failed']
+        }
+    } catch {
+        // Storage blocked: no notice.
+    }
+
     if (!paymentEl.value) {
         return
     }
@@ -307,7 +305,15 @@ onMounted(() => {
                 : {}),
         })
 
-        mountThreeDs()
+        if (props.nmiAccount.three_ds_enabled && threeDsEl.value) {
+            threeDs = mountNmiThreeDSecure(threeDsEl.value, {
+                tokenizationKey: props.nmiAccount.tokenization_key,
+                modal: true,
+                onChallenge: clearThreeDsWatchdog,
+                onComplete: onThreeDsComplete,
+                onFailure: onThreeDsFailure,
+            })
+        }
     } catch {
         message.value = FIXED.error
     }
