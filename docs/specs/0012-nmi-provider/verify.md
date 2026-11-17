@@ -13,7 +13,7 @@ _Steps derived from spec 0012 acceptance criteria. `/check verify` runs these; `
 - [x] Pay with sandbox card 4111 1111 1111 1111 (no 3DS) → success page, payment `completed` (email points skipped, decided 2026-11-14) → AC-7, AC-8, AC-9
 - [x] Pay with a sandbox decline amount (0.01 or 0.99) → "Your card was declined. Please try a different card.", form stays, payment still `pending`, attempt row shows `declined` → AC-9, AC-11, AC-12
 - [x] Decline three times → "Payment paused" notice (card lock); admin can release it → AC-12
-- [x] Turn 3DS on, pay with a Test 3DS card, pass the challenge → success; fail the challenge → "We could not verify your card…", no sale in NMI, attempt row `3ds_failed` → AC-6
+- [x] Turn 3DS on, pay with `4100000000000100` (frictionless) or `4100000000005000` (challenge, code `12345`), expiry `10/29`, any CVV (not the support article's `4000...` cards, see `docs/research/nmi-sandbox-check.md`), pass the challenge → success; fail the challenge → "We could not verify your card…", no sale in NMI, attempt row `3ds_failed` → AC-6
 - [ ] Turn Google Pay on, pay with Google Pay → success without a 3DS step; record the Google Pay and 3DS hosts the browser blocks, then fix config → AC-5, AC-16
 - [x] Close the tab right after paying, reopen the link → redirected to the success page → AC-10
 - [x] During a real charge (browser fetch/XHR capture, request and response bodies, plus the page HTML and props) → the private key never appears; the card goes only to NMI frames and the token to our charge call (checked by hash, with a positive control; request headers are not visible to page scripts) → AC-5

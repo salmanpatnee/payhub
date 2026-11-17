@@ -22,6 +22,13 @@ Run on 2026-11-13 against the sandbox merchant, with the v5 private key read fro
 - **GBP**: this sandbox processor answers "cc payment type [Visa] and/or currency [GBP] is not accepted". GBP cannot be tested here until Beyond Bancard or the portal enables it.
 - **Sale reply has no top level order id**: the reply `order_details` holds `ip_address`, `tax`, `shipping`. Use `query.php` for the order id check.
 
+## 3DS test cards that work on the pay page (browser runs 2026-11-17)
+
+- **Works**: `4100000000000100` (frictionless success), expiry `10/29`, any CVV. Challenge card `4100000000005000`, code `12345` passes (from NMI's Payment Component docs).
+- **Does not work here**: the support article's 3DS2 list (`4000000000002701` and the rest, expiry `08/2030`, CVV `999`). With 3DS on, `4000000000002701` gave no answer from the 3DS widget on fresh payments, so the page showed "3D Secure gave no answer". Do not use that list to test this page.
+- **Generic cards fail with 3DS on**: `371111111111114`, `4111111111111111` and the other generic PANs are rejected at the 3DS step ("Sandbox testing requires supported test card numbers"). Use them only with 3DS off.
+- **NMI's duplicate rule**: the same card and amount sent again shortly after a sale is refused with `E_DUPLICATE`. When retesting, change the amount.
+
 ## Still open (needs a real browser run of the Payment Component)
 
 - 5. Google Pay hosts, and whether it works in the sandbox.
