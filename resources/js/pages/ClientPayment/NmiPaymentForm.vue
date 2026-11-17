@@ -44,6 +44,7 @@ const paymentEl = ref<HTMLElement | null>(null)
 const threeDsEl = ref<HTMLElement | null>(null)
 let widget: ReturnType<typeof mountNmiPayments> | null = null
 let threeDs: ReturnType<typeof mountNmiThreeDSecure> | null = null
+let threeDsWatchdog: ReturnType<typeof setTimeout> | null = null
 // Settles the Payment Component's pay button once the charge (or the 3DS step) is over.
 let settlePay: ((result: true | string) => void) | null = null
 let pendingToken = ''
@@ -187,17 +188,34 @@ async function onPay(event: PaymentEvent): Promise<true | string> {
 
     return new Promise<true | string>((resolve) => {
         settlePay = resolve
-        threeDs?.startThreeDSecure({
-            paymentToken: event.token,
-            currency: props.payment.currency.toUpperCase(),
-            amount: decimalAmount(props.payment.amount),
-            firstName: first,
-            lastName: last,
-        })
+        // The 3DS widget can fail without calling onFailure (for example a rejected lookup), which would leave
+        // the spinner on forever. If nothing happens, and no challenge opened, treat it as a failed check.
+        clearThreeDsWatchdog()
+        threeDsWatchdog = setTimeout(() => void onThreeDsFailure(), 30000)
+
+        try {
+            threeDs?.startThreeDSecure({
+                paymentToken: event.token,
+                currency: props.payment.currency.toUpperCase(),
+                amount: decimalAmount(props.payment.amount),
+                firstName: first,
+                lastName: last,
+            })
+        } catch {
+            void onThreeDsFailure()
+        }
     })
 }
 
+function clearThreeDsWatchdog(): void {
+    if (threeDsWatchdog) {
+        clearTimeout(threeDsWatchdog)
+        threeDsWatchdog = null
+    }
+}
+
 async function onThreeDsComplete(result: ThreeDSecureCompleteEvent): Promise<void> {
+    clearThreeDsWatchdog()
     const outcome = await charge(pendingToken, 'card', pendingName[0], pendingName[1], result)
 
     settlePay?.(outcome)
@@ -205,6 +223,12 @@ async function onThreeDsComplete(result: ThreeDSecureCompleteEvent): Promise<voi
 }
 
 async function onThreeDsFailure(): Promise<void> {
+    clearThreeDsWatchdog()
+
+    if (!settlePay) {
+        return // already settled (a late event after the watchdog)
+    }
+
     // No charge is sent when 3DS fails or is cancelled; only a report so the attempt shows to admins.
     await reportThreeDsFailure('card', pendingName[0], pendingName[1])
     resetForm()
@@ -266,6 +290,7 @@ onMounted(() => {
             threeDs = mountNmiThreeDSecure(threeDsEl.value, {
                 tokenizationKey: props.nmiAccount.tokenization_key,
                 modal: true,
+                onChallenge: clearThreeDsWatchdog,
                 onComplete: onThreeDsComplete,
                 onFailure: onThreeDsFailure,
             })
@@ -276,6 +301,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+    clearThreeDsWatchdog()
     widget?.destroy()
     threeDs?.destroy()
 })
