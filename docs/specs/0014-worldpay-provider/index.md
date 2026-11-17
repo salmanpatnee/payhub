@@ -1,0 +1,234 @@
+# 0014. Worldpay as a payment provider, using Hosted Payment Pages (Access Worldpay)
+
+**Date**: 2026-11-17
+**Status**: Proposed
+
+## Summary
+
+This spec adds Worldpay (the Access Worldpay REST platform) as a new PayHub provider, after Bank of America (spec 0013, not built yet). PayHub's server asks Worldpay for a hosted payment page built from the amount on its own payment record, then sends the client to Worldpay's page to pay by card. Worldpay's signed webhook needs a Worldpay Implementation Manager, which a small merchant account may not have, so status comes from a read only lookup (Payment Queries API) that the pay page poll, a 10 minute sweep and an optional signed webhook all trigger. A payment becomes `completed` only after PayHub reads a settled sale from Worldpay for the exact amount in GBP. This is a scoped exception to "status comes from webhooks only", the same family as Kurv, NMI and MPGS. v1 is GBP only, cards through Worldpay's own page, with no card fields on PayHub's page.
+
+## Requirements
+
+**User stories**:
+- As an admin, I want to add, test, activate and deactivate a Worldpay account (username, password, entity) the same way as the other providers.
+- As an agent, I want to create a GBP payment link against an active Worldpay account.
+- As a client, I want to agree to the terms, go to Worldpay's page, pay, come back and see a clear result, even if I open the link again an hour later.
+- As the business, I want a payment marked paid only after PayHub's own server has read one settled sale for the exact amount in GBP from Worldpay.
+- As an admin, I want to see what Worldpay said on each check, so I can understand a refusal or a stuck payment.
+
+**Acceptance criteria** (the contract, each one IDed and checkable on its own):
+
+- **AC-1**: An admin (`role:admin`) can create, edit, activate, deactivate, delete (when no payment uses it) and test a Worldpay account with these fields: account name, prefix (optional, same rules as NMI's prefix), environment (`try` or `live`), API username, API password, entity reference, and an optional webhook key ID plus webhook secret (both or neither). The API username, API password and webhook secret are encrypted, not mass assignable, and never returned to the browser (only `has_api_username`, `has_api_password` and `has_webhook_secret` flags; Edit shows these fields blank with a "Saved" placeholder, and a blank field keeps the saved value). The entity reference is 1 to 64 letters, digits, underscores or hyphens (formats confirmed in step 0). There is no currency column and no Checkout ID column. While any payment uses the account, its environment and entity reference cannot change (422 "This account already has payments. Create a new account to change the environment or entity."). The form shows help text on where to find the values ("Worldpay Dashboard, Developer Tools. Use Try mode for test and Live mode for production; the entity is the same in both, the username and password are not"). The help text also says: "Card payments must capture automatically. With manual capture a payment stays authorized and PayHub never marks it paid."
+- **AC-2**: Test connection (two routes, one for the saved keys and one for unsaved form values, as for Kurv and Whop; on Edit the unsaved route takes a blank username or password from the saved account) makes one read only call, `GET {host}/paymentQueries/payments?transactionReference=payhub-test-{random}`, with the account's Basic Auth against the environment's host. It creates nothing at Worldpay. A 200 shows "Connected. The entity is checked on the first real payment." A 401 shows "Worldpay did not accept this username and password. Check they belong to this environment (Try or Live)." A 403 shows "This Worldpay user may not look up payments. Ask Worldpay to enable Payment Queries." (the real codes are confirmed in step 0). Any other failure shows "Could not reach Worldpay. Try again later." and is logged with the HTTP status only.
+- **AC-3**: A Worldpay payment may only be `gbp`. `StorePaymentRequest`, `UpdatePaymentRequest` and `CurrencySupportResolver` reject USD and PKR for a Worldpay account with "This Worldpay account only accepts GBP payments." `client_email` is not required for Worldpay payments (Worldpay's page collects the customer's own details); if one is on the payment it is not sent to Worldpay.
+- **AC-4**: Worldpay appears everywhere the other providers do: `PaymentProvider` enum (`worldpay`, display name "Worldpay"), payment create and edit forms (the currency is locked to GBP for a Worldpay account), agent account assignment (`user_payment_accounts`), `ProviderAccountTable`, CSV export, dashboard filters, totals and "Accounts Today", `CentralSummary` and `docs/integrations/central-dashboard-api.md`, provider badge, sidebar, `Payment::providerAccountName()` and prefix, the receipt pages (Success, Failed, Unavailable), `Admin\UserController` account lists and the admin user Store and Update request rules, and the `PaymentController` provider maps (including `provider_reference` as `worldpay_payment_id ?? newest page transaction_reference` and `clearStaleProviderTransactionIds` for `worldpay_account_id`). A Worldpay payment never falls through to the Stripe pay page. The `provider-parity-check` skill and `provider-parity-reviewer` agent text are first updated to list every provider, then the reviewer passes.
+- **AC-5**: The pay page of a Worldpay payment (`ClientPayment/PayWorldpay`) shows PayHub's brand layout and the existing consent check first, then the amount and a "Pay now" button. Only after consent and a click does the page call the checkout endpoint (AC-6), and then it sends the browser to the returned URL. Props are payment, brand, policies, amount, currency, `hasConsent` and `returnStatus` (AC-10); they never include the username, password, webhook secret, a page URL or a transaction reference. No card value ever touches PayHub. `ClientPaymentController::show` redirects a `completed` payment to the Success route before the Unavailable guard. An inactive account, and a payment that is not `pending`, render the Unavailable page; on an inactive account a Worldpay page that is already open can still be paid and the sweep or the optional webhook still completes it (a `cancelled` payment is never completed, AC-8). Any cancel of a Worldpay payment is refused while its newest page is younger than `expires_at` plus `page_grace_seconds`.
+- **AC-6**: `POST pay/{payment}/worldpay/checkout` (CSRF protected, `worldpay-checkout` limiter) takes no amount, currency or account from the request. It returns 422 unless the provider is Worldpay, the status is `pending`, the account exists and is active, and a consent record exists (`$payment->consents()->exists()`, same status code and message as NMI). To create a page it sends `POST {host}/payment_pages` with Basic Auth, headers `Content-Type` and `Accept` set to `application/vnd.worldpay.payment_pages-v1.hal+json`, and the body: `transactionReference` (AC-7), `merchant.entity` (the account's entity), `narrative.line1` (the payment's brand name, transliterated to ASCII with `Str::ascii`, stripped of characters that do not match `config('services.worldpay.narrative_pattern')` (letters, digits, spaces and `. , & ' /` until step 0 says otherwise), cut to `narrative_max`, falling back to `config('app.name')` when empty), `value.amount` (`Payment.amount`, already minor units, no conversion; GBP has two decimals, confirmed in step 0), `value.currency` `GBP`, and `resultURLs` (AC-10). The returned `url` is accepted only if it is https and its host is in `config('services.worldpay.hpp_hosts.{environment}')`; otherwise it is treated as a failure. Before the call it inserts the `worldpay_pages` row with the reserved sequence, reference and `expires_at` (no `url` yet), so a reference is never reused. On success it saves the `url` and sets `worldpay_charge_started_at` if empty, in one transaction, and returns JSON `{url}` only. A Worldpay 4xx, 5xx, timeout, unreadable reply or bad URL sets `failed_at` on that row (a failed row is never handed out, never looked up and does not count toward `max_pages`), leaves `worldpay_charge_started_at` unchanged, returns 502 with "We could not start your payment. Please try again." and logs the HTTP status and a trimmed reason (never the body of a request, the password or the full URL). Timeouts come from config (10 seconds to connect, 30 in total). A 429 is retried once after a short wait.
+- **AC-7**: Each payment has up to `max_pages` (5) hosted pages over its life, one at a time. Rules inside `Cache::lock('worldpay:checkout:{payment id}', config checkout_lock_seconds)->block(5)` (120 seconds, sized for one resolver run plus one create call; a caller that cannot get the lock in 5 seconds gets 409 "Your payment is being prepared. Please try again in a moment."; locks are always taken in the order checkout, then lookup). A page is **dead** when it has `closed_at`, or its `last_event` is a refusal or cancel (`declined_events`, unless step 0 shows the client can retry on the same page and `reuse_after_decline` is set), or it is older than `expires_at` plus `page_grace_seconds` (120). Pages with `failed_at` are ignored. (a) If the newest page is not dead and younger than its `expires_at`, return its saved URL and make no Worldpay call. (b) If the newest page is past `expires_at` but still inside the grace time, return 409 with the same message. (c) If the newest page is dead, first run the resolver (AC-8); if the payment is now `completed`, or any page shows a pending sale (`pending_events`, for example `authorized`), return 409 "We are confirming your payment. Please do not pay again." and let the page poll; otherwise create a new page with the next sequence. (d) With no page yet, create the first one. (e) When `max_pages` pages already exist and none is usable, return 422 "This payment link can no longer be used." `transactionReference` is `{payment uuid}-{sequence}`, unique across all PayHub installs that share a Worldpay entity (allowed characters and length confirmed in step 0). `expires_at` is creation time plus `page_expiry_seconds` (3600); the same value is sent to Worldpay as the page expiry if step 0 shows the field is accepted, otherwise it is Worldpay's confirmed default. The `worldpay-checkout` limiter allows 10 requests per payment UUID per hour and 30 per IP per hour (reuse calls count); the first limit hit returns JSON 429 "Too many attempts. Please try again later." with no Worldpay call. Once `worldpay_charge_started_at` is set, `UpdatePaymentRequest` rejects any change to the amount, currency, account or brand, and the payment cannot be deleted, for good.
+- **AC-8**: `WorldpayChargeResolver` is the only code that writes Worldpay payment status and the only writer of `payments.worldpay_payment_id`. It runs inside `Cache::lock('worldpay:lookup:{payment id}', config lookup_lock_seconds)` (60 seconds) with a per run deadline of `resolver_deadline_seconds` (45; pages not reached are looked up on the next run and the recheck key is set); a caller that cannot get the lock sets `worldpay:recheck:{payment id}` (60 seconds) and returns, and the holder runs once more before releasing. It ignores `is_active`, and with no page rows it makes no call and writes no row. For each of the payment's pages (newest first, at most `max_pages`) it calls `GET /paymentQueries/payments?transactionReference={page reference}` with `Accept: application/vnd.worldpay.payment-queries-v1.hal+json`, using a 10 second total timeout. Every payment row across the payment's pages whose `lastEvent` is in `paid_events` (`sentForSettlement` or `settled`, spellings confirmed in step 0) counts as a paid row. A payment is `completed` only when there is exactly one paid row AND Worldpay's own data for it shows an amount equal to `Payment.amount` and currency `GBP` AND its transaction reference is one of this payment's page references. Two or more paid rows are `duplicate`; exactly one that fails any of those checks is `mismatch`. Pages with `failed_at` or no `url` are never looked up. If the Payment Queries reply does not carry amount and currency, the resolver reads them from the call step 0 finds that does; if no Worldpay read returns them, nothing is built (AC-14). The update is one guarded query (`whereIn('status', ['pending','failed'])`) that sets `completed`, `paid_at` (Worldpay's time if present, else `now()`) and `worldpay_payment_id`, and dispatches `SendPaymentNotification` after the transaction commits only when a row changed. More than one paid row, a second paid sale on a `completed` payment (with a different `worldpay_payment_id`), or any paid sale on a `cancelled` payment is logged at error level with both ids ("refund the extra payment in Worldpay") and changes nothing. A paid sale with a different amount or currency is `mismatch`: error log, no status change. The resolver sets `worldpay_last_lookup_at` on every run. On an already `completed` payment it looks up only the pages other than the one that paid and writes only the `duplicate` error log (this is how a late second sale is found, AC-11).
+- **AC-9**: Outcomes follow the **Reply mapping** table in `## Feature design`. Every lookup writes or updates a `worldpay_lookup_attempts` row (one per page per run; a repeat with the same outcome and `last_event` as that page's newest row only adds 1 to `checks` and sets `last_checked_at`). Rows are diagnostic only: they never decide status and never hold a username, password, URL or signature. A refusal, a pending result, an API error, an unknown event and a value PayHub does not recognize leave `Payment.status` unchanged (v1 never sets `failed`) and are logged; an unknown value never fails a payment. A page whose events show it expired or closed gets `closed_at` set once. Admins see the rows on the payment page in the existing `attemptHistory()` shape (page reference as the reference, outcome plus `last_event` as the status, `reason`, `source` as an extra column), with a summary of the Worldpay payment id, page count and `worldpay_charge_started_at`.
+- **AC-10**: Every result URL (`successURL`, `pendingURL`, `failureURL`, `errorURL`, `cancelURL`, `expiryURL`) is the payment's own https pay page URL plus `worldpay_return={success|pending|failure|error|cancel|expiry}`. The pay page reads that value on the server (`showWorldpay`), accepts only those six words and ignores anything else, passes a display only `returnStatus`, and removes the query from the address bar. It is never used to decide status. For `success` and `pending` the page shows "We are confirming your payment. Please do not pay again.", queues one resolver lookup with `->afterResponse()` (`source=return`, throttled by the same `worldpay:poll` key as the poll, so the page never waits for Worldpay) and starts polling; for `failure` and `error` it shows "Your payment was not completed. Please try again." with Pay now; for `cancel`, "The payment was cancelled. You can try again." with Pay now; for `expiry`, "That payment page expired. Please try again." with Pay now. The waiting state and its start time are kept in `sessionStorage` under the payment UUID so a reload keeps waiting. The page polls `GET pay/{payment}/worldpay/status` every 3 seconds while the tab is visible. The endpoint (throttled to 60 per minute per IP) reads `Payment.status` and, only for a `pending` payment with a page, at most once every 10 seconds per payment (`Cache::add('worldpay:poll:{payment id}', 1, 10)`), runs the resolver (`source=poll`). It returns `state` only: `completed`, `waiting`, `retry` (the newest page's newest attempt row is `declined` or `closed`, its `last_checked_at` is under 60 seconds old, and that page is dead by the AC-7 rule, so a new checkout would really succeed; the page clears its waiting state and shows Pay now) or `unavailable` (the status is neither `pending` nor `completed`, or the account is inactive). `completed` visits Success. After 10 minutes of wall clock time the page shows "Still confirming, you will get a receipt by email." A return with no `worldpay_return` shows Pay now.
+- **AC-11**: `WorldpayStalePaymentSweep` runs every 10 minutes (`withoutOverlapping`). It picks Worldpay payments whose newest usable page `created_at` is older than `min_age_seconds` (120) and younger than `sweep_hours` (72), and whose `worldpay_last_lookup_at` is empty or older than `lookup_gap_seconds` (300), and that are either `pending` or `completed` with more than one page (the second group is only looked at to log a late second paid sale, AC-8), and runs the resolver for each (`source=sweep`). It ignores `is_active`, never creates a page and makes only read calls, throttled to at most one Worldpay call per second per account (same mechanism as `NmiStalePaymentSweep`). Each run logs one warning with the count of Worldpay payments still `pending` past the window. It works when `QUEUE_CONNECTION=sync` (no delayed jobs are used).
+- **AC-12**: The optional webhook route `POST webhook/worldpay/{worldpayAccount}` is excluded from CSRF (`webhook/worldpay/*` in `bootstrap/app.php`, raw body preserved) and always answers `200` with a short body. `{worldpayAccount}` is read as a raw id and looked up by hand. If the account has no webhook secret, the request is logged at info level and ignored. With a secret, the `Event-Signature` header is parsed as comma separated `keyId/hashFunction/signature` entries; the entry whose key ID equals the account's `webhook_key_id` is checked by computing the HMAC of the raw body with the saved secret and the named hash function (an allow list of `sha256` and `sha512`, confirmed in step 0) and comparing in constant time (`hash_equals`). A missing, unknown or wrong signature is logged at warning level (no header value in the log) and does nothing. A valid signature reads `eventDetails.transactionReference` only to find a `worldpay_pages` row of this account, and dispatches one lookup for that payment (`source=webhook`) with `->afterResponse()`; the body never decides status. Over a limit (per IP 60 per minute, one webhook lookup per payment per 10 seconds through `Cache::add`) it still answers 200 and skips the lookup. A page that is never found logs a warning and does nothing.
+- **AC-13**: No Content Security Policy change is made (the page only redirects). The username, password, webhook secret, page URLs and signature values are never logged in full, put in a URL the client sees, or returned to the browser. Card values never exist in PayHub.
+- **AC-14**: A step 0 check against the Worldpay Try environment and docs answers every item under **Open questions** before the checkout code is built. Answers go in `## Follow-up`. Any field, event or code name that differs is fixed only in `WorldpayClient`, `WorldpayPageReply` and `WorldpayLookupReply`, the only classes that know Worldpay field names. Step 0 is a hard gate: no later build step starts until its answers are recorded. If no Worldpay read call returns the amount and currency of a paid sale, the build stops and the design comes back to `/architect`.
+
+## Decision
+
+**Chosen option**: Option 1: Worldpay's Hosted Payment Pages by redirect, with paid status read from Worldpay's Payment Queries API after a throttled pay page poll, a timed sweep and an optional signed webhook.
+
+PayHub's server creates a hosted page per payment from the `Payment` amount and sends the client to Worldpay. The return pages, the poll, the sweep and the optional webhook only trigger a read only lookup; `WorldpayChargeResolver` alone writes status, and only from Worldpay's own answer.
+
+**Implementation skills**: `laravel-best-practices` (`.claude/skills/laravel-best-practices/`) · `inertia-vue-development` (`.claude/skills/inertia-vue-development/`) · `wayfinder-development` (`.claude/skills/wayfinder-development/`) · `pest-testing` (`.claude/skills/pest-testing/`) · `provider-parity-check` (`.claude/skills/provider-parity-check/`)
+
+## Rationale
+
+Reasoning and options: see `rationale.md`.
+
+## Feature design
+
+**Data model sketch** (new migrations; nothing built yet):
+
+- `worldpay_accounts`: id, `account_name`, `prefix` nullable, `api_username` (encrypted, not mass assignable), `api_password` (encrypted, not mass assignable), `entity_ref`, `environment` (`try` or `live`), `webhook_key_id` nullable, `webhook_secret` nullable (encrypted, not mass assignable), `is_active`, timestamps. No currency column (GBP is fixed) and no Checkout ID column (added by the later card fields spec).
+- `payments` (new columns): `worldpay_account_id` FK nullable (`nullOnDelete`), `worldpay_payment_id` string nullable (Worldpay's id of the paid sale, written only by the resolver), `worldpay_charge_started_at` timestamp nullable (a page exists: amount, currency, account and brand are locked, delete is blocked, for good), `worldpay_last_lookup_at` timestamp nullable (set by the resolver on every run; the sweep reads it).
+- `worldpay_pages`: id, `payment_id` FK, `sequence` unsigned small integer (unique with `payment_id`), `transaction_reference` string unique (`{payment uuid}-{sequence}`), `url` text nullable (empty until the create call succeeds; never sent to the browser), `expires_at` timestamp, `last_event` string nullable, `closed_at` timestamp nullable (set only from an expiry or closed event), `failed_at` timestamp nullable (the create call failed), timestamps.
+- `worldpay_lookup_attempts`: id, `payment_id` FK, `page_id` FK nullable, `source` (`return`, `poll`, `sweep`, `webhook`, `checkout`), `outcome` (`paid`, `declined`, `pending`, `closed`, `mismatch`, `duplicate`, `error`, `unknown`), `last_event` nullable, `reason` nullable (plain words), `worldpay_payment_id` nullable, `checks` unsigned integer default 1, `last_checked_at` timestamp, `created_at`. Diagnostic only.
+- No processed events table: a lookup is read only and the guarded update makes repeats harmless.
+
+Relationships: `worldpay_accounts` 1:N `payments`; `payments` 1:N `worldpay_pages`; `payments` 1:N `worldpay_lookup_attempts`; `worldpay_pages` 1:N `worldpay_lookup_attempts`. Agents reach an account through `user_payment_accounts`, as for the other providers.
+
+**State transitions**: `pending` to `completed` only through `WorldpayChargeResolver` (it also accepts `failed` as a source like the other providers, but Worldpay never sets `failed` in v1). A refusal, an error, an unknown event and a pending result leave `pending` unchanged. `completed` is terminal. A page goes `open` (before `expires_at`), `expired` (after `expires_at`, still looked up), then `closed` (`closed_at` set when an expiry or closed event is read). A page is `failed` when its create call failed (never handed out, never looked up) and `dead` by the AC-7 rule.
+
+**Reply mapping** (event spellings and where they appear are confirmed in step 0; the lists live in config):
+
+| Worldpay result (last event of a payment row) | Outcome | Effect |
+|---|---|---|
+| `sentForSettlement`, `settled` (`paid_events`) with matching amount, currency and reference | `paid` | resolver completes the payment |
+| paid event but amount, currency or reference differs | `mismatch` | error log, no change |
+| two or more paid rows, or a second paid sale on a completed payment | `duplicate` | error log with both ids, no change |
+| `refused`, `cancelled`, `cancelledByCustomer` | `declined` | no change; the poll shows Pay now |
+| `sentForAuthorization`, `authorized`, or no payment row yet | `pending` | no change; keep looking |
+| `expired`, `requestExpired`, or the page age past `expires_at` with no row | `closed` | no status change; `closed_at` is set only from an expiry or closed event, never from page age |
+| `error`, `settlementFailed`, HTTP 404, 429, 5xx or a timeout | `error` | error log, no change |
+| `refunded`, `sentForRefund`, `chargedBack` on a payment PayHub never saw paid | `unknown` | warning log, no change |
+| any other value | `unknown` | warning log, no change |
+
+**API surface**:
+
+| Endpoint | Method | Key inputs | Key outputs | Auth | Key errors |
+|---|---|---|---|---|---|
+| `worldpay-accounts` (resource, except `show`), `activate`, `deactivate`, `test-connection` (saved and unsaved) | GET/POST/PUT/DELETE/PATCH | account fields from AC-1 | rows with the `has_*` flags, never the secrets | `role:admin` | 403, 404, 422 |
+| `pay/{payment}` and `pay/{payment}/{ref}` (existing, new `showWorldpay` branch) | GET | payment UUID, optional `worldpay_return` | Inertia page with brand, policies, amount, currency, `hasConsent`, `returnStatus` | public (UUID) | 404, redirect to Success when completed, Unavailable otherwise |
+| `pay/{payment}/worldpay/checkout` | POST | none (UUID in path) | JSON `{url}` | public (UUID), limiter `worldpay-checkout` | 409 busy, 422 not payable or no consent or no usable page, 429, 502 |
+| `pay/{payment}/worldpay/status` | GET | payment UUID | JSON `{state}` (`waiting`, `completed`, `retry`, `unavailable`) | public (UUID), throttle 60 per minute | 404, 429 |
+| `webhook/worldpay/{worldpayAccount}` | POST | `Event-Signature` header, raw body | `200` always | signature, CSRF excluded, limits inside the controller | none (always 200) |
+| `WorldpayStalePaymentSweep` | scheduled, every 10 min | none | lookup attempts | system | none |
+
+**Value sourcing**:
+
+| Action | Value produced / displayed | Source |
+|---|---|---|
+| Pay page | button amount, currency | `Payment.amount`, `Payment.currency` |
+| Pay page | `hasConsent` | the existing `payment_consents` record |
+| Pay page | `returnStatus` | `worldpay_return` query, only the six allowed words, read server side in `showWorldpay`, display only |
+| Checkout | username, password, entity, host | the payment's `worldpay_accounts` row (credentials decrypted; host `config('services.worldpay.hosts.{environment}')`) |
+| Checkout | `value.amount` | `Payment.amount` (minor units, no conversion) |
+| Checkout | `value.currency` | the constant `GBP` (the payment is already checked to be `gbp`) |
+| Checkout | `narrative.line1` | the payment's brand name, cleaned and cut to `config('services.worldpay.narrative_max')` |
+| Checkout | `transactionReference` | `{payment uuid}-{next sequence}` |
+| Checkout | `merchant.entity` | `worldpay_accounts.entity_ref` |
+| Checkout | `resultURLs` | `route('pay.show', $payment)` (https) plus `worldpay_return={word}` |
+| Checkout | page expiry | `config('services.worldpay.page_expiry_seconds')` (3600) |
+| Checkout | returned `url` | the reply field (name per step 0), checked against `config('services.worldpay.hpp_hosts.{environment}')`, saved in `worldpay_pages.url` |
+| Checkout | reuse or replace | the newest `worldpay_pages.expires_at`, `page_grace_seconds`, `max_pages` |
+| Checkout | consent check | the existing `payment_consents` record |
+| Limiter | keys | `worldpay-payment:{uuid}` and `worldpay-ip:{ip}` |
+| Resolver | which references to look up | `worldpay_pages.transaction_reference` of this payment (never a value from the webhook body or the request) |
+| Resolver | paid, last event, payment id, amount, currency | Worldpay lookup fields (names per step 0) compared with `Payment` in integer minor units |
+| Resolver | `paid_at` | Worldpay's event time field (name per step 0) if present, else `now()` |
+| Resolver | `worldpay_payment_id` | Worldpay's `paymentId` field on the paid row (name confirmed in step 0) |
+| Resolver | attempt `reason` | a fixed PayHub sentence per outcome (the Reply mapping table) with the Worldpay event name appended, never Worldpay's own text |
+| Resolver | amount and currency | the Payment Queries reply if it carries them, otherwise the fallback read found in step 0 |
+| Resolver | page closed | the event values in `closed_events` (step 0); sets `worldpay_pages.closed_at` |
+| Poll | state shown | `Payment.status`, the account's `is_active`, the newest attempt row (`declined` or `closed` under 60 seconds gives `retry`) |
+| Poll | lookup throttle | `Cache::add('worldpay:poll:{payment id}', 1, config('services.worldpay.poll_lookup_seconds'))` (10) |
+| Sweep | which payments | provider `worldpay`, newest usable page `created_at` between `min_age_seconds` (120) and `sweep_hours` (72), `worldpay_last_lookup_at` empty or older than `lookup_gap_seconds` (300), status `pending`, or `completed` with more than one page |
+| Webhook | which account and secret | route `{worldpayAccount}`; the key ID in the header must equal `webhook_key_id` |
+| Webhook | which payment to look up | `eventDetails.transactionReference` matched to a `worldpay_pages` row of this account, used only to find the payment |
+| Attempts | rows | one per page per lookup, from the Worldpay reply and the source |
+
+**Key invariants**:
+- Only `WorldpayChargeResolver` sets `completed`, and only from Worldpay's own read answer with a paid event, a reference that is one of this payment's page references, the exact amount and GBP. The browser, the return query, the webhook body and the checkout reply never do.
+- A checkout never uses an amount, currency or account from the request.
+- A payment has at most `max_pages` pages and only the newest usable one is handed to the client; once the first page exists, the amount, currency, account and brand never change.
+- A new page is made only when every older page is dead (closed, refused or cancelled, or past its expiry plus the grace time) and a lookup found neither a paid nor a pending sale.
+- `completed` is terminal. A second paid sale, or a paid sale on a `cancelled` payment, changes nothing and logs at error level.
+- Amounts are integer minor units everywhere; Worldpay's GBP amount is already pence, so no conversion exists to get wrong.
+- Any Worldpay event or code PayHub does not recognize is logged, recorded as `unknown`, and never fails a payment.
+- The webhook only triggers a lookup; a forged webhook can cost one throttled lookup at most.
+
+**Security model**:
+- Account management is `role:admin` only. Pay, checkout and status routes are public but scoped by the unguessable payment UUID. The webhook is public, protected by the signature and a throttle, and cannot change status on its own.
+- **Compliance scope is PCI DSS.** Worldpay collects the card on its own page and PayHub only redirects, so the target is SAQ A, the lightest case. Confirm with Worldpay or the acquirer before production.
+- The returned page URL is checked against a host allow list before it is saved or used, so a bad reply cannot become an open redirect.
+- Checkout abuse is limited by the limiter, the lock, `max_pages` and the one page at a time rule.
+- Raw Worldpay text goes to logs and the attempts table for operators only. Clients see the fixed strings in AC-6, AC-7 and AC-10. Credentials and signature values are never logged in full.
+- Audit trail: `worldpay_payment_id` on the payment, the `worldpay_pages` rows and `worldpay_lookup_attempts`; every refused, mismatched or duplicate result is logged with both ids.
+
+**Configuration required**:
+- `config/services.php` `worldpay`: `hosts` (`try` `https://try.access.worldpay.com`, `live` `https://access.worldpay.com`), `hpp_hosts` (`try` `hpp-sandbox.worldpay.com`, `live` `payments.worldpay.com`, both confirmed in step 0), `connect_timeout` (10), `timeout` (30), `lookup_timeout` (10), `checkout_lock_seconds` (120), `lookup_lock_seconds` (60), `resolver_deadline_seconds` (45), `reuse_after_decline` (false, set by step 0), `page_expiry_seconds` (3600), `page_grace_seconds` (120), `max_pages` (5), `poll_lookup_seconds` (10), `min_age_seconds` (120), `lookup_gap_seconds` (300), `sweep_hours` (72), `narrative_max` (24, confirmed in step 0), `narrative_pattern`, `paid_events`, `closed_events`, `declined_events`, `pending_events`.
+- No `.env` secrets for the app: credentials live encrypted per account. The four `WORLDPAY_*` values in your local `.env` (entity, username, password, checkout ID) are for step 0 checks only; the app never reads them in production, and the Checkout ID is unused in v1. The scheduler must run (`php artisan schedule:run` every minute by cron), as for MPGS, Authorize.net, Kurv and NMI.
+- Outside the code: a Worldpay merchant account per brand, set to capture card payments automatically, with Try credentials (and later Live credentials on an account where Hosted Payment Pages and Payment Queries are enabled). The webhook needs an Implementation Manager to turn on signing and send the key ID and secret; v1 works without it.
+
+**Open questions** (answered by the step 0 check; the first two were already proven on 2026-11-17 against the user's Try account):
+1. Proven: `POST /payment_pages` with `merchant.entity`, `value`, `narrative`, `resultURLs` returns 200 with `url` (host `hpp-sandbox.worldpay.com`) and `_links.self.href` (a Payment Queries link). Still to confirm: that `amount` 100 shows as 1.00 pounds on the page, the allowed characters and length of `transactionReference`, the maximum length of `narrative.line1`, whether `expiry` can be sent, the page lifetime Worldpay really applies (it must equal `page_expiry_seconds`; if Worldpay's real lifetime is shorter, set the shorter value), whether a long expiry of about 72 hours is allowed (if yes, set `page_expiry_seconds` to it and `max_pages` to 1, which removes the replace logic), what a duplicate `transactionReference` does, and what a wrong entity or password returns.
+2. Proven: `GET /paymentQueries/payments?transactionReference=` with the Payment Queries `Accept` header returns 200 with `_embedded.payments: []` before any payment. Still to confirm: the shape for a paid, refused, cancelled and expired page, the exact `lastEvent` spellings, whether amount and currency are in that reply, and if not, which call returns them, plus the field names for `paymentId`, the paid event time (`paid_at`) and any reason text.
+3. What events does a paid hosted payment go through (authorized then sentForSettlement), how long does settlement take to show, and does a card payment on the hosted page capture automatically (a manual capture setting leaves it at `authorized` for good, so this must be on)?
+4. Result URLs: are query strings kept, does Worldpay append its own values, what does the customer see after a refusal (can they retry on the same page; this sets `reuse_after_decline`), and what happens when a paid or expired page is opened again? Can one page be paid twice?
+5. Status codes for bad credentials (401 or 403) on both calls, and for a missing Payment Queries permission, for the Test connection messages.
+6. Webhook: can a small merchant account get it, the exact `Event-Signature` format and hash functions, the event body for a hosted payment, and Worldpay's sender IPs.
+7. Live hosts (`access.worldpay.com`, `payments.worldpay.com`), and whether the entity and Payment Queries are enabled on Live for this account.
+8. Sandbox test cards or amounts for a refused payment, and what 3D Secure looks like on the hosted page.
+9. Rate limits on `payment_pages` and Payment Queries.
+
+**Critical test scenarios** (all Worldpay calls use `Http::fake`; the real service is covered only by step 0 and a staging run):
+- Happy path: checkout creates one page, the return and poll trigger a lookup, the resolver completes the payment once with one notification, the poll then returns `completed`, verifies **AC-6**, **AC-8**, **AC-10**
+- Second checkout call with a live page reuses the saved URL with no Worldpay call; two at once make one Worldpay call; the eleventh call in an hour is a JSON 429, verifies **AC-6**, **AC-7**
+- Page past expiry but inside the grace time returns 409; past the grace time with no sale creates page 2 with sequence 2; with a settled sale on page 1 it completes instead and creates nothing; a sixth page is refused with 422, verifies **AC-7**
+- A sale on page 1 that is only authorized blocks a new page with the "confirming" 409; a refused or cancelled page is replaced at once (unless `reuse_after_decline`); a failed create row is never handed out, never looked up, does not count toward `max_pages`, and its reference is not reused, verifies **AC-6**, **AC-7**
+- The sweep re-checks a `completed` payment with more than one page inside the window, logs a late second paid sale at error level and changes nothing; the sweep window follows the newest page, verifies **AC-8**, **AC-11**
+- A cancel is refused while the newest page is inside its expiry plus grace, verifies **AC-5**
+- The return lookup runs after the response so the page loads without waiting for Worldpay; a resolver past `resolver_deadline_seconds` stops and sets the recheck key, verifies **AC-8**, **AC-10**
+- No consent record, wrong provider, not pending, inactive account: 422 and no Worldpay call; a request body with an amount or account is ignored, verifies **AC-6**
+- Worldpay 4xx, 5xx, timeout, unreadable reply or a URL on another host: 502, nothing saved, the edit lock is not set; a 429 is retried once, verifies **AC-6**
+- Amount, currency, account, brand and delete changes are rejected once a page exists; environment and entity changes are rejected once a payment uses the account, verifies **AC-1**, **AC-7**
+- Lookup shows a paid event with a different amount or currency: `mismatch`, error log, no change; a paid row whose reference is not one of the payment's page references is ignored, verifies **AC-8**
+- Two paid rows, or a second paid sale on a completed payment, or a paid sale on a cancelled payment: no change and an error log with both ids, verifies **AC-8**
+- Two resolvers at once: one update, one notification; the loser sets the recheck key and the holder runs again, verifies **AC-8**
+- Refused, authorized only, empty list, unknown event and API error: status unchanged, one attempt row, a repeat only raises `checks`, an unknown value never throws, verifies **AC-9**
+- An expiry event sets `closed_at` on that page once, verifies **AC-9**
+- Return with each of the six words shows the matching message and strips the query; any other value is ignored; reload keeps the waiting state; no word shows Pay now, verifies **AC-10**
+- Poll runs at most one lookup per 10 seconds and returns `state` only; a refusal under 60 seconds old gives `retry`; inactive account gives `unavailable`, verifies **AC-10**
+- Sweep picks only pending Worldpay payments inside the age window, skips ones checked in the last 5 minutes, makes no create call, completes a payment on an inactive account, and works with the sync queue, verifies **AC-11**
+- Webhook with no secret saved is ignored; a wrong key ID or signature is ignored with a warning and no header value logged; a good signature queues one lookup after the response; a forged body never changes status; over a limit still answers 200, verifies **AC-12**
+- GBP only: USD and PKR are rejected; `client_email` is optional and never sent, verifies **AC-3**
+- A completed payment redirects to Success; a Worldpay payment page never renders Stripe; page props hold no URL, reference or secret, verifies **AC-4**, **AC-5**
+- CSV export, dashboard filter, "Accounts Today" and `CentralSummary` include a Worldpay payment, verifies **AC-4**
+- Account form: secrets are never returned; a blank field keeps the saved value; webhook key ID and secret must come together; both Test connection routes give the plain messages; delete is blocked while payments use the account, verifies **AC-1**, **AC-2**
+- The security headers test shows no CSP change on the Worldpay pay page; logs hold no password, secret, URL or signature, verifies **AC-13**
+
+## Build plan
+
+Build approach: none recorded in `AGENTS.md`, so end to end Tracer Bullet slices are assumed. The first thread goes from checkout to a hosted page to a lookup to a completed payment against the Try environment, because it is the one path that can be tested end to end.
+
+0. Worldpay Try check (the first two proven on 2026-11-17): answer every Open question with a real hosted payment, record answers in Follow-up, fix field names in `WorldpayClient`, `WorldpayPageReply` and `WorldpayLookupReply`; hard gate: nothing after it starts until the answers are recorded, satisfies **AC-14**
+1. Migrations (`worldpay_accounts`, payments columns, `worldpay_pages`, `worldpay_lookup_attempts`), `PaymentProvider::Worldpay`, models, factories, `config/services.php`, satisfies **AC-1**, **AC-9**
+2. `WorldpayClient` (create page, query by reference, the amount read from step 0, a read only ping), the two reply classes, `WorldpayChargeResolver` with its lock, recheck key and guarded update, satisfies **AC-8**, **AC-9**
+3. Admin account CRUD, activate, deactivate, both test connection routes, satisfies **AC-1**, **AC-2**
+4. Payment create and update requests, `CurrencySupportResolver`, optional `client_email`, edit and delete locks, agent assignment, satisfies **AC-3**, **AC-7**
+5. Checkout endpoint with consent check, lock, page reuse and replace rules, URL host check and the `worldpay-checkout` limiter, satisfies **AC-6**, **AC-7**
+6. `showWorldpay` in `ClientPaymentController`, the status endpoint with its throttled lookup, and `PayWorldpay.vue` (consent, amount, button, redirect, `returnStatus`, waiting state in `sessionStorage`, polling, query clean up, fixed messages), satisfies **AC-5**, **AC-10**, **AC-13**
+7. `WorldpayStalePaymentSweep` and its schedule in `routes/console.php`, satisfies **AC-11**
+8. Optional webhook route, signature check, CSRF exclusion in `bootstrap/app.php`, per IP and per payment limits, satisfies **AC-12**
+9. Admin attempts panel on the payment page, mapping rows into the existing `attemptHistory()` shape, satisfies **AC-9**
+10. Parity sweep: CSV export, `DashboardMetrics`, `CentralSummary`, receipt pages, agent forms, `PaymentController` maps, `Payment::providerAccountName()`, `$fillable` and `$casts`, then refresh the `provider-parity-check` skill and `provider-parity-reviewer` agent and run the reviewer, satisfies **AC-4**
+11. Pest tests for the scenarios above (`php artisan test --parallel`), then `npm run build` and regenerate Wayfinder files, satisfies **AC-1** to **AC-14**
+12. Staging run against Try (paid, refused, closed tab, expired page, repeated webhook if enabled), then a small live payment and a refund by hand once Live is enabled
+
+## Consequences
+
+**Positive**:
+- Card details never touch PayHub, and the page is the lightest PCI case (SAQ A).
+- Works on a small merchant account: no webhook is needed, and an Implementation Manager can add the signed webhook later without code changes.
+- Reuses the Kurv shape (redirect, read back, sweep, attempts table), so the review and test patterns are already known.
+- GBP minor units match Worldpay's amount unit, so there is no conversion step.
+- A client who opens an old link gets a fresh page without losing a late payment on the old one.
+
+**Negative / tradeoffs**:
+- The client leaves PayHub for Worldpay's page, which PayHub cannot style or embed.
+- Status needs an API lookup, so a Worldpay outage or a slow first lookup leaves a paid payment `pending` until the poll or sweep catches it (up to about 10 minutes if the client closes the tab and no webhook is set).
+- v1 never sets `failed`, so a refused payment stays `pending` until it is paid, or ages out of the sweep window.
+- A page replaced after expiry can leave a late payment on an old page, so a second paid sale is possible; only an error log marks it, and staff must refund it in Worldpay by hand.
+- Four Worldpay field facts (amount in the lookup reply, event spellings, page lifetime, narrative length) are unproven until step 0, and a different answer on the amount would send the design back to `/architect`.
+- GBP only. A USD or multi currency Worldpay account needs a later spec.
+
+**Neutral**:
+- Refunds, captures and chargebacks stay in the Worldpay dashboard; PayHub does not track them.
+- `AGENTS.md` still names ten providers (and Bank of America 0013 is not built yet) until `/sync` updates it after the build.
+- Card fields on PayHub's own page (Checkout SDK, which needs the Checkout ID, 3D Secure handling and probably SAQ A-EP) are a separate, later spec.
+
+## Follow-up
+
+- [x] Cross check on another model (2026-11-17): 16 gaps found and all recommended fixes applied (replace rules, pending sale block, sweep window and completed payment re check, lock sizes and deadline, failed page rows, `closed_at` rule, return lookup after the response, auto capture, long expiry question).
+- [ ] Run step 0 with a human Try payment on the hosted page (card, refused card, closed tab, expired page) and write each answer here before any code. Proven so far on 2026-11-17 against the user's Try account: page creation returned 200 with a `hpp-sandbox.worldpay.com` URL, and a Payment Queries call returned 200 with an empty list for an unpaid reference.
+- [ ] Confirm with Worldpay (or the Dashboard) that Hosted Payment Pages and Payment Queries are enabled on the Live account, and that Live uses the same entity.
+- [ ] Ask Worldpay whether this account can get signed webhooks (Implementation Manager), the key ID and secret format, and the sender IPs.
+- [ ] Confirm PCI level (SAQ A) with Worldpay or the acquirer in writing.
+- [ ] Spec 0013 (Bank of America) is not built and edits the same parity files. Whichever merges second resolves the enum, `AGENTS.md` and parity conflicts; update the provider count in `AGENTS.md` and `docs/agent.md` at that time.
+- [ ] After the build, `/sync` updates `AGENTS.md` (the provider list, a Worldpay bullet, the CSRF list) and `docs/agent.md`.
+- [ ] Refresh the `provider-parity-reviewer` agent and skill text to list every provider (they still name nine).
+- [ ] Revisit setting `failed` once the real refusal events are known from the attempts table.
+- [ ] Revisit an automatic refund of a `duplicate` payment only if double payments happen in practice.
+- [ ] Later spec: Worldpay Checkout card fields (Checkout ID, 3D Secure, CSP hosts, PCI scope).
+- [ ] `phpunit.xml` hardcodes `APP_BASE_PATH` for another machine; override it locally before running tests.
+- [ ] Untracked files on this branch that are not part of this spec (`docs/research/zen-payments.md`, `docs/integrations/central-dashboard-brief.md`, a sandbox screenshot) were left alone.
