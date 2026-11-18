@@ -55,7 +55,9 @@ final class WorldpayLookupReply
 
         if (is_string($row['timestamp'] ?? null)) {
             try {
-                $time = CarbonImmutable::parse($row['timestamp']);
+                // Worldpay sends UTC. Laravel saves a date as written, so it is moved to the app timezone first,
+                // otherwise paid_at shows hours early (Asia/Karachi: 5 hours).
+                $time = CarbonImmutable::parse($row['timestamp'])->setTimezone((string) config('app.timezone', 'UTC'));
             } catch (Throwable) {
                 $time = null;
             }

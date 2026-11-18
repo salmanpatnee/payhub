@@ -285,3 +285,14 @@ it('completes the payment when a retry on the same page succeeds after a refusal
     expect($resolver->resolve($payment->fresh(), 'poll'))->toBe('paid');
     expect($payment->fresh()->status)->toBe('completed')->and($payment->fresh()->worldpay_payment_id)->toBe('payOK');
 });
+
+it('saves paid_at in the app timezone, not in the UTC time Worldpay sends', function () {
+    config(['app.timezone' => 'Asia/Karachi']);
+    $payment = wcPayment();
+    $attempt = wcAttempt($payment);
+    wcFake([wcRow($attempt->transaction_reference, 'sentForSettlement')]); // 13:45:51 UTC
+
+    app(WorldpayChargeResolver::class)->resolve($payment, 'poll');
+
+    expect(DB::table('payments')->where('id', $payment->id)->value('paid_at'))->toStartWith('2026-11-17 18:45:51');
+});
