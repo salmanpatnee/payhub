@@ -37,6 +37,11 @@ class WorldpayPaymentController extends Controller
             return response()->json(['message' => 'unavailable'], 422);
         }
 
+        // The hosted route never serves a card fields account (spec 0015 AC-2). No Worldpay call is made.
+        if ($payment->worldpayAccount->isCardFields()) {
+            return response()->json(['message' => 'This account takes card payments on the PayHub page.'], 422);
+        }
+
         // Consent is enforced on the server, not only in the page (AC-6). Same code and message as NMI.
         if (! $payment->consents()->exists()) {
             return response()->json(['message' => 'Please accept the payment terms first.'], 422);

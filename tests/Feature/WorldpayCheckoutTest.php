@@ -80,6 +80,18 @@ it('creates one page from the saved amount and returns only the url', function (
     expect($page->sequence)->toBe(1)->and($page->url)->toContain('hpp-sandbox.worldpay.com');
 });
 
+it('refuses the hosted checkout for a card fields account and makes no Worldpay call', function () {
+    wpFakeCreate();
+    $payment = wpCheckoutPayment();
+    $payment->worldpayAccount->update(['mode' => 'card_fields']);
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")
+        ->assertStatus(422)
+        ->assertJson(['message' => 'This account takes card payments on the PayHub page.']);
+
+    expect(wpCreateCalls())->toBe(0)->and(WorldpayPage::count())->toBe(0);
+});
+
 it('accepts the second Try host and refuses a page on any other host or over http', function (string $url, int $status) {
     Http::fake(['*payment_pages' => Http::response(['url' => $url], 200)]);
     $payment = wpCheckoutPayment();

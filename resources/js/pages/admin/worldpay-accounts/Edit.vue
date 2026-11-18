@@ -217,7 +217,11 @@ function submit() {
                             <option value="hosted">
                                 Hosted page (the client pays on Worldpay)
                             </option>
-                            <option value="card_fields">
+                            <!-- Card fields has no pay page yet (spec 0015), so it is only kept for accounts already set to it. -->
+                            <option
+                                v-if="worldpayAccount.mode === 'card_fields'"
+                                value="card_fields"
+                            >
                                 Card fields (the client pays on the PayHub page)
                             </option>
                         </select>

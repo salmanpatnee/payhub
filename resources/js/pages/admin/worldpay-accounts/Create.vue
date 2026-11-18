@@ -199,9 +199,6 @@ function submit() {
                             <option value="hosted">
                                 Hosted page (the client pays on Worldpay)
                             </option>
-                            <option value="card_fields">
-                                Card fields (the client pays on the PayHub page)
-                            </option>
                         </select>
                         <p class="text-xs text-muted-foreground">
                             Hosted sends the client to Worldpay's page. Card
