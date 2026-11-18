@@ -46,6 +46,7 @@ const mainNavItems = computed((): NavItem[] => [
                 { title: 'Whop Accounts',     href: '/admin/whop-accounts',         icon: CreditCard },
                 { title: 'Kurv Accounts',     href: '/admin/kurv-accounts',         icon: CreditCard },
                 { title: 'NMI Accounts',      href: '/admin/nmi-accounts',          icon: CreditCard },
+                { title: 'Worldpay Accounts', href: '/admin/worldpay-accounts',     icon: CreditCard },
             ],
         } as NavItem,
     ] : []),

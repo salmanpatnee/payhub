@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\RelationshipManagerController;
 use App\Http\Controllers\Admin\RevolutAccountController;
 use App\Http\Controllers\Admin\SquareAccountController;
 use App\Http\Controllers\Admin\StripeAccountController;
+use App\Http\Controllers\Admin\WorldpayAccountController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VivaAccountController;
 use App\Http\Controllers\Admin\WhopAccountController;
@@ -22,6 +23,8 @@ use App\Http\Controllers\ClientPaymentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\KurvPaymentController;
 use App\Http\Controllers\KurvWebhookController;
+use App\Http\Controllers\WorldpayPaymentController;
+use App\Http\Controllers\WorldpayWebhookController;
 use App\Http\Controllers\MpgsPaymentController;
 use App\Http\Controllers\MpgsWebhookController;
 use App\Http\Controllers\NmiPaymentController;
@@ -248,6 +251,29 @@ Route::middleware(['auth', 'verified', 'role:admin'])
             [KurvAccountController::class, 'testStoredConnection']
         )->name('kurv-accounts.test-stored-connection');
 
+        Route::resource('worldpay-accounts', WorldpayAccountController::class)
+            ->except(['show']);
+
+        Route::patch(
+            'worldpay-accounts/{worldpay_account}/deactivate',
+            [WorldpayAccountController::class, 'deactivate']
+        )->name('worldpay-accounts.deactivate');
+
+        Route::patch(
+            'worldpay-accounts/{worldpay_account}/activate',
+            [WorldpayAccountController::class, 'activate']
+        )->name('worldpay-accounts.activate');
+
+        Route::post(
+            'worldpay-accounts/test-connection',
+            [WorldpayAccountController::class, 'testKeyConnection']
+        )->name('worldpay-accounts.test-connection');
+
+        Route::post(
+            'worldpay-accounts/{worldpay_account}/test-connection',
+            [WorldpayAccountController::class, 'testStoredConnection']
+        )->name('worldpay-accounts.test-stored-connection');
+
         Route::resource('square-accounts', SquareAccountController::class)
             ->except(['show']);
 
@@ -448,6 +474,15 @@ Route::post('/pay/{payment}/nmi/event', [NmiPaymentController::class, 'event'])
     ->name('pay.nmi.event')
     ->middleware('throttle:nmi-page-event');
 
+// Worldpay Hosted Payment Pages pay thread (spec 0014), public (scoped by the payment UUID). The limiter keys use
+// the raw route string because throttle runs before route model binding.
+Route::post('/pay/{payment}/worldpay/checkout', [WorldpayPaymentController::class, 'checkout'])
+    ->name('pay.worldpay.checkout')
+    ->middleware('throttle:worldpay-checkout');
+Route::get('/pay/{payment}/worldpay/status', [WorldpayPaymentController::class, 'status'])
+    ->name('pay.worldpay.status')
+    ->middleware('throttle:60,1');
+
 // Kurv hosted payment page pay thread (spec 0010), public (scoped by the payment UUID). The limiter keys
 // use the raw route string because throttle runs before route model binding.
 Route::post('/pay/{payment}/kurv/checkout', [KurvPaymentController::class, 'checkout'])
@@ -488,6 +523,10 @@ Route::post('/webhook/authorizenet/{authorizenetAccount}', [AuthorizenetWebhookC
 Route::post('/webhook/nmi/{nmiAccount}', [NmiWebhookController::class, 'handle'])
     ->name('webhook.nmi')
     ->middleware('throttle:120,1');
+
+// {worldpayAccount} is read as a raw id and looked up by hand. Optional signed webhook; it only triggers a lookup (spec 0014, AC-12).
+Route::post('/webhook/worldpay/{worldpayAccount}', [WorldpayWebhookController::class, 'handle'])
+    ->name('webhook.worldpay');
 
 // {whopAccount} resolves by integer id. Standard Webhooks signature, verified in the controller (spec 0009, AC-9).
 Route::post('/webhook/whop/{whopAccount}', [WhopWebhookController::class, 'handle'])

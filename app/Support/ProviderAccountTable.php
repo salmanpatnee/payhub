@@ -16,6 +16,7 @@ class ProviderAccountTable
             'whop' => 'whop_accounts',
             'kurv' => 'kurv_accounts',
             'nmi' => 'nmi_accounts',
+            'worldpay' => 'worldpay_accounts',
             default => 'stripe_accounts',
         };
     }

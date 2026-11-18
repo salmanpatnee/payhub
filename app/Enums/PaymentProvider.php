@@ -14,6 +14,7 @@ enum PaymentProvider: string
     case Whop = 'whop';
     case Kurv = 'kurv';
     case Nmi = 'nmi';
+    case Worldpay = 'worldpay';
 
     public function label(): string
     {
@@ -28,6 +29,7 @@ enum PaymentProvider: string
             self::Whop => 'Whop',
             self::Kurv => 'Kurv',
             self::Nmi => 'NMI',
+            self::Worldpay => 'Worldpay',
         };
     }
 }

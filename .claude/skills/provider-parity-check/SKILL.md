@@ -1,12 +1,12 @@
 ---
 name: provider-parity-check
-description: "Check that a payment-related change implements all nine providers (Stripe, Revolut, Square, Viva, Clover, MPGS, Authorize.net, Whop, Kurv) in parallel rather than just one or two. Use after adding or modifying anything that touches Payment records, provider accounts, webhooks, pay pages, CSV exports, admin account CRUD, dashboard/filter surfaces, or client-facing receipt pages. Also use when explicitly asked to verify provider parity, check for missing provider support, or audit multi-provider consistency."
+description: "Check that a payment-related change implements all eleven providers (Stripe, Revolut, Square, Viva, Clover, MPGS, Authorize.net, Whop, Kurv, NMI, Worldpay) in parallel rather than just one or two. Use after adding or modifying anything that touches Payment records, provider accounts, webhooks, pay pages, CSV exports, admin account CRUD, dashboard/filter surfaces, or client-facing receipt pages. Also use when explicitly asked to verify provider parity, check for missing provider support, or audit multi-provider consistency."
 license: MIT
 ---
 
 # Provider Parity Check
 
-PayHub runs nine payment providers behind the `PaymentProvider` enum: **Stripe, Revolut, Square, Viva, Clover, MPGS, Authorize.net, Whop, Kurv** (values `stripe`, `revolut`, `square`, `viva`, `clover`, `mpgs`, `authorizenet`, `whop`, `kurv`). History shows this is where features quietly break: Square landed after Stripe/Revolut and several read-side surfaces (dashboard filters, "Accounts Today" account resolution) were missed on first pass. Every later provider is a candidate for the same mistake unless checked explicitly. Always read the current list from `app/Enums/PaymentProvider.php`; if it has grown past nine, check the new ones too.
+PayHub runs eleven payment providers behind the `PaymentProvider` enum: **Stripe, Revolut, Square, Viva, Clover, MPGS, Authorize.net, Whop, Kurv, NMI, Worldpay** (values `stripe`, `revolut`, `square`, `viva`, `clover`, `mpgs`, `authorizenet`, `whop`, `kurv`, `nmi`, `worldpay`). History shows this is where features quietly break: Square landed after Stripe/Revolut and several read-side surfaces (dashboard filters, "Accounts Today" account resolution) were missed on first pass. Every later provider is a candidate for the same mistake unless checked explicitly. Always read the current list from `app/Enums/PaymentProvider.php`; if it has grown past eleven, check the new ones too.
 
 This skill is a **verification pass**, not an implementation guide. Run it after a payment-touching change is written, before calling it done.
 
@@ -31,7 +31,7 @@ For any feature that touches payments, every provider should be represented on:
    - Two/three-way ternaries keyed on provider (`$provider === 'stripe' ? ... : ...`)
    - Blade/Vue `v-if`/`v-else-if` chains keyed on `payment.provider`
 
-   For each hit, count how many of the nine providers are actually covered. Flag any branch that lists fewer than all of them — a `default` fallback that silently does nothing for the missing provider is the exact shape of the historical Square bug.
+   For each hit, count how many of the eleven providers are actually covered. Flag any branch that lists fewer than all of them — a `default` fallback that silently does nothing for the missing provider is the exact shape of the historical Square bug.
 
 3. **Check structural symmetry.** For each provider, confirm the equivalent file/method exists wherever one provider has it:
    - Webhook controller and job (`App\Http\Controllers\*WebhookController`, `App\Jobs\Handle*WebhookJob`), or the provider's resolver where status comes from a lookup (`MpgsChargeResolver`, `AuthorizenetChargeResolver`, `KurvChargeResolver`, Clover's charge reply)
@@ -40,11 +40,11 @@ For any feature that touches payments, every provider should be represented on:
 
    If the diff added or changed one of these for one provider, check the same file exists (or was equivalently updated) for the others.
 
-4. **Confirm the new/changed surface is reachable for every provider** — e.g. if a dashboard filter dropdown gained a new option, check it lists all nine provider account types, not just the ones that existed when the filter was first built.
+4. **Confirm the new/changed surface is reachable for every provider** — e.g. if a dashboard filter dropdown gained a new option, check it lists all eleven provider account types, not just the ones that existed when the filter was first built.
 
 5. **Don't flag intentional asymmetry.** Some differences are correct, not bugs (root `AGENTS.md` lists them):
-   - Square accounts are single-currency (`square_accounts.currency`); Kurv takes USD only; Whop takes USD and GBP; PKR is MPGS only.
-   - Status sources differ: most providers use webhooks only, while Clover, MPGS, Authorize.net and Kurv read status from the gateway's own reply or a lookup through one resolver. Check that the guarantee exists for each, not that it is implemented identically.
+   - Square accounts are single-currency (`square_accounts.currency`); Kurv takes USD only; Worldpay takes GBP only; an NMI account takes one currency (USD or GBP); Whop takes USD and GBP; PKR is MPGS only.
+   - Status sources differ: most providers use webhooks only, while Clover, MPGS, Authorize.net, Kurv, NMI and Worldpay read status from the gateway's own reply or a lookup through one resolver. Check that the guarantee exists for each, not that it is implemented identically.
    - Revolut webhooks carry no event id (idempotency via `order_id:event_type`); others carry event ids or use their own scheme.
    - One tap wallets exist only where the provider supports them on our integration (see root `AGENTS.md`).
 
@@ -63,6 +63,8 @@ Surface: <name>
   Authorize.net: ✅ / ❌
   Whop:          ✅ / ❌
   Kurv:          ✅ / ❌
+  NMI:           ✅ / ❌
+  Worldpay:      ✅ / ❌
 ```
 
 Only call the change complete when every touched surface is ✅ across all providers, or the asymmetry is explicitly justified (e.g. currency lock, provider-specific status source).
