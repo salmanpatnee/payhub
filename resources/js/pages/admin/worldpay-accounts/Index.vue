@@ -26,6 +26,8 @@ type WorldpayAccountRow = {
     account_name: string;
     prefix: string | null;
     environment: string;
+    mode: string;
+    google_pay_enabled: boolean;
     is_active: boolean;
 };
 
@@ -153,6 +155,11 @@ function executeDelete() {
                         <th
                             class="px-5 py-3.5 text-left text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
                         >
+                            Mode
+                        </th>
+                        <th
+                            class="px-5 py-3.5 text-left text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                        >
                             Status
                         </th>
                         <th
@@ -183,6 +190,19 @@ function executeDelete() {
                         </td>
                         <td class="px-5 py-3.5 capitalize">
                             {{ account.environment }}
+                        </td>
+                        <td class="px-5 py-3.5 text-sm">
+                            {{
+                                account.mode === 'card_fields'
+                                    ? 'Card fields'
+                                    : 'Hosted page'
+                            }}
+                            <span
+                                v-if="account.google_pay_enabled"
+                                class="text-muted-foreground"
+                            >
+                                + Google Pay
+                            </span>
                         </td>
                         <td class="px-5 py-3.5">
                             <div

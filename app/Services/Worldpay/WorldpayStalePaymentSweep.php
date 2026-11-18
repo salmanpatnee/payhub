@@ -4,6 +4,7 @@ namespace App\Services\Worldpay;
 
 use App\Enums\PaymentProvider;
 use App\Models\Payment;
+use App\Models\WorldpayChargeAttempt;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -27,7 +28,7 @@ class WorldpayStalePaymentSweep
 
         $inWindow = fn ($page) => $page->whereNull('failed_at')->whereNotNull('url');
 
-        $due = Payment::query()
+        $hostedDue = Payment::query()
             ->where('provider', PaymentProvider::Worldpay->value)
             ->where(fn ($q) => $q
                 ->where('status', 'pending')
@@ -40,6 +41,32 @@ class WorldpayStalePaymentSweep
                 ->whereNull('worldpay_last_lookup_at')
                 ->orWhere('worldpay_last_lookup_at', '<=', now()->subSeconds($gap)))
             ->get();
+
+        // Card fields payments (spec 0015, AC-10): any attempt still being decided inside the window, or a final
+        // one near the end of it (looked up once, so a late paid row is still caught). Read only, never a charge.
+        $lateAfter = (int) config('services.worldpay.card_final_lookup_after_hours', 60);
+        $undecided = WorldpayChargeAttempt::NON_FINAL;
+        $notFound = WorldpayChargeAttempt::OUTCOME_NOT_FOUND;
+
+        $inCardWindow = fn ($a) => $a->real()->whereNotNull('transaction_reference')
+            ->where('created_at', '<=', now()->subSeconds($minAge))
+            ->where('created_at', '>=', now()->subHours($hours));
+
+        $cardDue = Payment::query()
+            ->where('provider', PaymentProvider::Worldpay->value)
+            ->where(fn ($q) => $q
+                ->where('status', 'pending')
+                ->orWhere(fn ($q2) => $q2->where('status', 'completed')
+                    ->whereHas('worldpayChargeAttempts', fn ($a) => $inCardWindow($a), '>', 1)))
+            ->whereHas('worldpayChargeAttempts', fn ($a) => $inCardWindow($a)
+                ->where(fn ($w) => $w->whereIn('outcome', [...$undecided, $notFound])
+                    ->orWhere('created_at', '<=', now()->subHours($lateAfter))))
+            ->where(fn ($q) => $q
+                ->whereNull('worldpay_last_lookup_at')
+                ->orWhere('worldpay_last_lookup_at', '<=', now()->subSeconds($gap)))
+            ->get();
+
+        $due = $hostedDue->merge($cardDue)->unique('id');
 
         foreach ($due->groupBy('worldpay_account_id') as $group) {
             foreach ($group->values() as $i => $payment) {

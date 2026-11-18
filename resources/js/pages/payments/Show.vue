@@ -64,7 +64,14 @@ type AttemptHistory =
     | {
         provider: 'worldpay';
         rows: AttemptRow[];
-        summary: { worldpay_payment_id: string | null; page_count: number; charge_started_at: string | null };
+        summary: {
+            worldpay_payment_id: string | null;
+            page_count: number;
+            charge_attempt_count: number;
+            charge_started_at: string | null;
+            has_duplicate: boolean;
+            has_unsettled_charge: boolean;
+        };
     }
     | {
         provider: 'authorizenet';
@@ -87,6 +94,11 @@ const attemptTone: Record<string, string> = {
     prepared: 'pending',
     pending: 'pending',
     abandoned: 'cancelled',
+    // Worldpay card attempts
+    refused: 'failed',
+    challenge_failed: 'failed',
+    challenge_required: 'pending',
+    not_found: 'cancelled',
     // Kurv and Worldpay lookups
     paid: 'completed',
     mismatch: 'failed',
@@ -408,7 +420,7 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                                 <tr class="bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                     <th class="px-4 py-3">#</th>
                                     <th class="px-4 py-3">Started</th>
-                                    <th class="px-4 py-3">{{ attempts.provider === 'mpgs' ? 'Order ID' : attempts.provider === 'kurv' ? 'Request ID' : attempts.provider === 'worldpay' ? 'Page reference' : 'Transaction ID' }}</th>
+                                    <th class="px-4 py-3">{{ attempts.provider === 'mpgs' ? 'Order ID' : attempts.provider === 'kurv' ? 'Request ID' : attempts.provider === 'worldpay' ? 'Reference' : 'Transaction ID' }}</th>
                                     <th class="px-4 py-3">Status</th>
                                     <th class="px-4 py-3">Reason</th>
                                     <th v-if="attempts.provider === 'kurv' || attempts.provider === 'worldpay'" class="px-4 py-3">Source</th>
@@ -417,7 +429,7 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                             <tbody>
                                 <tr
                                     v-for="row in attempts.rows"
-                                    :key="row.sequence"
+                                    :key="`${row.source ?? 'row'}-${row.sequence}`"
                                     class="border-t border-border max-sm:m-3 max-sm:flex max-sm:flex-col max-sm:gap-1 max-sm:rounded-lg max-sm:border max-sm:p-3"
                                 >
                                     <td class="px-4 py-3.5 align-top tabular-nums max-sm:p-0">{{ row.sequence }}</td>
@@ -438,7 +450,7 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                                 </tr>
                             </tbody>
                         </table>
-                        <p v-else-if="attempts.provider === 'worldpay'" class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No lookups yet. PayHub has not asked Worldpay about this payment.</p>
+                        <p v-else-if="attempts.provider === 'worldpay'" class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No charges or lookups yet. The client has not paid and PayHub has not asked Worldpay about this payment.</p>
                         <p v-else-if="attempts.provider === 'kurv'" class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No lookups yet. PayHub has not asked Kurv about this payment.</p>
                         <p v-else class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No attempts yet. The client has not opened the payment link.</p>
 
@@ -458,7 +470,20 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                         </dl>
                     </div>
 
-                    <dl v-if="attempts.provider === 'worldpay'" class="grid grid-cols-1 gap-x-4 gap-y-4 border-t border-border px-5 py-5 text-sm sm:grid-cols-3 sm:px-6">
+                    <div
+                        v-if="attempts.provider === 'worldpay' && attempts.summary.has_duplicate"
+                        class="border-t border-border bg-destructive/10 px-5 py-3 text-sm font-medium text-destructive sm:px-6"
+                    >
+                        Two charges were found for this payment. Refund one in Worldpay.
+                    </div>
+                    <div
+                        v-if="attempts.provider === 'worldpay' && attempts.summary.has_unsettled_charge"
+                        class="border-t border-border bg-destructive/10 px-5 py-3 text-sm font-medium text-destructive sm:px-6"
+                    >
+                        This payment has a charge that Worldpay has not settled. New charges stay blocked until you resolve it in Worldpay.
+                    </div>
+
+                    <dl v-if="attempts.provider === 'worldpay'" class="grid grid-cols-1 gap-x-4 gap-y-4 border-t border-border px-5 py-5 text-sm sm:grid-cols-4 sm:px-6">
                         <div class="min-w-0">
                             <dt :class="labelClass">Worldpay payment ID</dt>
                             <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.worldpay_payment_id ?? '—' }}</dd>
@@ -466,6 +491,10 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                         <div>
                             <dt :class="labelClass">Pages created</dt>
                             <dd class="mt-1 tabular-nums">{{ attempts.summary.page_count }}</dd>
+                        </div>
+                        <div>
+                            <dt :class="labelClass">Card attempts</dt>
+                            <dd class="mt-1 tabular-nums">{{ attempts.summary.charge_attempt_count }}</dd>
                         </div>
                         <div>
                             <dt :class="labelClass">First page created</dt>

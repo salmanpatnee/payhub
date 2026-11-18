@@ -186,6 +186,7 @@ it('completes instead of creating a page when the old page was paid, and blocks 
 });
 
 it('refuses a page beyond max_pages with 422', function () {
+    config(['services.worldpay.max_pages' => 1]);
     wpFakeCreate();
     $payment = wpCheckoutPayment();
     WorldpayPage::create(['payment_id' => $payment->id, 'sequence' => 1, 'transaction_reference' => $payment->uuid.'-1', 'url' => 'https://hpp-sandbox.worldpay.com/a', 'expires_at' => now()->subDay()]);
@@ -196,7 +197,7 @@ it('refuses a page beyond max_pages with 422', function () {
 });
 
 it('replaces a refused page at once when the setting allows more pages', function () {
-    config(['services.worldpay.max_pages' => 2]);
+    config(['services.worldpay.max_pages' => 2, 'services.worldpay.reuse_after_decline' => false]);
     wpFakeCreate();
     $payment = wpCheckoutPayment();
     WorldpayPage::create(['payment_id' => $payment->id, 'sequence' => 1, 'transaction_reference' => $payment->uuid.'-1', 'url' => 'https://hpp-sandbox.worldpay.com/a', 'expires_at' => now()->addDay(), 'last_event' => 'authorizationFailed']);
@@ -242,6 +243,7 @@ it('reports state only and runs at most one lookup per ten seconds', function ()
 });
 
 it('gives retry for a fresh refusal on a dead page, completed after a sale and unavailable when inactive', function () {
+    config(['services.worldpay.reuse_after_decline' => false]);
     $payment = wpCheckoutPayment();
     $page = WorldpayPage::create(['payment_id' => $payment->id, 'sequence' => 1, 'transaction_reference' => $payment->uuid.'-1', 'url' => 'https://hpp-sandbox.worldpay.com/a', 'expires_at' => now()->addDay(), 'last_event' => 'authorizationFailed']);
     WorldpayLookupAttempt::create(['payment_id' => $payment->id, 'page_id' => $page->id, 'source' => 'poll', 'outcome' => 'declined', 'last_event' => 'authorizationFailed', 'last_checked_at' => now()]);
@@ -322,4 +324,85 @@ it('does not change the content security policy on the Worldpay pay page', funct
 
     expect($a)->not->toContain('worldpay');
     expect(preg_replace('/nonce-[A-Za-z0-9+\/=]+/', 'N', (string) $a))->toBe(preg_replace('/nonce-[A-Za-z0-9+\/=]+/', 'N', (string) $b));
+});
+
+it('asks Worldpay to hide the billing address by default and leaves it out when the config is empty', function (?string $config, ?string $expected) {
+    config(['services.worldpay.show_billing_address' => $config]);
+    wpFakeCreate();
+    $payment = wpCheckoutPayment();
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertOk();
+
+    Http::assertSent(function ($request) use ($expected) {
+        if (! str_ends_with($request->url(), '/payment_pages')) {
+            return false;
+        }
+
+        $body = $request->data();
+
+        return $expected === null
+            ? ! array_key_exists('hostedProperties', $body)
+            : ($body['hostedProperties'] ?? null) === ['showBillingAddress' => $expected];
+    });
+})->with([['HIDE', 'HIDE'], ['edit', 'EDIT'], ['SHOW', 'SHOW'], ['', null], ['nonsense', null]]);
+
+it('closes the page when the client returns on the failure or error address and makes a new page on Pay now', function (string $word) {
+    wpFakeCreate();
+    $payment = wpCheckoutPayment();
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertOk();
+    expect(WorldpayPage::count())->toBe(1);
+
+    $this->get("/pay/{$payment->uuid}?worldpay_return={$word}&errors=")->assertOk();
+    expect(WorldpayPage::first()->closed_at)->not->toBeNull();
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertOk();
+    expect(WorldpayPage::count())->toBe(2)->and(WorldpayPage::orderByDesc('sequence')->first()->closed_at)->toBeNull();
+    expect($payment->fresh()->status)->toBe('pending');
+})->with(['failure', 'error']);
+
+it('does not close the page for other return words or for a payment that is not pending', function () {
+    wpFakeCreate();
+    $payment = wpCheckoutPayment();
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertOk();
+
+    foreach (['success', 'pending', 'cancel', 'expiry', 'nonsense'] as $word) {
+        $this->get("/pay/{$payment->uuid}?worldpay_return={$word}")->assertOk();
+    }
+    expect(WorldpayPage::first()->closed_at)->toBeNull();
+
+    $payment->update(['status' => 'completed']);
+    $this->get("/pay/{$payment->uuid}?worldpay_return=failure");
+    expect(WorldpayPage::first()->closed_at)->toBeNull();
+});
+
+it('stops making new pages after max_pages failures and never makes one while a sale is pending', function () {
+    wpFakeCreate();
+    $payment = wpCheckoutPayment();
+
+    foreach (range(1, 3) as $i) {
+        $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertOk();
+        $this->get("/pay/{$payment->uuid}?worldpay_return=failure");
+    }
+    expect(WorldpayPage::count())->toBe(3);
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertStatus(422)
+        ->assertJson(['message' => 'This payment link can no longer be used.']);
+    expect(WorldpayPage::count())->toBe(3);
+});
+
+it('does not make a new page after a failure return when Worldpay shows a sale in progress', function () {
+    Http::swap(new Illuminate\Http\Client\Factory);
+    Http::fake([
+        '*payment_pages' => Http::response(['_links' => ['self' => ['href' => 'x']], 'url' => 'https://hpp-sandbox.worldpay.com/app/hpp/integration/transaction/abc?cs=SECRET'], 200),
+        '*paymentQueries/payments*' => fn ($request) => Http::response(['_embedded' => ['payments' => [[
+            'timestamp' => '2026-11-17T13:45:51.762Z', 'paymentId' => 'payX', 'transactionReference' => $request->data()['transactionReference'] ?? str($request->url())->after('transactionReference=')->before('&')->toString(),
+            'lastEvent' => 'authorized', 'entity' => 'PO1', 'value' => ['currency' => 'GBP', 'amount' => 1234],
+        ]]]], 200),
+    ]);
+    $payment = wpCheckoutPayment();
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertOk();
+    $this->get("/pay/{$payment->uuid}?worldpay_return=failure");
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertStatus(409);
+    expect(WorldpayPage::count())->toBe(1);
 });

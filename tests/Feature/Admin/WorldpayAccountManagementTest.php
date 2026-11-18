@@ -166,3 +166,90 @@ it('fills a blank username or password from the saved account on the unsaved rou
         return $auth === 'Basic '.base64_encode($account->api_username.':typed-pass');
     });
 });
+
+const WP_CHECKOUT_ID = '4c1b8b1e-3d0e-4d5b-9a53-2f4c6f0a1b11';
+
+it('defaults to hosted mode and drops card fields values on a hosted account', function () {
+    $this->actingAs(wpUser('admin'))->post('/admin/worldpay-accounts', wpForm([
+        'checkout_id' => WP_CHECKOUT_ID,
+    ]))->assertSessionHasNoErrors();
+
+    $account = WorldpayAccount::sole();
+    expect($account->mode)->toBe('hosted')->and($account->checkout_id)->toBeNull()
+        ->and($account->google_pay_enabled)->toBeFalse();
+});
+
+it('needs a UUID Checkout ID for card fields mode and saves it as plain text', function () {
+    $admin = wpUser('admin');
+
+    $this->actingAs($admin)->post('/admin/worldpay-accounts', wpForm(['mode' => 'card_fields']))
+        ->assertSessionHasErrors('checkout_id');
+    $this->actingAs($admin)->post('/admin/worldpay-accounts', wpForm(['mode' => 'card_fields', 'checkout_id' => 'not-a-uuid']))
+        ->assertSessionHasErrors('checkout_id');
+
+    $this->actingAs($admin)->post('/admin/worldpay-accounts', wpForm(['mode' => 'card_fields', 'checkout_id' => WP_CHECKOUT_ID]))
+        ->assertSessionHasNoErrors();
+
+    $account = WorldpayAccount::sole();
+    expect($account->isCardFields())->toBeTrue()->and($account->checkout_id)->toBe(WP_CHECKOUT_ID);
+
+    $this->actingAs($admin)->get("/admin/worldpay-accounts/{$account->id}/edit")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('worldpayAccount.mode', 'card_fields')
+            ->where('worldpayAccount.checkout_id', WP_CHECKOUT_ID)
+            ->missing('worldpayAccount.api_password'));
+});
+
+it('allows Google Pay only in card fields mode and then needs the gateway merchant id', function () {
+    $admin = wpUser('admin');
+
+    $this->actingAs($admin)->post('/admin/worldpay-accounts', wpForm(['google_pay_enabled' => true]))
+        ->assertSessionHasErrors('google_pay_enabled');
+
+    $this->actingAs($admin)->post('/admin/worldpay-accounts', wpForm([
+        'mode' => 'card_fields', 'checkout_id' => WP_CHECKOUT_ID, 'google_pay_enabled' => true,
+    ]))->assertSessionHasErrors('google_pay_gateway_merchant_id');
+
+    $this->actingAs($admin)->post('/admin/worldpay-accounts', wpForm([
+        'mode' => 'card_fields', 'checkout_id' => WP_CHECKOUT_ID, 'google_pay_enabled' => true,
+        'google_pay_gateway_merchant_id' => 'BCR2DN4T-gateway',
+    ]))->assertSessionHasNoErrors();
+
+    expect(WorldpayAccount::sole()->google_pay_enabled)->toBeTrue();
+});
+
+it('locks the mode once a payment uses the account but keeps the Checkout ID editable', function () {
+    $admin = wpUser('admin');
+    $account = WorldpayAccount::factory()->cardFields()->create(['entity_ref' => 'PO1234567890']);
+    Payment::factory()->worldpay()->create(['worldpay_account_id' => $account->id]);
+
+    $this->actingAs($admin)->put("/admin/worldpay-accounts/{$account->id}", wpForm([
+        'api_username' => '', 'api_password' => '', 'mode' => 'hosted',
+    ]))->assertSessionHasErrors(['mode' => 'This account already has payments. Create a new account to change the mode.']);
+
+    $newId = 'aaaaaaaa-3d0e-4d5b-9a53-2f4c6f0a1b11';
+    $this->actingAs($admin)->put("/admin/worldpay-accounts/{$account->id}", wpForm([
+        'api_username' => '', 'api_password' => '', 'mode' => 'card_fields', 'checkout_id' => $newId,
+    ]))->assertSessionHasNoErrors();
+
+    expect($account->fresh()->checkout_id)->toBe($newId)->and($account->fresh()->mode)->toBe('card_fields');
+});
+
+it('checks the Checkout ID shape in test connection for card fields without creating anything', function () {
+    Http::fake(['*' => Http::response(['_embedded' => ['payments' => []]], 200)]);
+    $admin = wpUser('admin');
+
+    $this->actingAs($admin)->post('/admin/worldpay-accounts/test-connection', [
+        'environment' => 'try', 'api_username' => 'u', 'api_password' => 'p', 'mode' => 'card_fields', 'checkout_id' => 'nope',
+    ])->assertSessionHasErrors('worldpay_api');
+    Http::assertNothingSent();
+
+    $this->actingAs($admin)->post('/admin/worldpay-accounts/test-connection', [
+        'environment' => 'try', 'api_username' => 'u', 'api_password' => 'p', 'mode' => 'card_fields', 'checkout_id' => WP_CHECKOUT_ID,
+    ])->assertSessionHasNoErrors();
+    Http::assertSentCount(1);
+
+    $account = WorldpayAccount::factory()->cardFields()->create(['checkout_id' => 'broken']);
+    $this->actingAs($admin)->post("/admin/worldpay-accounts/{$account->id}/test-connection")
+        ->assertSessionHasErrors('worldpay_api');
+});

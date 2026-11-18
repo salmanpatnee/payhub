@@ -15,6 +15,7 @@ use App\Models\MpgsAccount;
 use App\Models\NmiAccount;
 use App\Models\WorldpayAccount;
 use App\Models\Payment;
+use App\Models\WorldpayChargeAttempt;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
@@ -727,32 +728,67 @@ class PaymentController extends Controller
                     'charge_started_at' => $payment->kurv_charge_started_at?->toISOString(),
                 ],
             ],
-            // Worldpay (spec 0014, AC-9): one row per page per lookup, newest first, with where it came from.
-            PaymentProvider::Worldpay => [
-                'provider' => 'worldpay',
-                'rows' => $payment->worldpayLookupAttempts()
-                    ->with('page:id,transaction_reference')
-                    ->orderByDesc('last_checked_at')
-                    ->orderByDesc('id')
-                    ->limit(100)
-                    ->get()
-                    ->map(fn ($attempt) => [
-                        'sequence' => $attempt->id,
-                        'reference' => $attempt->page?->transaction_reference,
-                        'status' => $attempt->outcome,
-                        'status_detail' => $attempt->last_event,
-                        'reason' => $attempt->reason,
-                        'source' => $attempt->source,
-                        'started_at' => ($attempt->last_checked_at ?? $attempt->created_at)?->toISOString(),
-                    ])
-                    ->all(),
-                'summary' => [
-                    'worldpay_payment_id' => $payment->worldpay_payment_id,
-                    'page_count' => $payment->worldpayPages()->count(),
-                    'charge_started_at' => $payment->worldpay_charge_started_at?->toISOString(),
-                ],
-            ],
+            // Worldpay (spec 0014, AC-9; spec 0015, AC-11): one row per lookup (hosted page or card attempt) and one
+            // row per card charge, newest first, with where it came from. Page report rows show here only.
+            PaymentProvider::Worldpay => $this->worldpayAttemptHistory($payment),
             default => null,
         };
+    }
+
+    /**
+     * @return array{provider: string, rows: list<array<string, mixed>>, summary: array<string, mixed>}
+     */
+    private function worldpayAttemptHistory(Payment $payment): array
+    {
+        $lookups = $payment->worldpayLookupAttempts()
+            ->with(['page:id,transaction_reference', 'chargeAttempt:id,transaction_reference'])
+            ->orderByDesc('last_checked_at')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(fn ($attempt) => [
+                'sequence' => $attempt->id,
+                'reference' => $attempt->page?->transaction_reference ?? $attempt->chargeAttempt?->transaction_reference,
+                'status' => $attempt->outcome,
+                'status_detail' => $attempt->last_event,
+                'reason' => $attempt->reason,
+                'source' => $attempt->source,
+                'started_at' => ($attempt->last_checked_at ?? $attempt->created_at)?->toISOString(),
+            ]);
+
+        // Card charge rows hold only what PayHub wrote: never a card value, session, token or link.
+        $charges = $payment->worldpayChargeAttempts()
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(fn (WorldpayChargeAttempt $attempt) => [
+                'sequence' => $attempt->id,
+                'reference' => $attempt->transaction_reference,
+                'status' => $attempt->outcome,
+                'status_detail' => collect([$attempt->step, $attempt->method, $attempt->last_event, $attempt->response_code])->filter()->implode(' · ') ?: null,
+                'reason' => $attempt->reason,
+                'client_info' => $attempt->client_info,
+                'source' => 'charge',
+                'started_at' => $attempt->created_at->toISOString(),
+            ]);
+
+        $stuckHours = (int) config('services.worldpay.card_stuck_hours', 24);
+
+        return [
+            'provider' => 'worldpay',
+            'rows' => $lookups->concat($charges)->sortByDesc('started_at')->values()->all(),
+            'summary' => [
+                'worldpay_payment_id' => $payment->worldpay_payment_id,
+                'page_count' => $payment->worldpayPages()->count(),
+                'charge_attempt_count' => $payment->worldpayChargeAttempts()->real()->count(),
+                'charge_started_at' => $payment->worldpay_charge_started_at?->toISOString(),
+                // Two charges were found for this payment (spec 0015, AC-9).
+                'has_duplicate' => $payment->worldpayLookupAttempts()->where('outcome', 'duplicate')->exists(),
+                // A charge Worldpay has not settled after the limit (spec 0015, AC-8).
+                'has_unsettled_charge' => $payment->status === 'pending'
+                    && $payment->worldpayChargeAttempts()->where('outcome', 'approved')
+                        ->where('created_at', '<=', now()->subHours($stuckHours))->exists(),
+            ],
+        ];
     }
 }

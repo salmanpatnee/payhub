@@ -11,6 +11,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -27,6 +28,8 @@ class WorldpayAccountController extends Controller
                     'account_name' => $account->account_name,
                     'prefix' => $account->prefix,
                     'environment' => $account->environment,
+                    'mode' => $account->mode,
+                    'google_pay_enabled' => $account->google_pay_enabled,
                     'is_active' => $account->is_active,
                 ]),
         ]);
@@ -39,7 +42,8 @@ class WorldpayAccountController extends Controller
 
     public function store(StoreWorldpayAccountRequest $request): RedirectResponse
     {
-        $account = new WorldpayAccount($request->safe()->except(['api_username', 'api_password', 'webhook_secret']));
+        $account = new WorldpayAccount($request->safe()->only(['account_name', 'prefix', 'environment', 'entity_ref']));
+        $this->applyMode($account, $request->validated());
         $account->api_username = $request->validated('api_username');
         $account->api_password = $request->validated('api_password');
         $account->webhook_secret = $request->filled('webhook_secret') ? $request->validated('webhook_secret') : null;
@@ -59,6 +63,12 @@ class WorldpayAccountController extends Controller
                 'prefix' => $worldpayAccount->prefix,
                 'environment' => $worldpayAccount->environment,
                 'entity_ref' => $worldpayAccount->entity_ref,
+                'mode' => $worldpayAccount->mode,
+                // Public identifiers, safe to show (spec 0015, AC-1).
+                'checkout_id' => $worldpayAccount->checkout_id,
+                'google_pay_enabled' => $worldpayAccount->google_pay_enabled,
+                'google_pay_gateway_merchant_id' => $worldpayAccount->google_pay_gateway_merchant_id,
+                'has_payments' => $worldpayAccount->payments()->exists(),
                 'webhook_key_id' => $worldpayAccount->webhook_key_id,
                 'is_active' => $worldpayAccount->is_active,
                 'has_api_username' => ! empty($worldpayAccount->api_username),
@@ -84,6 +94,7 @@ class WorldpayAccountController extends Controller
         }
 
         $worldpayAccount->fill($request->safe()->only(['account_name', 'prefix', 'environment', 'entity_ref']));
+        $this->applyMode($worldpayAccount, $request->validated() + ['mode' => $worldpayAccount->mode]);
         $worldpayAccount->webhook_key_id = $request->filled('webhook_key_id') ? $request->validated('webhook_key_id') : null;
 
         if (! $request->filled('webhook_key_id')) {
@@ -94,6 +105,30 @@ class WorldpayAccountController extends Controller
 
         return redirect()->route('admin.worldpay-accounts.index')
             ->with('success', 'Worldpay account updated.');
+    }
+
+    /**
+     * Set the mode fields from validated input. A hosted account keeps no Checkout ID and no Google
+     * Pay settings (ignored, spec 0015, AC-1); Google Pay also needs its gateway merchant id.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function applyMode(WorldpayAccount $account, array $data): void
+    {
+        $mode = $data['mode'] ?? 'hosted';
+        $account->mode = $mode;
+
+        if ($mode !== 'card_fields') {
+            $account->checkout_id = null;
+            $account->google_pay_enabled = false;
+            $account->google_pay_gateway_merchant_id = null;
+
+            return;
+        }
+
+        $account->checkout_id = $data['checkout_id'] ?? null;
+        $account->google_pay_enabled = (bool) ($data['google_pay_enabled'] ?? false);
+        $account->google_pay_gateway_merchant_id = $account->google_pay_enabled ? ($data['google_pay_gateway_merchant_id'] ?? null) : null;
     }
 
     public function deactivate(WorldpayAccount $worldpayAccount): RedirectResponse
@@ -136,6 +171,8 @@ class WorldpayAccountController extends Controller
             'api_password' => ['nullable', 'string', 'max:255'],
             'environment' => ['required', Rule::in(WorldpayAccount::ENVIRONMENTS)],
             'account_id' => ['nullable', 'integer', 'exists:worldpay_accounts,id'],
+            'mode' => ['nullable', Rule::in(WorldpayAccount::MODES)],
+            'checkout_id' => ['nullable', 'string', 'max:64'],
         ]);
 
         $saved = isset($data['account_id']) ? WorldpayAccount::find($data['account_id']) : null;
@@ -146,12 +183,37 @@ class WorldpayAccountController extends Controller
             return back()->withErrors(['worldpay_api' => 'Enter the API username and password to test the connection.']);
         }
 
+        $shapeError = $this->checkoutIdError($data['mode'] ?? $saved?->mode, $data['checkout_id'] ?? $saved?->checkout_id);
+
+        if ($shapeError !== null) {
+            return back()->withErrors(['worldpay_api' => $shapeError]);
+        }
+
         return $this->connectionResult($username, $password, $data['environment']);
     }
 
     public function testStoredConnection(WorldpayAccount $worldpayAccount): RedirectResponse
     {
+        $shapeError = $this->checkoutIdError($worldpayAccount->mode, $worldpayAccount->checkout_id);
+
+        if ($shapeError !== null) {
+            return back()->withErrors(['worldpay_api' => $shapeError]);
+        }
+
         return $this->connectionResult($worldpayAccount->api_username, $worldpayAccount->api_password, $worldpayAccount->environment);
+    }
+
+    /**
+     * A card fields account also needs a Checkout ID that looks like a UUID. Only the shape is checked here:
+     * the ID and its domain allow list are proven when the card fields load on a real pay page (spec 0015, AC-3).
+     */
+    private function checkoutIdError(?string $mode, ?string $checkoutId): ?string
+    {
+        if ($mode !== 'card_fields') {
+            return null;
+        }
+
+        return Str::isUuid((string) $checkoutId) ? null : 'Enter the Checkout ID as a UUID (for example 4c1b8b1e-3d0e-4d5b-9a53-2f4c6f0a1b11).';
     }
 
     /**

@@ -64,6 +64,14 @@ class WorldpayClient
             'resultURLs' => $resultUrls,
         ];
 
+        // Hosted page options (HPP API, hostedProperties). The billing address mode is SHOW, HIDE or EDIT.
+        // Left out when the config value is empty, so the account's own Worldpay setting applies.
+        $billing = strtoupper((string) config('services.worldpay.show_billing_address', ''));
+
+        if (in_array($billing, ['SHOW', 'HIDE', 'EDIT'], true)) {
+            $body['hostedProperties'] = ['showBillingAddress' => $billing];
+        }
+
         $response = $this->pagesRequest()->post('/payment_pages', $body);
 
         if ($response->status() === 429) {

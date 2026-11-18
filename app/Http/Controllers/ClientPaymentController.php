@@ -233,6 +233,14 @@ class ClientPaymentController extends Controller
 
         $returnStatus = WorldpayPaymentController::returnWord($request->query('worldpay_return'));
 
+        // Worldpay sends the client to the failure or error address when the payment did not go through. A page
+        // that ended like this can reject every later try (Try, 2026-11-18), so it is closed and the next Pay now
+        // makes a fresh page (up to max_pages). The word is untrusted: it only closes a page, never sets a status,
+        // and Pay now looks at Worldpay again before it makes a new page, so a paid sale is never paid twice.
+        if (in_array($returnStatus, ['failure', 'error'], true) && $payment->status === 'pending') {
+            $payment->worldpayPages()->usable()->whereNull('closed_at')->update(['closed_at' => now()]);
+        }
+
         // One lookup after the response, so the page never waits for Worldpay. Shares the poll's throttle key.
         if (in_array($returnStatus, ['success', 'pending'], true)
             && $payment->status === 'pending'

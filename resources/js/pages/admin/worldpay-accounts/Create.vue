@@ -36,6 +36,10 @@ const form = useForm({
     prefix: '',
     environment: 'try',
     entity_ref: '',
+    mode: 'hosted',
+    checkout_id: '',
+    google_pay_enabled: false,
+    google_pay_gateway_merchant_id: '',
     api_username: '',
     api_password: '',
     webhook_key_id: '',
@@ -54,6 +58,8 @@ function testConnection() {
             api_username: form.api_username,
             api_password: form.api_password,
             environment: form.environment,
+            mode: form.mode,
+            checkout_id: form.checkout_id,
         },
         {
             preserveState: true,
@@ -61,7 +67,9 @@ function testConnection() {
             onSuccess: () => {
                 testStatus.value = 'ok';
                 testMessage.value =
-                    'Connected. The entity is checked on the first real payment.';
+                    form.mode === 'card_fields'
+                        ? 'Connected. The Checkout ID is checked when the card fields load on a real payment page.'
+                        : 'Connected. The entity is checked on the first real payment.';
             },
             onError: (errors) => {
                 const e = errors as Record<string, string>;
@@ -179,6 +187,84 @@ function submit() {
                         </p>
                         <InputError :message="form.errors.entity_ref" />
                     </div>
+
+                    <div class="grid gap-2">
+                        <Label for="mode">Payment mode</Label>
+                        <select
+                            id="mode"
+                            v-model="form.mode"
+                            :disabled="false"
+                            class="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs disabled:opacity-60"
+                        >
+                            <option value="hosted">
+                                Hosted page (the client pays on Worldpay)
+                            </option>
+                            <option value="card_fields">
+                                Card fields (the client pays on the PayHub page)
+                            </option>
+                        </select>
+                        <p class="text-xs text-muted-foreground">
+                            Hosted sends the client to Worldpay's page. Card
+                            fields shows Worldpay's card inputs on the PayHub
+                            page. The mode cannot be changed once a payment uses
+                            this account.
+                        </p>
+                        <InputError :message="form.errors.mode" />
+                    </div>
+
+                    <template v-if="form.mode === 'card_fields'">
+                        <div class="grid gap-2">
+                            <Label for="checkout_id">Checkout ID</Label>
+                            <Input
+                                id="checkout_id"
+                                v-model="form.checkout_id"
+                                type="text"
+                                maxlength="64"
+                                placeholder="e.g. 4c1b8b1e-3d0e-4d5b-9a53-2f4c6f0a1b11"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                The Checkout ID comes from your Worldpay
+                                implementation manager. Use the Try values for
+                                test mode and the Live values for production.
+                                Test connection cannot prove the Checkout ID or
+                                its domain allow list. The first real pay page
+                                load does, so open a Try payment link to check.
+                            </p>
+                            <InputError :message="form.errors.checkout_id" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <label class="flex items-center gap-2 text-sm">
+                                <input
+                                    id="google_pay_enabled"
+                                    v-model="form.google_pay_enabled"
+                                    type="checkbox"
+                                    class="size-4"
+                                />
+                                Offer Google Pay (GBP payments only)
+                            </label>
+                            <InputError
+                                :message="form.errors.google_pay_enabled"
+                            />
+                        </div>
+
+                        <div v-if="form.google_pay_enabled" class="grid gap-2">
+                            <Label for="google_pay_gateway_merchant_id">
+                                Google Pay gateway merchant ID
+                            </Label>
+                            <Input
+                                id="google_pay_gateway_merchant_id"
+                                v-model="form.google_pay_gateway_merchant_id"
+                                type="text"
+                                maxlength="128"
+                            />
+                            <InputError
+                                :message="
+                                    form.errors.google_pay_gateway_merchant_id
+                                "
+                            />
+                        </div>
+                    </template>
 
                     <div class="grid gap-2">
                         <Label for="api_username">API username</Label>

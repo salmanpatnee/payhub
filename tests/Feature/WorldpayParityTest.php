@@ -150,3 +150,27 @@ it('never lets a Worldpay payment fall through to the Stripe pay page', function
 
     $this->get("/pay/{$payment->uuid}")->assertInertia(fn (Assert $p) => $p->component('ClientPayment/PayWorldpay'));
 });
+
+it('shows card charges, lookups and the admin banners on the payment page without secrets', function () {
+    $payment = Payment::factory()->worldpay()->create(['amount' => 5000, 'status' => 'pending']);
+    $attempt = App\Models\WorldpayChargeAttempt::factory()->create([
+        'payment_id' => $payment->id, 'transaction_reference' => $payment->uuid.'-c1', 'outcome' => 'approved',
+        'client_info' => 'Chrome on Windows', 'created_at' => now()->subHours(30),
+    ]);
+    $attempt->three_ds_state = 'https://secret.example/next';
+    $attempt->save();
+    WorldpayLookupAttempt::create([
+        'payment_id' => $payment->id, 'charge_attempt_id' => $attempt->id, 'source' => 'poll',
+        'outcome' => 'duplicate', 'checks' => 1, 'last_checked_at' => now(),
+    ]);
+
+    $response = $this->actingAs(wpParityAdmin())->get("/payments/{$payment->uuid}");
+
+    $response->assertOk()->assertInertia(fn (Assert $p) => $p
+        ->where('attempts.provider', 'worldpay')
+        ->where('attempts.summary.charge_attempt_count', 1)
+        ->where('attempts.summary.has_duplicate', true)
+        ->where('attempts.summary.has_unsettled_charge', true)
+        ->has('attempts.rows', 2));
+    expect($response->getContent())->not->toContain('secret.example');
+});

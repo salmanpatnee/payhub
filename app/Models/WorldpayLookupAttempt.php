@@ -15,7 +15,7 @@ class WorldpayLookupAttempt extends Model
     public const UPDATED_AT = null;
 
     protected $fillable = [
-        'payment_id', 'page_id', 'source', 'outcome', 'last_event', 'reason',
+        'payment_id', 'page_id', 'charge_attempt_id', 'source', 'outcome', 'last_event', 'reason',
         'worldpay_payment_id', 'checks', 'last_checked_at',
     ];
 
@@ -30,6 +30,11 @@ class WorldpayLookupAttempt extends Model
     public function payment(): BelongsTo
     {
         return $this->belongsTo(Payment::class);
+    }
+
+    public function chargeAttempt(): BelongsTo
+    {
+        return $this->belongsTo(WorldpayChargeAttempt::class, 'charge_attempt_id');
     }
 
     public function page(): BelongsTo

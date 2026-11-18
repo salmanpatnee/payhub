@@ -1,7 +1,7 @@
 # 0015. Worldpay Checkout card fields on the PayHub pay page
 
 **Date**: 2026-11-17
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
