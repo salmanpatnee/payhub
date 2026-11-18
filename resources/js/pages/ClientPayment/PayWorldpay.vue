@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui/spinner'
 import PaymentLayout from '@/layouts/PaymentLayout.vue'
 import { formatMoney } from '@/lib/utils'
 
@@ -346,10 +347,14 @@ onBeforeUnmount(() => {
                     </p>
                 </div>
 
-                <Alert v-if="uiState === 'waiting'">
-                    <AlertCircle class="size-4" />
-                    <AlertDescription>We are confirming your payment. Please do not pay again.</AlertDescription>
-                </Alert>
+                <div v-if="uiState === 'waiting'">
+                    <Alert>
+                        <Spinner class="size-4 !text-[var(--brand-primary)]" />
+                        <AlertDescription>We are confirming your payment. Please do not pay again.</AlertDescription>
+                    </Alert>
+                    <div class="confirming-bar mt-2.5" aria-hidden="true" />
+                    <p class="mt-2 text-xs text-slate-400">This page updates by itself. Please keep it open.</p>
+                </div>
 
                 <template v-if="uiState === 'ready' || uiState === 'starting'">
                     <Alert v-if="message" variant="destructive">
@@ -546,5 +551,35 @@ onBeforeUnmount(() => {
 @keyframes contentIn {
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
+}
+
+.confirming-bar {
+    position: relative;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: hsl(214, 32%, 91%);
+}
+.confirming-bar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 34%;
+    border-radius: 3px;
+    background: var(--brand-primary);
+    animation: confirmingSlide 1.5s ease-in-out infinite;
+}
+@keyframes confirmingSlide {
+    from { left: -34%; }
+    to   { left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .confirming-bar::before {
+        left: 0;
+        width: 100%;
+        opacity: 0.4;
+        animation: none;
+    }
 }
 </style>
