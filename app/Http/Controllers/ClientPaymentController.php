@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\PaymentProvider;
 use App\Http\Requests\StorePaymentConsentRequest;
 use App\Jobs\ResolveCloverChargeAttempt;
+use App\Jobs\ResolveWorldpayPayment;
 use App\Models\Brand;
 use App\Models\CloverChargeAttempt;
 use App\Models\Payment;
@@ -15,6 +16,7 @@ use App\Services\Clover\CloverClient;
 use App\Services\Nmi\NmiChargeResolver;
 use App\Services\Revolut\RevolutClient;
 use App\Services\Viva\VivaClient;
+use App\Services\Worldpay\WorldpayChargeResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,8 +42,8 @@ class ClientPaymentController extends Controller
     {
         $payment->loadMissing('brand');
 
-        // Whop, Kurv and NMI: a webhook or lookup that lands before the client returns sends them to Success, ahead of the guard below.
-        if (in_array($payment->provider, [PaymentProvider::Whop, PaymentProvider::Kurv, PaymentProvider::Nmi], true) && $payment->status === 'completed') {
+        // Whop, Kurv, NMI and Worldpay: a webhook or lookup that lands before the client returns sends them to Success, ahead of the guard below.
+        if (in_array($payment->provider, [PaymentProvider::Whop, PaymentProvider::Kurv, PaymentProvider::Nmi, PaymentProvider::Worldpay], true) && $payment->status === 'completed') {
             return redirect()->route('pay.success', $payment);
         }
 
@@ -71,6 +73,7 @@ class ClientPaymentController extends Controller
             PaymentProvider::Whop => $this->showWhop($request, $payment),
             PaymentProvider::Kurv => $this->showKurv($request, $payment),
             PaymentProvider::Nmi => $this->showNmi($payment),
+            PaymentProvider::Worldpay => $this->showWorldpay($request, $payment),
             default => $this->showStripe($payment),
         };
     }
@@ -204,6 +207,54 @@ class ClientPaymentController extends Controller
             'hasLink' => $payment->kurv_request_id !== null,
             // Display only: Kurv appends other query values, which are ignored. Never changes status.
             'returnStatus' => $request->query('kurv_return') === '1' ? 'returned' : null,
+        ]);
+    }
+
+    /**
+     * Worldpay Hosted Payment Pages (spec 0014, AC-5, AC-10). The login, the page address and the
+     * transaction reference are NOT in these props: the browser only gets the address from
+     * WorldpayPaymentController::checkout() after consent and a click on Pay now. The return word
+     * is display only and never decides a status.
+     */
+    private function showWorldpay(Request $request, Payment $payment): Response
+    {
+        $payment->loadMissing('worldpayAccount');
+
+        // An inactive account is unavailable (a page that is already open can still be paid on
+        // Worldpay's side, and the sweep or the optional webhook still completes it).
+        if ($payment->worldpayAccount === null || ! $payment->worldpayAccount->is_active) {
+            return Inertia::render('ClientPayment/Unavailable', [
+                'status' => $payment->status,
+                'payment' => $this->paymentProps($payment),
+                'brand' => $this->brandProps($payment->brand),
+                'provider' => $payment->provider->value,
+            ]);
+        }
+
+        $returnStatus = WorldpayPaymentController::returnWord($request->query('worldpay_return'));
+
+        // Worldpay sends the client to the failure or error address when the payment did not go through. A page
+        // that ended like this can reject every later try (Try, 2026-11-18), so it is closed and the next Pay now
+        // makes a fresh page (up to max_pages). The word is untrusted: it only closes a page, never sets a status,
+        // and Pay now looks at Worldpay again before it makes a new page, so a paid sale is never paid twice.
+        if (in_array($returnStatus, ['failure', 'error'], true) && $payment->status === 'pending') {
+            $payment->worldpayPages()->usable()->whereNull('closed_at')->update(['closed_at' => now()]);
+        }
+
+        // One lookup after the response, so the page never waits for Worldpay. Shares the poll's throttle key.
+        if (in_array($returnStatus, ['success', 'pending'], true)
+            && $payment->status === 'pending'
+            && $payment->worldpayPages()->usable()->exists()
+            && Cache::add('worldpay:poll:'.$payment->id, 1, (int) config('services.worldpay.poll_lookup_seconds', 10))) {
+            ResolveWorldpayPayment::dispatchAfterResponse($payment->id, WorldpayChargeResolver::SOURCE_RETURN);
+        }
+
+        return Inertia::render('ClientPayment/PayWorldpay', [
+            'payment' => $this->paymentProps($payment),
+            'brand' => $this->brandProps($payment->brand),
+            'policies' => $this->policyProps(),
+            'hasConsent' => $payment->consents()->exists(),
+            'returnStatus' => $returnStatus,
         ]);
     }
 

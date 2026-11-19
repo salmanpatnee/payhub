@@ -87,6 +87,16 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
+        // Worldpay (spec 0014, AC-7): 10 checkout calls per payment and 30 per IP per hour. Reuse calls count.
+        RateLimiter::for('worldpay-checkout', function (Request $request): array {
+            $tooMany = fn () => response()->json(['message' => 'Too many attempts. Please try again later.'], 429);
+
+            return [
+                Limit::perHour(10)->by('worldpay-payment:'.($request->route('payment') ?? $request->ip()))->response($tooMany),
+                Limit::perHour(30)->by('worldpay-ip:'.$request->ip())->response($tooMany),
+            ];
+        });
+
         // NMI (spec 0012, AC-13): real sale requests only, 5 per payment and 20 per IP per hour. A 3DS failure
         // report is limited by its own limiter and never counts here.
         RateLimiter::for('nmi-charge', function (Request $request): array {

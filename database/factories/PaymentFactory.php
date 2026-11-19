@@ -8,6 +8,7 @@ use App\Models\CloverAccount;
 use App\Models\KurvAccount;
 use App\Models\MpgsAccount;
 use App\Models\NmiAccount;
+use App\Models\WorldpayAccount;
 use App\Models\RevolutAccount;
 use App\Models\SquareAccount;
 use App\Models\StripeAccount;
@@ -178,6 +179,20 @@ class PaymentFactory extends Factory
             'stripe_account_id' => null,
             'client_email' => 'client@example.com',
             'nmi_account_id' => NmiAccount::factory(),
+        ]);
+    }
+
+    /**
+     * Worldpay payment: nulls the Stripe account and attaches a Worldpay account. GBP only;
+     * a client email is optional and never sent to Worldpay.
+     */
+    public function worldpay(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'provider' => 'worldpay',
+            'currency' => 'gbp',
+            'stripe_account_id' => null,
+            'worldpay_account_id' => WorldpayAccount::factory(),
         ]);
     }
 }

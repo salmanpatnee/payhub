@@ -57,10 +57,20 @@ it('labels a silent 3DS and a mount failure on their own', function (string $eve
     $row = $payment->nmiChargeAttempts()->sole();
     expect($row->reason)->toBe($label)->and($row->status)->toBe($status);
 })->with([
-    ['three_ds_timeout', '3D Secure gave no answer in 20 seconds', '3ds_failed'],
+    ['three_ds_timeout', '3D Secure gave no answer in 60 seconds', '3ds_failed'],
     ['mount_failed', 'The card form could not start on the pay page', 'page_issue'],
     ['three_ds_error', '3D Secure reported an error', '3ds_failed'],
 ]);
+
+it('keeps the Gateway.js error code and a cleaned message on a 3DS error', function () {
+    $payment = pageEventPayment();
+
+    sendPageEvent($payment, ['event' => 'three_ds_error', 'code' => 'GATEWAY_NOT_LOADED', 'message' => 'Payer auth not enabled for 4111111111111111'])->assertNoContent();
+
+    $row = $payment->nmiChargeAttempts()->sole();
+    expect($row->status)->toBe('3ds_failed')
+        ->and($row->reason)->toBe('3D Secure reported an error: [GATEWAY_NOT_LOADED] Payer auth not enabled for [number removed]');
+});
 
 it('rejects an unknown event, a bad code and leaves no row', function () {
     $payment = pageEventPayment();

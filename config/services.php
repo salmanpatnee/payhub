@@ -192,6 +192,77 @@ return [
         'three_ds_hosts' => ['https://secure.networkmerchants.com'],
     ],
 
+    'worldpay' => [
+        // Constants per environment, not secrets (spec 0014). Username, password, entity and the optional
+        // webhook secret live encrypted on worldpay_accounts. Hosts and values below come from step 0.
+        'hosts' => [
+            'try' => 'https://try.access.worldpay.com',
+            'live' => 'https://access.worldpay.com',
+        ],
+        // The hosted page may only be on one of these hosts (a bad reply must not become an open redirect).
+        // Try returned both for identical requests; the live host is still to confirm.
+        'hpp_hosts' => [
+            'try' => ['payments-test.worldpay.com', 'hpp-sandbox.worldpay.com'],
+            'live' => ['payments.worldpay.com'],
+        ],
+        'connect_timeout' => 10,
+        'timeout' => 30,
+        'lookup_timeout' => 10,
+        'checkout_lock_seconds' => 120,
+        'lookup_lock_seconds' => 60,
+        'resolver_deadline_seconds' => 45,
+        // Worldpay accepts 300 to 2592000 seconds. 72 hours, so one page normally lasts the whole payment.
+        'page_expiry_seconds' => 259200,
+        'page_grace_seconds' => 120,
+        // A page that returns the client on the failure or error address is closed and the next Pay now makes a new one
+        // (Try, 2026-11-18: after that, the old page rejected every card). This caps how many pages one payment may use.
+        'max_pages' => 3,
+        // Set true if the staging run shows the client can retry on the same page after a refusal.
+        // True since the Try test on 2026-11-18: after authorizationRefused the client paid on the same page.
+        'reuse_after_decline' => true,
+        'poll_lookup_seconds' => 10,
+        'min_age_seconds' => 120,
+        'lookup_gap_seconds' => 300,
+        'sweep_hours' => 72,
+        // Worldpay rejects more than 24 characters and anything outside a-z A-Z 0-9 - . , and space.
+        // Billing address on the hosted page: HIDE, SHOW, EDIT, or empty to use the Worldpay account setting.
+        // Hiding it may change what Worldpay uses for AVS checks, so check declines on Try before going live.
+        'show_billing_address' => env('WORLDPAY_SHOW_BILLING_ADDRESS', 'HIDE'),
+        'narrative_max' => 24,
+        'narrative_pattern' => '/[^A-Za-z0-9\-., ]/',
+        // lastEvent spellings. A Try payment with AUTHORISED (2026-11-18) ended on settlementRequestSubmitted after authorization.
+        'paid_events' => ['sentForSettlement', 'settlementRequestSubmitted', 'settled'],
+        'pending_events' => ['sentForAuthorization', 'authorized'],
+        'declined_events' => ['authorizationFailed', 'authorizationRefused', 'refused', 'cancelled', 'cancelledByCustomer'],
+        'closed_events' => ['expired', 'requestExpired'],
+        'error_events' => ['error', 'settlementFailed'],
+        'refund_events' => ['refunded', 'sentForRefund', 'chargedBack'],
+
+        // Card fields mode (spec 0015). Hosts, session rules and 3DS names are NOT proven yet: they come from
+        // build step 0 against Try, so each stays a config value until then.
+        'card_max_refusals' => 5,
+        'card_max_attempts' => 10,
+        'card_pause_seconds' => 120,
+        'card_lock_seconds' => 90,
+        'card_http_timeout_seconds' => 30,
+        'card_session_ttl_seconds' => 60,
+        // A lookup row for the attempt always wins. No row after this many lookups over this many minutes lifts the block.
+        'card_not_found_lookups' => 3,
+        'card_not_found_minutes' => 10,
+        'card_stuck_hours' => 24,
+        // A final attempt (refused, abandoned, not_found) is looked up once, from the sweep, after this many hours.
+        'card_final_lookup_after_hours' => 60,
+        // Outcome names of the charge reply (step 0 confirms the spellings).
+        'card_approved_events' => ['authorized', 'sentForSettlement'],
+        'card_refused_events' => ['refused', 'fraudHighRisk'],
+        'card_challenge_failed_events' => ['3dsAuthenticationFailed', '3dsUnavailable'],
+        // Unproven (step 0): empty until Try answers. The card routes must stay off while these are empty.
+        'checkout_hosts' => ['try' => [], 'live' => []],
+        'session_hosts' => ['try' => [], 'live' => []],
+        'session_path_prefix' => null,
+        'three_ds_hosts' => [],
+    ],
+
     // Card attempt lock (MPGS and Authorize.net): this many failed attempts pause the pay page.
     'card_lock' => [
         'max_attempts' => (int) env('CARD_LOCK_MAX_ATTEMPTS', 3),

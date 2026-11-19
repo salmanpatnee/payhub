@@ -15,6 +15,7 @@ const PROVIDER_LABELS: Record<string, string> = {
     whop: 'Whop',
     kurv: 'Kurv',
     nmi: 'NMI',
+    worldpay: 'Worldpay',
     mpgs: 'MPGS',
 };
 
