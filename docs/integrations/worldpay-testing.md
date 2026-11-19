@@ -74,6 +74,7 @@ are not confirmed to work on the hosted page.
 
 ## Local setup notes
 
-- The Try hosted page can come from `payments-test.worldpay.com` or `hpp-sandbox.worldpay.com`.
-  Both are allowed in `config/services.php` (`worldpay.hpp_hosts.try`).
+- The hosted page can come from `payments-test.worldpay.com`, `hpp-sandbox.worldpay.com` (Try) or
+  `hpp.worldpay.com`, `payments.worldpay.com` (live). Any https subdomain of `worldpay.com` is
+  allowed (`config/services.php`, `worldpay.hpp_domains`), because Worldpay says not to list hosts.
 - The 10 minute sweep needs the host cron to run `php artisan schedule:run` every minute.

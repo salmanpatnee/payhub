@@ -159,7 +159,42 @@ it('maps refusals, pending sales, unknown events and API errors without changing
     ['refunded', 'unknown'],
     ['somethingNew', 'unknown'],
     ['settlementFailed', 'error'],
+    // The real Payment Queries lastEvent values (docs.worldpay.com, checked 2026-11-19).
+    ['authorizationRequested', 'pending'],
+    ['authorizationSucceeded', 'pending'],
+    ['saleRequested', 'pending'],
+    ['settlementRequested', 'pending'],
+    ['authorizationRefused', 'declined'],
+    ['saleRefused', 'declined'],
+    ['saleFailed', 'declined'],
+    ['authorizationTimedOut', 'error'],
+    ['saleTimedOut', 'error'],
+    ['settlementRequestSubmissionFailed', 'error'],
+    ['settlementRequestSubmissionTimedOut', 'error'],
+    ['refundRequested', 'unknown'],
+    ['refundRequestSubmitted', 'unknown'],
+    ['cancellationSucceeded', 'unknown'],
+    ['reversalSucceeded', 'unknown'],
 ]);
+
+it('completes the payment on the real paid lastEvent values', function (string $event) {
+    $payment = wpPayment();
+    $page = wpPage($payment);
+    wpFake([wpRow($page->transaction_reference, $event)]);
+
+    expect(app(WorldpayChargeResolver::class)->resolve($payment, 'poll'))->toBe('paid');
+    expect($payment->fresh()->status)->toBe('completed');
+})->with(['settlementRequestSubmitted', 'saleSucceeded']);
+
+it('never completes the payment on authorization alone', function () {
+    $payment = wpPayment();
+    $page = wpPage($payment);
+    wpFake([wpRow($page->transaction_reference, 'authorizationSucceeded')]);
+
+    app(WorldpayChargeResolver::class)->resolve($payment, 'poll');
+
+    expect($payment->fresh()->status)->toBe('pending');
+});
 
 it('treats an API failure as an error and keeps the status', function () {
     $payment = wpPayment();
