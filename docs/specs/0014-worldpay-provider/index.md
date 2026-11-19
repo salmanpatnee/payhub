@@ -1,7 +1,7 @@
 # 0014. Worldpay as a payment provider, using Hosted Payment Pages (Access Worldpay)
 
 **Date**: 2026-11-17
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 
@@ -239,7 +239,7 @@ Build approach: none recorded in `AGENTS.md`, so end to end Tracer Bullet slices
 - [ ] Ask Worldpay whether this account can get signed webhooks (Implementation Manager), the key ID and secret format, and the sender IPs.
 - [ ] Confirm PCI level (SAQ A) with Worldpay or the acquirer in writing.
 - [ ] Spec 0013 (Bank of America) is not built and edits the same parity files. Whichever merges second resolves the enum, `AGENTS.md` and parity conflicts; update the provider count in `AGENTS.md` and `docs/agent.md` at that time.
-- [ ] After the build, `/sync` updates `AGENTS.md` (the provider list, a Worldpay bullet, the CSRF list) and `docs/agent.md`.
+- [x] After the build, `/sync` updates `AGENTS.md` (the provider list, a Worldpay bullet, the CSRF list) and `docs/agent.md`. (2026-11-19: `AGENTS.md` and `resources/js/pages/ClientPayment/AGENTS.md` updated by /audit; `docs/agent.md` still open.)
 - [ ] Refresh the `provider-parity-reviewer` agent and skill text to list every provider (they still name nine).
 - [ ] Revisit setting `failed` once the real refusal events are known from the attempts table.
 - [ ] Revisit an automatic refund of a `duplicate` payment only if double payments happen in practice.
