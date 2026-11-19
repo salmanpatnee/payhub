@@ -200,10 +200,10 @@ return [
             'live' => 'https://access.worldpay.com',
         ],
         // The hosted page may only be on one of these hosts (a bad reply must not become an open redirect).
-        // Try returned both for identical requests; the live host is still to confirm.
+        // Try returned both for identical requests. Live returned hpp.worldpay.com (seen 2026-11-19); payments.worldpay.com is kept as a guess.
         'hpp_hosts' => [
             'try' => ['payments-test.worldpay.com', 'hpp-sandbox.worldpay.com'],
-            'live' => ['payments.worldpay.com'],
+            'live' => ['hpp.worldpay.com', 'payments.worldpay.com'],
         ],
         'connect_timeout' => 10,
         'timeout' => 30,
