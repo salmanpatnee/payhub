@@ -48,6 +48,8 @@ const threeDsEl = ref<HTMLElement | null>(null)
 let widget: ReturnType<typeof mountNmiPayments> | null = null
 let threeDs: ReturnType<typeof mountNmiThreeDSecure> | null = null
 const THREE_DS_NOTICE = 'nmi-3ds-failed'
+// NMI's frictionless 3DS took about 23 seconds in the sandbox (2026-11-19), so 20 seconds cut off good checks.
+const THREE_DS_LIMIT_MS = 60000
 let threeDsWatchdog: ReturnType<typeof setTimeout> | null = null
 let fieldsTimer: ReturnType<typeof setTimeout> | null = null
 // Settles the Payment Component's pay button once the charge (or the 3DS step) is over.
@@ -83,7 +85,7 @@ function hookGatewayErrors(gateway: GatewayGlobal): void {
             try {
                 instance?.on?.('error', onGatewayError)
             } catch {
-                // Hooking is best effort: the 20 second watchdog still covers a silent 3DS step.
+                // Hooking is best effort: the 60 second watchdog still covers a silent 3DS step.
             }
 
             return instance
@@ -298,7 +300,7 @@ async function payOnce(event: PaymentEvent): Promise<true | string> {
         // The 3DS widget can fail without calling onFailure (for example a rejected lookup), which would leave
         // the spinner on forever. If nothing happens, and no challenge opened, treat it as a failed check.
         clearThreeDsWatchdog()
-        threeDsWatchdog = setTimeout(() => void failThreeDs('three_ds_timeout'), 20000)
+        threeDsWatchdog = setTimeout(() => void failThreeDs('three_ds_timeout'), THREE_DS_LIMIT_MS)
 
         // Without Gateway.js the 3DS step can never answer (nmi-pay swallows that error): stop at once.
         const gateway = gatewayGlobal()
@@ -334,10 +336,17 @@ function clearThreeDsWatchdog(): void {
 
 async function onThreeDsComplete(result: ThreeDSecureCompleteEvent): Promise<void> {
     clearThreeDsWatchdog()
-    const outcome = await charge(pendingToken, 'card', pendingName[0], pendingName[1], result)
 
-    settlePay?.(outcome)
+    // The step already ended (timed out, failed or errored) and the customer was told so: a late answer must
+    // never charge the card. Claim the step before any await so a late failure cannot settle it twice.
+    const settle = settlePay
+
+    if (!settle) {
+        return
+    }
+
     settlePay = null
+    settle(await charge(pendingToken, 'card', pendingName[0], pendingName[1], result))
 }
 
 /** NMI's own failure callback, with its code and message when it gives them. */
@@ -348,9 +357,15 @@ function onThreeDsFailure(e?: ThreeDSecureFailureEvent): Promise<void> {
 async function failThreeDs(kind: 'three_ds_failed' | 'three_ds_timeout' | 'three_ds_error', code?: string, text?: string): Promise<void> {
     clearThreeDsWatchdog()
 
-    if (!settlePay) {
+    const settle = settlePay
+
+    if (!settle) {
         return // already settled (a late event after the watchdog)
     }
+
+    // Claim the step before any await, and drop the token, so a late 3DS answer can never send a charge.
+    settlePay = null
+    pendingToken = ''
 
     // No charge is sent when 3DS fails or is cancelled; only a report so the attempt shows to admins.
     await reportEvent(kind, code, text)
@@ -363,8 +378,7 @@ async function failThreeDs(kind: 'three_ds_failed' | 'three_ds_timeout' | 'three
         // No storage: the reload still happens, only the message is lost.
     }
 
-    settlePay?.(FIXED['3ds_failed'])
-    settlePay = null
+    settle(FIXED['3ds_failed'])
     window.location.reload()
 }
 
