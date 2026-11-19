@@ -197,6 +197,21 @@ it('completes instead of creating a page when the old page was paid, and blocks 
     expect($payment->fresh()->status)->toBe('completed')->and(WorldpayPage::count())->toBe(1);
 });
 
+it('blocks a new page while a sale shows a real in progress lastEvent', function (string $event) {
+    config(['services.worldpay.max_pages' => 2]);
+    $payment = wpCheckoutPayment();
+    $page = WorldpayPage::create(['payment_id' => $payment->id, 'sequence' => 1, 'transaction_reference' => $payment->uuid.'-1', 'url' => 'https://hpp-sandbox.worldpay.com/a', 'expires_at' => now()->subHour()]);
+
+    Http::fake(['*paymentQueries/payments*' => Http::response(['_embedded' => ['payments' => [[
+        'timestamp' => '2026-11-17T13:45:51Z', 'paymentId' => 'payX', 'transactionReference' => $page->transaction_reference,
+        'lastEvent' => $event, 'value' => ['amount' => 1234, 'currency' => 'GBP'],
+    ]]]], 200)]);
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")
+        ->assertStatus(409)->assertJson(['message' => 'We are confirming your payment. Please do not pay again.']);
+    expect(wpCreateCalls())->toBe(0)->and(WorldpayPage::count())->toBe(1);
+})->with(['authorizationRequested', 'authorizationSucceeded', 'saleRequested', 'settlementRequested']);
+
 it('refuses a page beyond max_pages with 422', function () {
     config(['services.worldpay.max_pages' => 1]);
     wpFakeCreate();
