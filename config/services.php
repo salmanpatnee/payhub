@@ -199,11 +199,13 @@ return [
             'try' => 'https://try.access.worldpay.com',
             'live' => 'https://access.worldpay.com',
         ],
-        // The hosted page may only be on one of these hosts (a bad reply must not become an open redirect).
-        // Try returned both for identical requests. Live returned hpp.worldpay.com (seen 2026-11-19); payments.worldpay.com is kept as a guess.
-        'hpp_hosts' => [
-            'try' => ['payments-test.worldpay.com', 'hpp-sandbox.worldpay.com'],
-            'live' => ['hpp.worldpay.com', 'payments.worldpay.com'],
+        // The hosted page must be https on a subdomain of one of these domains (a bad reply must not become an
+        // open redirect). Worldpay's docs say "do not whitelist domains": HPP switches between several, so a fixed
+        // host list broke live on 2026-11-19 (hpp.worldpay.com). Seen so far: payments.worldpay.com, hpp.worldpay.com
+        // (live), payments-test.worldpay.com, hpp-sandbox.worldpay.com (Try).
+        'hpp_domains' => [
+            'try' => ['worldpay.com'],
+            'live' => ['worldpay.com'],
         ],
         'connect_timeout' => 10,
         'timeout' => 30,
@@ -230,13 +232,24 @@ return [
         'show_billing_address' => env('WORLDPAY_SHOW_BILLING_ADDRESS', 'HIDE'),
         'narrative_max' => 24,
         'narrative_pattern' => '/[^A-Za-z0-9\-., ]/',
-        // lastEvent spellings. A Try payment with AUTHORISED (2026-11-18) ended on settlementRequestSubmitted after authorization.
-        'paid_events' => ['sentForSettlement', 'settlementRequestSubmitted', 'settled'],
-        'pending_events' => ['sentForAuthorization', 'authorized'],
-        'declined_events' => ['authorizationFailed', 'authorizationRefused', 'refused', 'cancelled', 'cancelledByCustomer'],
+        // Payment Queries `lastEvent` values (docs.worldpay.com, query-by-trans-ref, checked 2026-11-19):
+        // authorization|sale|refund|cancellation|reversal + Requested|Succeeded|Refused|Failed|TimedOut, plus
+        // settlementRequested, settlementRequestSubmitted, settlementRequestSubmissionFailed|TimedOut.
+        // A Try payment with AUTHORISED (2026-11-18) ended on settlementRequestSubmitted after authorization.
+        // Authorized alone (authorizationSucceeded) is never paid. The names after the real ones are the older
+        // webhook vocabulary: never seen in lastEvent, kept so old rows and the paused card tests still map.
+        'paid_events' => ['settlementRequestSubmitted', 'saleSucceeded', 'sentForSettlement', 'settled'],
+        'pending_events' => ['authorizationRequested', 'authorizationSucceeded', 'saleRequested', 'settlementRequested', 'sentForAuthorization', 'authorized'],
+        'declined_events' => ['authorizationRefused', 'authorizationFailed', 'saleRefused', 'saleFailed', 'refused', 'cancelled', 'cancelledByCustomer'],
         'closed_events' => ['expired', 'requestExpired'],
-        'error_events' => ['error', 'settlementFailed'],
-        'refund_events' => ['refunded', 'sentForRefund', 'chargedBack'],
+        'error_events' => ['authorizationTimedOut', 'saleTimedOut', 'settlementRequestSubmissionFailed', 'settlementRequestSubmissionTimedOut', 'error', 'settlementFailed'],
+        'refund_events' => [
+            'refundRequested', 'refundSucceeded', 'refundRefused', 'refundFailed', 'refundTimedOut',
+            'refundRequestSubmitted', 'refundRequestSubmissionFailed', 'refundRequestSubmissionTimedOut',
+            'cancellationRequested', 'cancellationSucceeded', 'cancellationRefused', 'cancellationFailed', 'cancellationTimedOut',
+            'reversalRequested', 'reversalSucceeded', 'reversalRefused', 'reversalFailed', 'reversalTimedOut',
+            'refunded', 'sentForRefund', 'chargedBack',
+        ],
 
         // Card fields mode (spec 0015). Hosts, session rules and 3DS names are NOT proven yet: they come from
         // build step 0 against Try, so each stays a config value until then.
