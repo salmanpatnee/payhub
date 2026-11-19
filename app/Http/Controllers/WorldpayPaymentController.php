@@ -189,7 +189,8 @@ class WorldpayPaymentController extends Controller
             );
 
             if (! $reply->hasAllowedHost($account->environment)) {
-                throw new \UnexpectedValueException('Worldpay page address is not on an allowed host.');
+                // The host alone (no path or query) is safe to log and tells operators what to allow.
+                throw new \UnexpectedValueException('Worldpay page address is not on an allowed host: '.(string) parse_url($reply->url, PHP_URL_HOST));
             }
         } catch (Throwable $e) {
             $page->update(['failed_at' => now()]);
@@ -201,6 +202,7 @@ class WorldpayPaymentController extends Controller
                 'exception' => $e::class,
                 'http_status' => $e instanceof RequestException ? $e->response->status() : null,
                 'reason' => $e instanceof RequestException ? (string) $e->response->json('errorName') : null,
+                'detail' => $e instanceof \UnexpectedValueException ? $e->getMessage() : null,
             ]);
 
             return response()->json(['message' => 'We could not start your payment. Please try again.'], 502);
