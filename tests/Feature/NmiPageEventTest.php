@@ -62,6 +62,16 @@ it('labels a silent 3DS and a mount failure on their own', function (string $eve
     ['three_ds_error', '3D Secure reported an error', '3ds_failed'],
 ]);
 
+it('keeps the Gateway.js error code and a cleaned message on a 3DS error', function () {
+    $payment = pageEventPayment();
+
+    sendPageEvent($payment, ['event' => 'three_ds_error', 'code' => 'GATEWAY_NOT_LOADED', 'message' => 'Payer auth not enabled for 4111111111111111'])->assertNoContent();
+
+    $row = $payment->nmiChargeAttempts()->sole();
+    expect($row->status)->toBe('3ds_failed')
+        ->and($row->reason)->toBe('3D Secure reported an error: [GATEWAY_NOT_LOADED] Payer auth not enabled for [number removed]');
+});
+
 it('rejects an unknown event, a bad code and leaves no row', function () {
     $payment = pageEventPayment();
 
