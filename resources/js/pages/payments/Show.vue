@@ -279,7 +279,7 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                 </Button>
                 <div class="flex flex-wrap items-center gap-3">
                     <h1 class="text-xl font-semibold tracking-tight sm:text-3xl">
-                        Payment <span class="font-mono">{{ referenceLabel }}</span>
+                        <span class="max-sm:sr-only">Payment </span><span class="font-mono">{{ referenceLabel }}</span>
                     </h1>
                     <PaymentStatusBadge :status="payment.status" />
                 </div>
