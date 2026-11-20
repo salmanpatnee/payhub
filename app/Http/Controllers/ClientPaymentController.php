@@ -306,12 +306,24 @@ class ClientPaymentController extends Controller
             ->filter(fn ($key) => $key !== '' && $key !== 'worldpay_return')
             ->unique()->take(10)->values()->all();
 
+        // For each text parameter that arrived: its length (0 means Worldpay sent it empty). Never the value.
+        $textLengths = [];
+
+        foreach (['messages', 'errors'] as $name) {
+            if ($request->query->has($name)) {
+                $raw = $request->query($name);
+                $textLengths[$name] = is_array($raw) ? count($raw) : mb_strlen((string) $raw);
+            }
+        }
+
         Log::info('Worldpay client returned', [
             'payment_id' => $payment->id,
             'page_id' => $page->id,
             'word' => $word,
             'error_ref' => $ref,
             'query_keys' => $queryKeys,
+            'text_lengths' => $textLengths,
+            'text_saved' => $text !== null,
         ]);
 
         // A failed or errored return goes to Sentry, at most once per payment every 10 minutes so a reload or a

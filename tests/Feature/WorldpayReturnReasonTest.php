@@ -152,6 +152,44 @@ it('reads the error text from messages, falls back to errors, and prefers messag
         ->and(WorldpayPageReturn::where('error_ref', 'M3')->sole()->error_text)->toBe('From messages');
 });
 
+it('logs whether the text parameters arrived empty, by length only', function () {
+    Log::spy();
+    $payment = wrPayment();
+    wrPage($payment);
+
+    $this->get("/pay/{$payment->uuid}?worldpay_return=failure&errorRefNumber=EMPTY1&errors=");
+
+    Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === 'Worldpay client returned'
+        && ($context['text_lengths'] ?? null) === ['errors' => 0]
+        && $context['text_saved'] === false);
+
+    $this->get("/pay/{$payment->uuid}?worldpay_return=failure&errorRefNumber=FULL1&messages=Declined");
+
+    Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => ($context['text_lengths'] ?? null) === ['messages' => 8]
+        && $context['text_saved'] === true);
+});
+
+it('tells the admin that Worldpay gave no reason when a failure has a reference but no text', function () {
+    $payment = wrPayment();
+    wrPage($payment);
+    $this->get("/pay/{$payment->uuid}?worldpay_return=failure&errorRefNumber=D261120-T9&errors=");
+    $this->get("/pay/{$payment->uuid}?worldpay_return=cancel");
+
+    $admin = User::factory()->create(['email_verified_at' => now()]);
+    $admin->syncRoles(['admin']);
+
+    $this->actingAs($admin)->get("/payments/{$payment->uuid}")->assertInertia(fn (Assert $p) => $p
+        ->where('attempts.rows', function ($rows) {
+            $rows = collect($rows);
+            $failure = $rows->firstWhere('status_detail', 'failure · D261120-T9');
+            $cancel = $rows->firstWhere('status_detail', 'cancel');
+
+            return $failure !== null
+                && $failure['reason'] === 'Worldpay gave no reason. Give this reference to Worldpay support.'
+                && $cancel !== null && $cancel['reason'] === null;
+        }));
+});
+
 it('logs the names of the return parameters and never their values', function () {
     Log::spy();
     $payment = wrPayment();
