@@ -1,0 +1,1 @@
+import{P as e}from"./app-CYjJrna9.js";var t=e(`CheckIcon`,[[`path`,{d:`M20 6 9 17l-5-5`,key:`1gmf2c`}]]);export{t};
