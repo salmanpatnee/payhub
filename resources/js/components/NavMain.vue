@@ -14,6 +14,7 @@ import {
     SidebarMenuSub,
     SidebarMenuSubButton,
     SidebarMenuSubItem,
+    useSidebar,
 } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import type { NavItem } from '@/types';
@@ -23,6 +24,14 @@ defineProps<{
 }>();
 
 const { isCurrentOrParentUrl } = useCurrentUrl();
+const { isMobile, setOpenMobile } = useSidebar();
+
+// On mobile the sidebar is a drawer: close it after a link is clicked.
+const closeOnMobile = () => {
+    if (isMobile.value) {
+        setOpenMobile(false);
+    }
+};
 
 const hasActiveChild = (item: NavItem) =>
     item.children?.some((child) => isCurrentOrParentUrl(child.href)) ?? false;
@@ -58,7 +67,7 @@ const hasActiveChild = (item: NavItem) =>
                                         as-child
                                         :is-active="isCurrentOrParentUrl(child.href)"
                                     >
-                                        <Link :href="child.href">
+                                        <Link :href="child.href" @click="closeOnMobile">
                                             <component
                                                 :is="child.icon"
                                                 v-if="child.icon"
@@ -78,7 +87,7 @@ const hasActiveChild = (item: NavItem) =>
                         :is-active="isCurrentOrParentUrl(item.href)"
                         :tooltip="item.title"
                     >
-                        <Link :href="item.href">
+                        <Link :href="item.href" @click="closeOnMobile">
                             <component :is="item.icon" />
                             <span>{{ item.title }}</span>
                         </Link>
