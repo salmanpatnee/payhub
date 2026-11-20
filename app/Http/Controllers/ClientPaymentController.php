@@ -9,6 +9,7 @@ use App\Jobs\ResolveWorldpayPayment;
 use App\Models\Brand;
 use App\Models\CloverChargeAttempt;
 use App\Models\Payment;
+use App\Models\WorldpayPageReturn;
 use App\Services\Authorizenet\AuthorizenetInvoiceLookup;
 use App\Services\Clover\CloverChargeClassifier;
 use App\Services\Clover\CloverChargeResolver;
@@ -17,6 +18,7 @@ use App\Services\Nmi\NmiChargeResolver;
 use App\Services\Revolut\RevolutClient;
 use App\Services\Viva\VivaClient;
 use App\Services\Worldpay\WorldpayChargeResolver;
+use App\Services\Worldpay\WorldpaySentry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -241,6 +243,10 @@ class ClientPaymentController extends Controller
             $payment->worldpayPages()->usable()->whereNull('closed_at')->update(['closed_at' => now()]);
         }
 
+        if (in_array($returnStatus, WorldpayPageReturn::WORDS, true) && $payment->status === 'pending') {
+            $this->recordWorldpayReturn($request, $payment, $returnStatus);
+        }
+
         // One lookup after the response, so the page never waits for Worldpay. Shares the poll's throttle key.
         if (in_array($returnStatus, ['success', 'pending'], true)
             && $payment->status === 'pending'
@@ -256,6 +262,100 @@ class ClientPaymentController extends Controller
             'hasConsent' => $payment->consents()->exists(),
             'returnStatus' => $returnStatus,
         ]);
+    }
+
+    /**
+     * Saves where Worldpay sent the client back and the error reference and text it adds to the address, so an
+     * admin can see why a payment did not go through. The values come from the browser address: they are cleaned,
+     * shown to admins only and never decide a status. A reload with the same values inside a minute adds nothing.
+     */
+    private function recordWorldpayReturn(Request $request, Payment $payment, string $word): void
+    {
+        $page = $payment->worldpayPages()->usable()->orderByDesc('sequence')->first();
+
+        if ($page === null) {
+            return;
+        }
+
+        $ref = WorldpayPageReturn::cleanRef($request->query('errorRefNumber'));
+        // Worldpay's docs name the text `messages` (comma separated); an older SDK example names it `errors`.
+        $text = WorldpayPageReturn::cleanText($request->query('messages') ?? $request->query('errors'));
+
+        $repeat = $payment->worldpayPageReturns()
+            ->where('page_id', $page->id)
+            ->where('word', $word)
+            ->where('error_ref', $ref)
+            ->where('created_at', '>=', now()->subMinute())
+            ->exists();
+
+        if ($repeat) {
+            return;
+        }
+
+        $payment->worldpayPageReturns()->create([
+            'page_id' => $page->id,
+            'word' => $word,
+            'error_ref' => $ref,
+            'error_text' => $text,
+        ]);
+
+        // The error text stays out of the log: it is free text from the address. The parameter names (never the
+        // values) show what Worldpay really sends on a return.
+        $queryKeys = collect(array_keys($request->query()))
+            ->map(fn ($key) => mb_substr((string) preg_replace('/[^A-Za-z0-9_\-]/', '', (string) $key), 0, 40))
+            ->filter(fn ($key) => $key !== '' && $key !== 'worldpay_return')
+            ->unique()->take(10)->values()->all();
+
+        // For each text parameter that arrived: its length (0 means Worldpay sent it empty). Never the value.
+        $textLengths = [];
+
+        foreach (['messages', 'errors'] as $name) {
+            if ($request->query->has($name)) {
+                $raw = $request->query($name);
+                $textLengths[$name] = is_array($raw) ? count($raw) : mb_strlen((string) $raw);
+            }
+        }
+
+        Log::info('Worldpay client returned', [
+            'payment_id' => $payment->id,
+            'page_id' => $page->id,
+            'word' => $word,
+            'error_ref' => $ref,
+            'query_keys' => $queryKeys,
+            'text_lengths' => $textLengths,
+            'text_saved' => $text !== null,
+        ]);
+
+        // A failed or errored return goes to Sentry, at most once per payment every 10 minutes so a reload or a
+        // forged address cannot flood it. Grouped by word and the first reason, never by the unique reference.
+        if (in_array($word, ['failure', 'error'], true) && Cache::add('worldpay:sentry:return:'.$payment->id, 1, 600)) {
+            $payment->loadMissing('worldpayAccount');
+            $reasonKey = $text === null
+                ? 'no-reason'
+                : (mb_substr((string) preg_replace('/[^a-z0-9]/', '', mb_strtolower(explode(',', $text)[0])), 0, 60) ?: 'no-reason');
+
+            app(WorldpaySentry::class)->capture(
+                'Worldpay payment did not go through (client return)',
+                [
+                    'payment.provider' => 'worldpay',
+                    'worldpay.return' => $word,
+                    'worldpay.environment' => $payment->worldpayAccount?->environment,
+                    'worldpay.account_id' => $payment->worldpay_account_id,
+                ],
+                [
+                    'payment_id' => $payment->id,
+                    'payment_uuid' => $payment->uuid,
+                    'page_id' => $page->id,
+                    'page_sequence' => $page->sequence,
+                    'transaction_reference' => $page->transaction_reference,
+                    'error_ref' => $ref,
+                    'error_text' => $text,
+                    // False means Worldpay shows no payment for this page: it likely failed before authorization (for example 3DS).
+                    'worldpay_has_payment_row' => $page->attempts()->whereNotNull('last_event')->exists(),
+                ],
+                ['worldpay', 'return', $word, $reasonKey],
+            );
+        }
     }
 
     /**

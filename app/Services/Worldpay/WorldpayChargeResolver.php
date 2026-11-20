@@ -602,6 +602,28 @@ class WorldpayChargeResolver
             'checks' => 1,
             'last_checked_at' => now(),
         ]);
+
+        // A refusal or failure seen for the first time goes to Sentry, grouped by Worldpay's event name.
+        if (in_array($outcome, [self::OUTCOME_DECLINED, self::OUTCOME_ERROR], true) && $event !== null) {
+            app(WorldpaySentry::class)->capture(
+                'Worldpay lookup shows a refused or failed payment',
+                [
+                    'payment.provider' => 'worldpay',
+                    'worldpay.last_event' => $event,
+                    'worldpay.outcome' => $outcome,
+                    'worldpay.environment' => $payment->worldpayAccount?->environment,
+                    'worldpay.account_id' => $payment->worldpay_account_id,
+                ],
+                [
+                    'payment_id' => $payment->id,
+                    'transaction_reference' => $subject->transaction_reference,
+                    'worldpay_event' => $event,
+                    'worldpay_payment_id' => $worldpayPaymentId,
+                    'source' => $source,
+                ],
+                ['worldpay', 'lookup', $event],
+            );
+        }
     }
 
     /** One Sentry message per key, ever (the key is per payment or per attempt). */

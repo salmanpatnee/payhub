@@ -65,6 +65,7 @@ it('creates one page from the saved amount and returns only the url', function (
 
         return $request->hasHeader('Content-Type', 'application/vnd.worldpay.payment_pages-v1.hal+json')
             && $request->hasHeader('Accept', 'application/vnd.worldpay.payment_pages-v1.hal+json')
+            && $body['hostedProperties']['passBackErrorReasons'] === true
             && $body['transactionReference'] === $payment->uuid.'-1'
             && $body['merchant']['entity'] === $payment->worldpayAccount->entity_ref
             && $body['value'] === ['amount' => 1234, 'currency' => 'GBP']
@@ -367,9 +368,10 @@ it('asks Worldpay to hide the billing address by default and leaves it out when 
 
         $body = $request->data();
 
+        // passBackErrorReasons is always sent; showBillingAddress only when the config value is valid.
         return $expected === null
-            ? ! array_key_exists('hostedProperties', $body)
-            : ($body['hostedProperties'] ?? null) === ['showBillingAddress' => $expected];
+            ? ($body['hostedProperties'] ?? null) === ['passBackErrorReasons' => true]
+            : ($body['hostedProperties'] ?? null) === ['passBackErrorReasons' => true, 'showBillingAddress' => $expected];
     });
 })->with([['HIDE', 'HIDE'], ['edit', 'EDIT'], ['SHOW', 'SHOW'], ['', null], ['nonsense', null]]);
 

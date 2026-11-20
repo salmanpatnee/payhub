@@ -772,11 +772,32 @@ class PaymentController extends Controller
                 'started_at' => $attempt->created_at->toISOString(),
             ]);
 
+        // Where Worldpay sent the client back (failure, error, cancel, expiry), with the error reference and text
+        // from the address. Display only, never a status.
+        $returns = $payment->worldpayPageReturns()
+            ->with('page:id,transaction_reference')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(fn ($return) => [
+                'sequence' => $return->id,
+                'reference' => $return->page?->transaction_reference,
+                'status' => 'returned',
+                'status_detail' => collect([$return->word, $return->error_ref])->filter()->implode(' · '),
+                // A failed or errored return with a reference but no text: Worldpay gave no reason (a failed 3DS code does this).
+                'reason' => $return->error_text
+                    ?? (in_array($return->word, ['failure', 'error'], true) && $return->error_ref !== null
+                        ? 'Worldpay gave no reason. Give this reference to Worldpay support.'
+                        : null),
+                'source' => 'client return',
+                'started_at' => $return->created_at?->toISOString(),
+            ]);
+
         $stuckHours = (int) config('services.worldpay.card_stuck_hours', 24);
 
         return [
             'provider' => 'worldpay',
-            'rows' => $lookups->concat($charges)->sortByDesc('started_at')->values()->all(),
+            'rows' => $lookups->concat($charges)->concat($returns)->sortByDesc('started_at')->values()->all(),
             'summary' => [
                 'worldpay_payment_id' => $payment->worldpay_payment_id,
                 'page_count' => $payment->worldpayPages()->count(),
