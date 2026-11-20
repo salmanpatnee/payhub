@@ -9,6 +9,7 @@ use App\Jobs\ResolveWorldpayPayment;
 use App\Models\Brand;
 use App\Models\CloverChargeAttempt;
 use App\Models\Payment;
+use App\Models\WorldpayPageReturn;
 use App\Services\Authorizenet\AuthorizenetInvoiceLookup;
 use App\Services\Clover\CloverChargeClassifier;
 use App\Services\Clover\CloverChargeResolver;
@@ -241,6 +242,10 @@ class ClientPaymentController extends Controller
             $payment->worldpayPages()->usable()->whereNull('closed_at')->update(['closed_at' => now()]);
         }
 
+        if (in_array($returnStatus, WorldpayPageReturn::WORDS, true) && $payment->status === 'pending') {
+            $this->recordWorldpayReturn($request, $payment, $returnStatus);
+        }
+
         // One lookup after the response, so the page never waits for Worldpay. Shares the poll's throttle key.
         if (in_array($returnStatus, ['success', 'pending'], true)
             && $payment->status === 'pending'
@@ -255,6 +260,49 @@ class ClientPaymentController extends Controller
             'policies' => $this->policyProps(),
             'hasConsent' => $payment->consents()->exists(),
             'returnStatus' => $returnStatus,
+        ]);
+    }
+
+    /**
+     * Saves where Worldpay sent the client back and the error reference and text it adds to the address, so an
+     * admin can see why a payment did not go through. The values come from the browser address: they are cleaned,
+     * shown to admins only and never decide a status. A reload with the same values inside a minute adds nothing.
+     */
+    private function recordWorldpayReturn(Request $request, Payment $payment, string $word): void
+    {
+        $page = $payment->worldpayPages()->usable()->orderByDesc('sequence')->first();
+
+        if ($page === null) {
+            return;
+        }
+
+        $ref = WorldpayPageReturn::cleanRef($request->query('errorRefNumber'));
+        $text = WorldpayPageReturn::cleanText($request->query('errors'));
+
+        $repeat = $payment->worldpayPageReturns()
+            ->where('page_id', $page->id)
+            ->where('word', $word)
+            ->where('error_ref', $ref)
+            ->where('created_at', '>=', now()->subMinute())
+            ->exists();
+
+        if ($repeat) {
+            return;
+        }
+
+        $payment->worldpayPageReturns()->create([
+            'page_id' => $page->id,
+            'word' => $word,
+            'error_ref' => $ref,
+            'error_text' => $text,
+        ]);
+
+        // The error text stays out of the log: it is free text from the address.
+        Log::info('Worldpay client returned', [
+            'payment_id' => $payment->id,
+            'page_id' => $page->id,
+            'word' => $word,
+            'error_ref' => $ref,
         ]);
     }
 
