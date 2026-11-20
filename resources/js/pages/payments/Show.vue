@@ -270,15 +270,15 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
     <div class="space-y-6 p-4 sm:p-6">
         <!-- Top bar -->
         <div class="flex flex-wrap items-center justify-between gap-4">
-            <div class="space-y-2">
+            <div class="space-y-2 max-sm:w-full">
                 <Button variant="ghost" size="sm" as-child class="-ml-2 text-muted-foreground">
                     <Link href="/payments">
                         <ArrowLeft class="mr-1 size-4" />
                         Back to payments
                     </Link>
                 </Button>
-                <div class="flex flex-wrap items-center gap-3">
-                    <h1 class="text-xl font-semibold tracking-tight sm:text-3xl">
+                <div class="flex items-center gap-3 max-sm:justify-between sm:flex-wrap">
+                    <h1 class="min-w-0 text-xl font-semibold tracking-tight sm:text-3xl">
                         <span class="max-sm:sr-only">Payment </span><span class="font-mono">{{ referenceLabel }}</span>
                     </h1>
                     <PaymentStatusBadge :status="payment.status" />
