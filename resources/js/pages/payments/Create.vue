@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, ChevronRight, Lock, Plus } from 'lucide-vue-next';
+import { ArrowLeft, ChevronRight, Coins, Lock, Plus } from 'lucide-vue-next';
 import { ToggleGroupItem, ToggleGroupRoot } from 'reka-ui';
 import { computed, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -103,7 +103,8 @@ const allowedCurrencies = computed<CurrencyChoice[]>(() => {
 });
 
 const showCurrencyToggle = computed(() => allowedCurrencies.value.length > 1);
-const symbol = computed(() => currencySymbol[form.currency] ?? '–');
+// Empty until a currency is known, so no placeholder character can look like a minus sign.
+const symbol = computed(() => currencySymbol[form.currency] ?? '');
 
 watch(accountValue, (val) => {
     const [provider, id] = val.split(':');
@@ -117,6 +118,15 @@ watch(accountValue, (val) => {
     // Keep the amount; drop the currency only when the new account does not allow it.
     if (form.currency && !allowedCurrencies.value.some(c => c.value === form.currency && c.enabled)) {
         form.currency = '';
+    }
+
+    // When the account takes more than one currency, start on USD (or the first enabled one).
+    if (!form.currency) {
+        const enabled = allowedCurrencies.value.filter(c => c.enabled);
+
+        if (enabled.length > 1) {
+            form.currency = enabled.some(c => c.value === 'usd') ? 'usd' : enabled[0].value;
+        }
     }
 });
 
@@ -140,7 +150,7 @@ function onAmountInput(event: Event): void {
 
 // Country, package and note are optional and folded away until needed.
 const moreOpen = ref(false);
-watch(() => [form.errors.country, form.errors.package, form.errors.note], (errors) => {
+watch(() => [form.errors.package, form.errors.note], (errors) => {
     if (errors.some(Boolean)) {
         moreOpen.value = true;
     }
@@ -191,6 +201,8 @@ onMounted(() => {
 
         if (enabledCurrencies.length === 1) {
             form.currency = enabledCurrencies[0].currency;
+        } else if (enabledCurrencies.length > 1) {
+            form.currency = enabledCurrencies.some(c => c.currency === 'usd') ? 'usd' : enabledCurrencies[0].currency;
         }
     }
 
@@ -254,7 +266,7 @@ function submit() {
                             <div v-if="!isAccountLocked" class="grid gap-2 md:col-span-2">
                                 <Label for="account_id">Payment account <span class="text-destructive">*</span></Label>
                                 <Select v-model="accountValue">
-                                    <SelectTrigger id="account_id" class="h-11 w-full md:h-9">
+                                    <SelectTrigger id="account_id" class="w-full data-[size=default]:h-11 md:data-[size=default]:h-9">
                                         <SelectValue placeholder="Select a payment account" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -275,7 +287,10 @@ function submit() {
                                     class="flex h-14 overflow-hidden rounded-lg border bg-background transition-colors focus-within:ring-2 focus-within:ring-ring/50"
                                     :class="{ 'bg-muted/50 opacity-70': !accountChosen }"
                                 >
-                                    <span class="flex w-12 shrink-0 items-center justify-center border-r bg-muted text-lg font-semibold text-muted-foreground">{{ symbol }}</span>
+                                    <span class="flex w-12 shrink-0 items-center justify-center border-r bg-muted text-lg font-semibold text-muted-foreground">
+                                        <template v-if="symbol">{{ symbol }}</template>
+                                        <Coins v-else class="size-5" aria-hidden="true" />
+                                    </span>
                                     <input
                                         id="amount"
                                         :value="form.amount"
@@ -386,6 +401,20 @@ function submit() {
                             </div>
 
                             <div class="grid gap-2">
+                                <Label for="country">Country <span class="text-destructive">*</span></Label>
+                                <SearchableSelect
+                                    id="country"
+                                    v-model="form.country"
+                                    required
+                                    class="h-11 md:h-9"
+                                    :options="props.countries"
+                                    placeholder="Select a country"
+                                    search-placeholder="Search countries…"
+                                />
+                                <InputError class="mt-1" :message="form.errors.country" />
+                            </div>
+
+                            <div class="grid gap-2">
                                 <Label for="relationship_manager_id">Relationship manager <span class="text-destructive">*</span></Label>
                                 <SearchableSelect
                                     id="relationship_manager_id"
@@ -406,28 +435,14 @@ function submit() {
                         <CollapsibleTrigger class="group flex w-full items-center gap-2 px-4 py-3.5 text-left text-sm font-medium md:px-6">
                             <ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" />
                             More details
-                            <span class="font-normal text-muted-foreground">country, package, note</span>
+                            <span class="font-normal text-muted-foreground">package, note</span>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                             <div class="grid gap-x-6 gap-y-4 px-4 pb-4 md:grid-cols-2 md:px-6">
                                 <div class="grid gap-2">
-                                    <Label for="country">Country</Label>
-                                    <SearchableSelect
-                                        id="country"
-                                        v-model="form.country"
-                                        class="h-11 md:h-9"
-                                        :options="props.countries"
-                                        placeholder="Select a country"
-                                        search-placeholder="Search countries…"
-                                        clear-label="No country"
-                                    />
-                                    <InputError class="mt-1" :message="form.errors.country" />
-                                </div>
-
-                                <div class="grid gap-2">
                                     <Label for="package">Package</Label>
                                     <Select v-model="form.package">
-                                        <SelectTrigger id="package" class="h-11 w-full md:h-9">
+                                        <SelectTrigger id="package" class="w-full data-[size=default]:h-11 md:data-[size=default]:h-9">
                                             <SelectValue placeholder="Select a package (optional)" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -463,7 +478,7 @@ function submit() {
             class="z-20 flex items-center gap-3 border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 max-lg:sticky max-lg:bottom-0 max-lg:-mx-4 max-lg:shadow-[0_-6px_16px_rgba(20,24,34,0.06)] max-md:-mb-4 md:max-lg:-mx-6 md:max-lg:-mb-6 lg:justify-end lg:border-0 lg:bg-transparent lg:px-0 lg:pt-0"
         >
             <div class="min-w-0 flex-1 lg:hidden">
-                <p class="truncate text-base font-semibold tabular-nums">{{ symbol === '–' ? '' : symbol }}{{ form.amount || '0.00' }}</p>
+                <p class="truncate text-base font-semibold tabular-nums">{{ symbol }}{{ form.amount || '0.00' }}</p>
                 <p class="truncate text-xs text-muted-foreground">{{ form.client_name || 'No client yet' }} · {{ brandName ?? 'No brand yet' }}</p>
             </div>
             <Button type="submit" form="create-payment-form" class="h-11 lg:h-9" :disabled="form.processing">
