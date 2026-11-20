@@ -118,6 +118,15 @@ git pull origin master
 
 Then restart PHP in hPanel (**Advanced → PHP Configuration → Save**). The built front end files are committed to the repo, so no `npm` step is needed on the server.
 
+**Optional: New payment form defaults.** To start the New payment form with a brand and payment account already chosen, add these to the site's `.env`, then run `config:clear` and restart PHP as above:
+
+```
+PAYMENT_DEFAULT_BRAND=your-brand-slug
+PAYMENT_DEFAULT_ACCOUNT=stripe:1
+```
+
+The brand is the brand's slug. The account is `provider:id` (the provider name, a colon, the account id). Leave them empty for no default. A default that does not exist, is inactive, or that the user may not use is ignored. Agents never get an account default (they are locked to their assigned account).
+
 ## If something goes wrong
 
 | What you see | Likely cause | Fix |

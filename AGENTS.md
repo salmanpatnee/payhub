@@ -59,6 +59,10 @@ PayHub supports eleven parallel providers behind the `PaymentProvider` enum (`st
 
 Three roles: `admin`, `agent`, and `account` (read-only Payments viewer, but full manage rights on Bank Accounts). See `docs/agent.md` for nav access matrix, implementation rules, and seeded users.
 
+## New payment form defaults
+
+`config/payments.php` (`PAYMENT_DEFAULT_BRAND` slug, `PAYMENT_DEFAULT_ACCOUNT` as `provider:id`) sets the brand and payment account the New payment form starts with. `PaymentController::formDefaults` keeps a default only when that user can pick it (agents: assigned brand only, never an account). The form falls back to the last used values stored on the device. Read it with `config()`, never `env()`, so config caching works.
+
 ## Bank Accounts
 
 Separate from the payment providers. Admin/account roles manage them; agents only see active accounts assigned to them (`bank_account_user` pivot). Soft-deleted, with an activity log (`ActivityLogger`, `bank-accounts/activity-log`). At least one of sort code / routing number / IBAN is required. Full details in `docs/agent.md` → "Bank Accounts".
