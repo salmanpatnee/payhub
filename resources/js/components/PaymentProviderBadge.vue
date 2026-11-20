@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-const props = defineProps<{ provider: string }>();
+const props = defineProps<{ provider: string; showName?: boolean }>();
 
 const config: Record<string, { color: string; label: string; path: string; viewBox?: string }> = {
     stripe: {
@@ -78,7 +78,8 @@ const c = computed(() => config[props.provider] ?? config.stripe);
 </script>
 
 <template>
-    <svg :class="['size-4 flex-shrink-0', c.color]" :viewBox="c.viewBox ?? '0 0 24 24'" fill="currentColor" :aria-label="c.label" role="img">
+    <span v-if="showName" :class="['font-medium', c.color]">{{ c.label }}</span>
+    <svg v-else :class="['size-4 flex-shrink-0', c.color]" :viewBox="c.viewBox ?? '0 0 24 24'" fill="currentColor" :aria-label="c.label" role="img">
         <path :d="c.path" />
     </svg>
 </template>

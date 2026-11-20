@@ -501,7 +501,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                                 </div>
                                 <div v-if="canViewStripeAccount" class="min-w-0">
                                     <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Provider</dt>
-                                    <dd class="text-[13px]"><PaymentProviderBadge :provider="payment.provider" /></dd>
+                                    <dd class="text-[13px]"><PaymentProviderBadge :provider="payment.provider" show-name /></dd>
                                 </div>
                                 <div class="min-w-0">
                                     <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Country</dt>
