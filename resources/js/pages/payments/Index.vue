@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, provide, reactive, ref, watch } from 'vue';
 import { useLocalStorage, useMediaQuery } from '@vueuse/core';
 import { Check, Columns, Copy, Download, Eye, Filter, LockKeyhole, LockOpen, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
@@ -165,6 +165,10 @@ const UNSET = '__all';
 // Phones get cards and a filters sheet; tablets and up get the table.
 const isPhone = useMediaQuery('(max-width: 767px)');
 const filtersOpen = ref(false);
+// Searchable selects inside the filters sheet render their list inside the
+// sheet; the modal sheet blocks input to anything portaled to <body>.
+const sheetPortalEl = ref<HTMLElement | null>(null);
+provide('popover-portal-target', sheetPortalEl);
 
 const filters = reactive<FilterState>({
     brand_id: props.filters.brand_id || UNSET,
@@ -363,7 +367,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                     <SheetTitle>Filters</SheetTitle>
                     <SheetDescription class="sr-only">Filter the payments list</SheetDescription>
                 </SheetHeader>
-                <div class="grid grid-cols-2 gap-3 px-4">
+                <div ref="sheetPortalEl" class="grid grid-cols-2 gap-3 px-4">
                     <PaymentFilters
                         v-model:filters="filters"
                         :brands="brands"
@@ -460,69 +464,93 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
 
             <!-- Phone: one card per payment -->
             <div v-if="isPhone">
-                <div v-if="refreshing" class="divide-y divide-border/50">
-                    <div v-for="n in skeletonRowCount" :key="`card-skeleton-${n}`" class="space-y-2.5 p-4">
-                        <div class="h-4 w-2/3 animate-pulse rounded bg-muted"></div>
-                        <div class="h-3 w-1/2 animate-pulse rounded bg-muted"></div>
-                        <div class="h-3 w-3/4 animate-pulse rounded bg-muted"></div>
+                <div v-if="refreshing" class="space-y-3 bg-muted/40 p-3">
+                    <div v-for="n in skeletonRowCount" :key="`card-skeleton-${n}`" class="space-y-3 rounded-xl border bg-card p-3.5">
+                        <div class="flex justify-between gap-4">
+                            <div class="h-4 w-1/2 animate-pulse rounded bg-muted"></div>
+                            <div class="h-4 w-1/4 animate-pulse rounded bg-muted"></div>
+                        </div>
+                        <div class="flex justify-between gap-4">
+                            <div class="h-3 w-1/4 animate-pulse rounded bg-muted"></div>
+                            <div class="h-4 w-1/5 animate-pulse rounded-full bg-muted"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-dashed pt-2.5">
+                            <div v-for="m in 4" :key="m" class="h-7 animate-pulse rounded bg-muted"></div>
+                        </div>
                     </div>
                 </div>
-                <div v-else-if="payments.data.length" class="divide-y divide-border/50">
+                <div v-else-if="payments.data.length" class="space-y-3 bg-muted/40 p-3">
                     <div
                         v-for="payment in payments.data"
                         :key="payment.id"
-                        class="space-y-2 p-4"
-                        :class="{ 'bg-red-50/70 dark:bg-red-950/20': isAdmin && payment.card_locked_until }"
+                        class="overflow-hidden rounded-xl border bg-card"
                     >
-                        <div class="flex items-baseline justify-between gap-3">
-                            <span class="min-w-0 break-words font-medium">{{ payment.client_name }}</span>
-                            <span class="shrink-0 font-mono font-medium tabular-nums">{{ formatMoney(payment.amount, payment.currency, { grouping: false }) }}</span>
+                        <div class="space-y-2.5 p-3.5">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="line-clamp-2 min-w-0 break-words text-[15px] font-semibold leading-snug">{{ payment.client_name }}</span>
+                                <span class="shrink-0 font-mono text-[17px] font-semibold tabular-nums">{{ formatMoney(payment.amount, payment.currency, { grouping: false }) }}</span>
+                            </div>
+                            <div class="flex items-center justify-between gap-3">
+                                <span class="min-w-0 truncate font-mono text-xs text-muted-foreground">{{ payment.reference_code ?? '—' }}</span>
+                                <PaymentStatusBadge :status="payment.status" />
+                            </div>
+                            <dl class="grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-dashed pt-2.5">
+                                <div class="min-w-0">
+                                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Brand</dt>
+                                    <dd class="truncate text-[13px]">{{ payment.brand_name || '—' }}</dd>
+                                </div>
+                                <div v-if="canViewStripeAccount" class="min-w-0">
+                                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Provider</dt>
+                                    <dd class="text-[13px]"><PaymentProviderBadge :provider="payment.provider" /></dd>
+                                </div>
+                                <div class="min-w-0">
+                                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Country</dt>
+                                    <dd class="truncate text-[13px]" :class="{ 'text-muted-foreground': !payment.country_name }">{{ payment.country_name ?? '—' }}</dd>
+                                </div>
+                                <div class="min-w-0">
+                                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">RM</dt>
+                                    <dd class="truncate text-[13px]" :class="{ 'text-muted-foreground': !payment.relationship_manager_name }">{{ payment.relationship_manager_name ?? '—' }}</dd>
+                                </div>
+                                <div class="min-w-0">
+                                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Created</dt>
+                                    <dd class="truncate text-[13px]">{{ formatDate(payment.created_at) }}</dd>
+                                </div>
+                            </dl>
                         </div>
-                        <div class="flex items-center justify-between gap-3">
-                            <span class="min-w-0 break-all font-mono text-xs text-muted-foreground">{{ payment.reference_code ?? '—' }}</span>
-                            <PaymentStatusBadge :status="payment.status" />
-                        </div>
-                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                            <span>{{ payment.brand_name }}</span>
-                            <PaymentProviderBadge v-if="canViewStripeAccount" :provider="payment.provider" />
-                            <span v-if="payment.country_name">{{ payment.country_name }}</span>
-                            <span v-if="payment.relationship_manager_name">RM: {{ payment.relationship_manager_name }}</span>
-                            <span>{{ formatDate(payment.created_at) }}</span>
-                        </div>
-                        <p v-if="isAdmin && payment.card_locked_until" class="flex items-start gap-1 text-xs text-red-600 dark:text-red-400">
+                        <p v-if="isAdmin && payment.card_locked_until" class="flex items-start gap-1.5 border-t border-red-200 bg-red-50 px-3.5 py-2 text-xs text-red-600">
                             <LockKeyhole class="mt-0.5 size-3 shrink-0" />
                             Card payments paused until {{ lockedUntilLabel(payment.card_locked_until) }}. Customer should contact their representative.
                         </p>
-                        <div v-if="!readOnly" class="-mx-2 flex items-center gap-0.5">
-                            <Button variant="ghost" class="size-10" as-child aria-label="View payment details">
-                                <Link :href="`/payments/${payment.uuid}`"><Eye class="size-4" /></Link>
+                        <div v-if="!readOnly" class="flex items-center gap-2 border-t px-3.5 py-2">
+                            <Button variant="outline" class="size-10" as-child aria-label="View payment details">
+                                <Link :href="`/payments/${payment.uuid}`"><Eye class="size-[18px]" /></Link>
                             </Button>
-                            <Button variant="ghost" class="size-10" aria-label="Copy payment link" @click="copyLink(payment.uuid, payment.reference_slug)">
-                                <Check v-if="copiedUuid === payment.uuid" class="size-4 text-green-600" />
-                                <Copy v-else class="size-4" />
+                            <Button variant="outline" class="size-10" aria-label="Copy payment link" @click="copyLink(payment.uuid, payment.reference_slug)">
+                                <Check v-if="copiedUuid === payment.uuid" class="size-[18px] text-green-600" />
+                                <Copy v-else class="size-[18px]" />
                             </Button>
-                            <Button v-if="payment.status === 'pending'" variant="ghost" class="size-10" as-child aria-label="Edit payment">
-                                <Link :href="`/payments/${payment.uuid}/edit`"><Pencil class="size-4" /></Link>
+                            <Button v-if="payment.status === 'pending'" variant="outline" class="size-10" as-child aria-label="Edit payment">
+                                <Link :href="`/payments/${payment.uuid}/edit`"><Pencil class="size-[18px]" /></Link>
                             </Button>
                             <Button
                                 v-if="isAdmin && payment.card_locked_until"
-                                variant="ghost"
+                                variant="outline"
                                 class="size-10"
                                 aria-label="Release card lock"
                                 :disabled="resetting === payment.uuid"
                                 @click="resetLock(payment)"
                             >
-                                <LockOpen class="size-4 text-red-600" />
+                                <LockOpen class="size-[18px] text-red-600" />
                             </Button>
                             <Button
                                 v-if="isAdmin"
-                                variant="ghost"
-                                class="ml-auto size-10"
+                                variant="outline"
+                                class="ml-auto size-10 border-destructive/30"
                                 aria-label="Delete payment"
                                 :disabled="deleteForm.processing && deleteTarget?.uuid === payment.uuid"
                                 @click="confirmDelete(payment)"
                             >
-                                <Trash2 class="size-4 text-destructive" />
+                                <Trash2 class="size-[18px] text-destructive" />
                             </Button>
                         </div>
                     </div>
