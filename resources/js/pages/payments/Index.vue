@@ -317,8 +317,10 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
     <Head title="Payments" />
 
     <div class="space-y-4 p-4 md:p-6">
+        <!-- Phone: title, export, New payment and search stay pinned while the list scrolls -->
+        <div class="space-y-3 max-md:sticky max-md:top-0 max-md:z-30 max-md:-mx-4 max-md:-mt-4 max-md:border-b max-md:bg-background max-md:px-4 max-md:pb-3 max-md:pt-[max(1rem,env(safe-area-inset-top))] max-md:shadow-sm">
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <h1 class="text-2xl font-semibold tracking-tight">Payments</h1>
+            <h1 class="text-xl font-semibold tracking-tight md:text-2xl">Payments</h1>
             <div class="flex items-center gap-2">
                 <Button v-if="canExport" as-child variant="outline" class="max-sm:size-9 max-sm:px-0" aria-label="Export payments">
                     <a :href="exportUrl">
@@ -359,6 +361,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                     class="absolute -right-1.5 -top-1.5 inline-flex size-4 items-center justify-center rounded-full bg-foreground text-[10px] font-bold leading-none text-background"
                 >{{ activeFilterCount }}</span>
             </Button>
+        </div>
         </div>
 
         <Sheet v-if="isPhone" v-model:open="filtersOpen">
@@ -503,6 +506,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                                     <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Provider</dt>
                                     <dd class="text-[13px]"><PaymentProviderBadge :provider="payment.provider" show-name /></dd>
                                 </div>
+                                <div v-else aria-hidden="true"></div>
                                 <div class="min-w-0">
                                     <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Country</dt>
                                     <dd class="truncate text-[13px]" :class="{ 'text-muted-foreground': !payment.country_name }">{{ payment.country_name ?? '—' }}</dd>
