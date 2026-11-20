@@ -138,3 +138,33 @@ it('cleans the error reference and text that come from the address', function ()
         ->and(WorldpayPageReturn::cleanText('   '))->toBeNull()
         ->and(WorldpayPageReturn::cleanText(null))->toBeNull();
 });
+
+it('reads the error text from messages, falls back to errors, and prefers messages', function () {
+    $payment = wrPayment();
+    wrPage($payment);
+
+    $this->get("/pay/{$payment->uuid}?worldpay_return=failure&errorRefNumber=M1&messages=Card%20refused,Try%20again");
+    $this->get("/pay/{$payment->uuid}?worldpay_return=failure&errorRefNumber=M2&errors=Old%20style");
+    $this->get("/pay/{$payment->uuid}?worldpay_return=failure&errorRefNumber=M3&messages=From%20messages&errors=From%20errors");
+
+    expect(WorldpayPageReturn::where('error_ref', 'M1')->sole()->error_text)->toBe('Card refused,Try again')
+        ->and(WorldpayPageReturn::where('error_ref', 'M2')->sole()->error_text)->toBe('Old style')
+        ->and(WorldpayPageReturn::where('error_ref', 'M3')->sole()->error_text)->toBe('From messages');
+});
+
+it('logs the names of the return parameters and never their values', function () {
+    Log::spy();
+    $payment = wrPayment();
+    wrPage($payment);
+
+    $this->get("/pay/{$payment->uuid}?worldpay_return=failure&errorRefNumber=K1&messages=SECRETVALUE&other_param=SECRETVALUE2");
+
+    Log::shouldHaveReceived('info')->withArgs(function ($message, $context = []) {
+        return $message === 'Worldpay client returned'
+            && in_array('messages', $context['query_keys'], true)
+            && in_array('other_param', $context['query_keys'], true)
+            && in_array('errorRefNumber', $context['query_keys'], true)
+            && ! in_array('worldpay_return', $context['query_keys'], true)
+            && ! str_contains(json_encode($context), 'SECRETVALUE');
+    });
+});
