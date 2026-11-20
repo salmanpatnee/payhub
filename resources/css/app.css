@@ -6,7 +6,7 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *):not(.auth-shell *));
 
 @theme inline {
     --font-sans:
@@ -90,7 +90,9 @@
     }
 }
 
-:root {
+:root,
+.auth-shell {
+    color-scheme: light;
     --background: hsl(0 0% 100%);
     --foreground: hsl(0 0% 3.9%);
     --card: hsl(0 0% 100%);
