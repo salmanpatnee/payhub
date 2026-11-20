@@ -37,6 +37,13 @@ const config: Record<string, { dot: string; wrap: string; pulse: boolean; icon: 
 };
 
 const c = computed(() => config[props.status] ?? config.cancelled);
+
+// Sentence case: "Completed", "Check details".
+const text = computed(() => {
+    const raw = (props.label ?? props.status).replace(/_/g, ' ');
+
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+});
 </script>
 
 <template>
@@ -46,14 +53,14 @@ const c = computed(() => config[props.status] ?? config.cancelled);
     <span
         v-else
         :class="[
-            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5',
-            'text-[10px] font-bold uppercase tracking-widest ring-1',
+            'inline-flex h-[26px] items-center gap-[7px] whitespace-nowrap rounded-full pl-[9px] pr-[11px]',
+            'text-[12.5px] font-semibold leading-none ring-1 ring-inset',
             c.wrap,
         ]"
     >
         <span
-            :class="['size-1.5 rounded-full flex-shrink-0', c.dot, c.pulse ? 'animate-pulse' : '']"
+            :class="['size-[7px] flex-shrink-0 rounded-full shadow-[0_0_0_3px] shadow-current/20', c.dot, c.pulse ? 'animate-pulse motion-reduce:animate-none' : '']"
         />
-        {{ label ?? status }}
+        {{ text }}
     </span>
 </template>
