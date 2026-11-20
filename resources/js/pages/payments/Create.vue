@@ -32,6 +32,8 @@ const props = defineProps<{
     isAccountLocked: boolean;
     relationshipManagers: RmOption[];
     countries: { id: string; name: string }[];
+    /** Configured defaults (config/payments.php), already checked against what this user may pick. */
+    defaults: { brand_id: number | null; account: string | null };
 }>();
 
 defineOptions({
@@ -165,7 +167,8 @@ function loadDefaults(): void {
     try {
         const stored = JSON.parse(localStorage.getItem(DEFAULTS_KEY) ?? '{}') as Record<string, string>;
 
-        if (stored.brand_id && props.brands.some(b => String(b.id) === stored.brand_id)) {
+        // A configured default wins; the last used value only fills what is still empty.
+        if (!form.brand_id && stored.brand_id && props.brands.some(b => String(b.id) === stored.brand_id)) {
             form.brand_id = stored.brand_id;
         }
 
@@ -173,7 +176,7 @@ function loadDefaults(): void {
             form.relationship_manager_id = stored.relationship_manager_id;
         }
 
-        if (!props.isAccountLocked && stored.account && props.accounts.some(a => `${a.provider}:${a.id}` === stored.account)) {
+        if (!props.isAccountLocked && !accountValue.value && stored.account && props.accounts.some(a => `${a.provider}:${a.id}` === stored.account)) {
             accountValue.value = stored.account;
         }
     } catch {
@@ -194,6 +197,14 @@ function saveDefaults(): void {
 }
 
 onMounted(() => {
+    if (props.defaults.brand_id !== null) {
+        form.brand_id = String(props.defaults.brand_id);
+    }
+
+    if (props.defaults.account !== null && !props.isAccountLocked) {
+        accountValue.value = props.defaults.account;
+    }
+
     loadDefaults();
 
     if (props.isAccountLocked) {

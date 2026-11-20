@@ -157,7 +157,41 @@ class PaymentController extends Controller
             return $options;
         }
 
-        return Inertia::render('payments/Create', $options);
+        return Inertia::render('payments/Create', $options + ['defaults' => $this->formDefaults($options)]);
+    }
+
+    /**
+     * The configured default brand and payment account (config/payments.php),
+     * kept only when this user can actually pick them in the form.
+     *
+     * @param  array{brands: mixed, accounts: mixed, isAccountLocked: bool}  $options
+     * @return array{brand_id: ?int, account: ?string}
+     */
+    private function formDefaults(array $options): array
+    {
+        $brandId = null;
+        $slug = config('payments.defaults.brand');
+
+        if (is_string($slug) && $slug !== '') {
+            $id = Brand::where('slug', $slug)->value('id');
+
+            if ($id !== null && collect($options['brands'])->contains('id', $id)) {
+                $brandId = (int) $id;
+            }
+        }
+
+        $account = null;
+        $configured = config('payments.defaults.account');
+
+        if (! $options['isAccountLocked'] && is_string($configured) && $configured !== '') {
+            $found = collect($options['accounts'])->contains(
+                fn (array $a) => "{$a['provider']}:{$a['id']}" === $configured,
+            );
+
+            $account = $found ? $configured : null;
+        }
+
+        return ['brand_id' => $brandId, 'account' => $account];
     }
 
     /**
