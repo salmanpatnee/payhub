@@ -502,7 +502,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                                     <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Brand</dt>
                                     <dd class="truncate text-[13px]">{{ payment.brand_name || '—' }}</dd>
                                 </div>
-                                <div v-if="canViewStripeAccount" class="min-w-0">
+                                <div v-if="canViewStripeAccount" class="min-w-0 text-right">
                                     <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Provider</dt>
                                     <dd class="text-[13px]"><PaymentProviderBadge :provider="payment.provider" show-name /></dd>
                                 </div>
@@ -511,7 +511,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                                     <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Country</dt>
                                     <dd class="truncate text-[13px]" :class="{ 'text-muted-foreground': !payment.country_name }">{{ payment.country_name ?? '—' }}</dd>
                                 </div>
-                                <div class="min-w-0">
+                                <div class="min-w-0 text-right">
                                     <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">RM</dt>
                                     <dd class="truncate text-[13px]" :class="{ 'text-muted-foreground': !payment.relationship_manager_name }">{{ payment.relationship_manager_name ?? '—' }}</dd>
                                 </div>
