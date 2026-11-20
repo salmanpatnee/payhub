@@ -68,8 +68,13 @@ class WorldpayClient
         // Left out when the config value is empty, so the account's own Worldpay setting applies.
         $billing = strtoupper((string) config('services.worldpay.show_billing_address', ''));
 
+        // passBackErrorReasons asks Worldpay to add errorRefNumber and messages to the failure and error return
+        // addresses (docs: HPP configuration, "Return error reasons in URL"). Sent explicitly so it does not
+        // depend on the merchant dashboard setting.
+        $body['hostedProperties'] = ['passBackErrorReasons' => true];
+
         if (in_array($billing, ['SHOW', 'HIDE', 'EDIT'], true)) {
-            $body['hostedProperties'] = ['showBillingAddress' => $billing];
+            $body['hostedProperties']['showBillingAddress'] = $billing;
         }
 
         $response = $this->pagesRequest()->post('/payment_pages', $body);
