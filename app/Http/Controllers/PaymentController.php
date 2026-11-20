@@ -784,7 +784,11 @@ class PaymentController extends Controller
                 'reference' => $return->page?->transaction_reference,
                 'status' => 'returned',
                 'status_detail' => collect([$return->word, $return->error_ref])->filter()->implode(' · '),
-                'reason' => $return->error_text,
+                // A failed or errored return with a reference but no text: Worldpay gave no reason (a failed 3DS code does this).
+                'reason' => $return->error_text
+                    ?? (in_array($return->word, ['failure', 'error'], true) && $return->error_ref !== null
+                        ? 'Worldpay gave no reason. Give this reference to Worldpay support.'
+                        : null),
                 'source' => 'client return',
                 'started_at' => $return->created_at?->toISOString(),
             ]);

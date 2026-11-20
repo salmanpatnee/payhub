@@ -118,7 +118,7 @@ it('sends a new refused lookup to Sentry once, grouped by the Worldpay event', f
     expect($fake->calls)->toHaveCount(1);
     $call = $fake->calls[0];
     expect($call['tags']['worldpay.last_event'])->toBe('authorizationRefused')
-        ->and($call['context']['last_event'])->toBe('authorizationRefused')
+        ->and($call['context']['worldpay_event'])->toBe('authorizationRefused')
         ->and($call['context']['transaction_reference'])->toBe($page->transaction_reference)
         ->and($call['fingerprint'])->toBe(['worldpay', 'lookup', 'authorizationRefused']);
 });
@@ -135,6 +135,10 @@ it('does not send a pending lookup to Sentry', function () {
     app(WorldpayChargeResolver::class)->resolve($payment, 'poll');
 
     expect($fake->calls)->toHaveCount(0);
+});
+
+it('never sends events to a real Sentry project from the test suite', function () {
+    expect(config('sentry.dsn'))->toBeEmpty();
 });
 
 it('does nothing and does not throw when Sentry is not set up', function () {

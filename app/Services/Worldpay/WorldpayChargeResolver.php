@@ -617,7 +617,7 @@ class WorldpayChargeResolver
                 [
                     'payment_id' => $payment->id,
                     'transaction_reference' => $subject->transaction_reference,
-                    'last_event' => $event,
+                    'worldpay_event' => $event,
                     'worldpay_payment_id' => $worldpayPaymentId,
                     'source' => $source,
                 ],

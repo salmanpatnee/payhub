@@ -50,7 +50,7 @@ record which of the cards in the table were run, so check a case here before rel
 | Result on Worldpay's page | PayHub |
 |---|---|
 | Success (frictionless or challenged) | The pay page waits, then shows success. The payment becomes `completed` only after PayHub reads one settled sale for the exact amount in GBP (poll, 10 minute sweep or optional webhook). |
-| Failure, rejected or cancel | The payment stays `pending`. The pay page offers Pay now again. The admin payment page shows a `client return` row with the return word and Worldpay's error reference (and the error text when Worldpay sends it). A failed return also shows up in Sentry with the tag `payment.provider:worldpay`. Worldpay results `refused`, `authorizationFailed`, `cancelled` count as `declined` and never set `failed`. |
+| Failure, rejected or cancel | The payment stays `pending`. The pay page offers Pay now again. The admin payment page shows a `client return` row with the return word and Worldpay's error reference (and the error text when Worldpay sends it). A failed return also shows up in Sentry with the tag `payment.provider:worldpay`. A failed 3DS code (wrong OTP) comes back with `errorRefNumber` and an empty `errors`: the admin row then says Worldpay gave no reason, and the reference is what to give Worldpay support (seen on Try 2026-11-20). Worldpay results `refused`, `authorizationFailed`, `cancelled` count as `declined` and never set `failed`. |
 | Crash on Worldpay's page | The payment stays `pending`. Nothing is recorded as paid. |
 
 ## Suggested test run
