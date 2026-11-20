@@ -7,7 +7,13 @@ import {
   PopoverPortal,
   useForwardPropsEmits,
 } from "reka-ui"
+import { inject } from "vue"
+import type { Ref } from "vue"
 import { cn } from "@/lib/utils"
+
+// A modal Sheet/Dialog blocks clicks and typing outside itself, so a page can
+// provide an element inside it to render popovers into. Falls back to <body>.
+const portalTarget = inject<Ref<HTMLElement | null> | null>("popover-portal-target", null)
 
 defineOptions({
   inheritAttrs: false,
@@ -28,7 +34,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
 
 <template>
-  <PopoverPortal>
+  <PopoverPortal :to="portalTarget ?? undefined">
     <PopoverContent
       data-slot="popover-content"
       v-bind="{ ...$attrs, ...forwarded }"
