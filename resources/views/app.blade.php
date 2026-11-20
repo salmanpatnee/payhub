@@ -21,7 +21,6 @@
         {{-- The folder PayHub is served from ("/payhub"), empty at the top of a domain. A meta tag, not an inline script, because the production CSP blocks inline scripts. Read by resources/js/lib/basePath.ts. --}}
         <meta name="app-base" content="{{ request()->getBasePath() }}">
 
-        <link rel="icon" href="{{ asset('favicon.ico') }}?v=2" sizes="any">
         <link rel="icon" href="{{ asset('favicon.svg') }}?v=2" type="image/svg+xml">
         <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=2">
 
