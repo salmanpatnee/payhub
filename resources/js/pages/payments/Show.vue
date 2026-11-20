@@ -270,21 +270,21 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
     <div class="space-y-6 p-4 sm:p-6">
         <!-- Top bar -->
         <div class="flex flex-wrap items-center justify-between gap-4">
-            <div class="space-y-2">
+            <div class="space-y-2 max-sm:w-full">
                 <Button variant="ghost" size="sm" as-child class="-ml-2 text-muted-foreground">
                     <Link href="/payments">
                         <ArrowLeft class="mr-1 size-4" />
                         Back to payments
                     </Link>
                 </Button>
-                <div class="flex flex-wrap items-center gap-3">
-                    <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">
-                        Payment <span class="font-mono">{{ referenceLabel }}</span>
+                <div class="flex items-center gap-3 max-sm:justify-between sm:flex-wrap">
+                    <h1 class="min-w-0 text-xl font-semibold tracking-tight sm:text-3xl">
+                        <span class="max-sm:sr-only">Payment </span><span class="font-mono">{{ referenceLabel }}</span>
                     </h1>
                     <PaymentStatusBadge :status="payment.status" />
                 </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="hidden items-center gap-2 sm:flex">
                 <Button v-if="payment.status === 'pending'" variant="outline" as-child>
                     <Link :href="`/payments/${payment.uuid}/edit`">
                         <Pencil class="mr-1 size-4" />
@@ -295,6 +295,40 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                     v-if="isAdmin"
                     variant="outline"
                     class="text-destructive hover:text-destructive"
+                    :disabled="deleteForm.processing"
+                    @click="deleteOpen = true"
+                >
+                    <Trash2 class="mr-1 size-4" />
+                    Delete
+                </Button>
+            </div>
+        </div>
+
+        <!-- Phone and tablet: payment link first, then Edit and Delete -->
+        <div class="space-y-3 lg:hidden">
+            <Card class="gap-0 px-4 py-4">
+                <div :class="[labelClass, 'flex items-center gap-1.5']">
+                    <Link2 class="size-3.5" />
+                    Payment link
+                </div>
+                <Button class="mt-3 h-11 w-full" @click="copyLink">
+                    <Check v-if="copied" class="size-4" />
+                    <Copy v-else class="size-4" />
+                    {{ copied ? 'Copied!' : 'Copy link' }}
+                </Button>
+                <p class="mt-2.5 text-xs text-muted-foreground">Share with your client to collect payment.</p>
+            </Card>
+            <div v-if="payment.status === 'pending' || isAdmin" class="grid grid-cols-2 gap-2 sm:hidden [&>*:only-child]:col-span-2">
+                <Button v-if="payment.status === 'pending'" variant="outline" as-child class="h-10">
+                    <Link :href="`/payments/${payment.uuid}/edit`">
+                        <Pencil class="mr-1 size-4" />
+                        Edit
+                    </Link>
+                </Button>
+                <Button
+                    v-if="isAdmin"
+                    variant="outline"
+                    class="h-10 text-destructive hover:text-destructive"
                     :disabled="deleteForm.processing"
                     @click="deleteOpen = true"
                 >
@@ -329,11 +363,11 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                 <Card class="gap-0 overflow-hidden py-0">
                     <div class="h-1 bg-primary" aria-hidden="true" />
 
-                    <div class="flex flex-wrap items-end justify-between gap-6 border-b border-dashed border-border px-6 py-7 sm:px-9">
+                    <div class="flex flex-wrap items-end justify-between gap-6 border-b border-dashed border-border px-4 py-4 sm:px-9 sm:py-7">
                         <div>
                             <p :class="labelClass">Amount</p>
                             <div class="mt-1.5 flex items-baseline gap-2.5">
-                                <span class="text-4xl font-semibold tracking-tight tabular-nums sm:text-6xl">
+                                <span class="text-[34px] font-semibold tracking-tight tabular-nums sm:text-6xl">
                                     {{ formatAmount(payment.amount, payment.currency) }}
                                 </span>
                                 <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -341,14 +375,14 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                                 </span>
                             </div>
                         </div>
-                        <div class="sm:text-right">
+                        <div class="text-right">
                             <p :class="labelClass">Brand</p>
-                            <p class="mt-1 text-lg font-semibold">{{ payment.brand_name }}</p>
+                            <p class="mt-1 text-base font-semibold sm:text-lg">{{ payment.brand_name }}</p>
                         </div>
                     </div>
 
                     <!-- Progress -->
-                    <ol class="flex gap-0 border-b border-border bg-muted/30 px-6 py-5 sm:px-9">
+                    <ol class="flex gap-0 border-b border-border bg-muted/30 px-4 py-4 sm:px-9 sm:py-5">
                         <li
                             v-for="(step, i) in timeline"
                             :key="i"
@@ -368,12 +402,12 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                     </ol>
 
                     <!-- Details -->
-                    <dl class="grid grid-cols-1 gap-x-8 gap-y-6 px-6 py-7 sm:grid-cols-2 sm:px-9 xl:grid-cols-3">
-                        <div>
-                            <dt :class="labelClass">Client</dt>
-                            <dd class="mt-1 font-semibold">{{ payment.client_name }}</dd>
-                        </div>
+                    <dl class="grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4 sm:gap-x-8 sm:gap-y-6 sm:px-9 sm:py-7 xl:grid-cols-3">
                         <div class="min-w-0">
+                            <dt :class="labelClass">Client</dt>
+                            <dd class="mt-1 break-words font-semibold">{{ payment.client_name }}</dd>
+                        </div>
+                        <div class="col-span-2 min-w-0 sm:col-span-1">
                             <dt :class="labelClass">Email</dt>
                             <dd class="mt-1 break-words">{{ payment.client_email }}</dd>
                         </div>
@@ -397,11 +431,31 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                             <dt :class="labelClass">Reference</dt>
                             <dd class="mt-1 font-mono">{{ referenceLabel }}</dd>
                         </div>
-                        <div v-if="payment.note" class="rounded-lg bg-muted/50 px-4 py-3 sm:col-span-2 xl:col-span-3">
+                        <div v-if="payment.note" class="col-span-2 rounded-lg bg-muted/50 px-4 py-3 xl:col-span-3">
                             <dt :class="labelClass">Note</dt>
                             <dd class="mt-1 text-foreground/80">{{ payment.note }}</dd>
                         </div>
                     </dl>
+                </Card>
+
+                <!-- Phone and tablet: processed through sits right after the details -->
+                <Card v-if="canViewStripeAccount || payment.provider_reference" class="gap-0 px-4 py-4 lg:hidden">
+                    <div v-if="canViewStripeAccount" class="flex items-center gap-3">
+                        <span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                            <PaymentProviderBadge :provider="payment.provider" />
+                        </span>
+                        <div class="min-w-0">
+                            <p :class="labelClass">Processed through</p>
+                            <p class="truncate font-semibold">{{ providerName }} · {{ payment.account_name ?? '—' }}</p>
+                        </div>
+                    </div>
+                    <div
+                        v-if="payment.provider_reference"
+                        :class="canViewStripeAccount ? 'mt-3 border-t border-border pt-3' : ''"
+                    >
+                        <p :class="labelClass">{{ providerReferenceLabel }}</p>
+                        <p class="mt-1 break-all font-mono text-xs">{{ payment.provider_reference }}</p>
+                    </div>
                 </Card>
 
                 <!-- Attempt history (admins only; the server sends null for everyone else) -->
@@ -412,11 +466,9 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                     </div>
 
                     <div v-if="attempts.rows.length || attempts.provider === 'mpgs' || attempts.provider === 'kurv' || attempts.provider === 'nmi' || attempts.provider === 'worldpay'" class="overflow-x-auto">
-                        <table
-                            v-if="attempts.rows.length"
-                            class="w-full text-sm max-sm:block [&_tbody]:max-sm:block [&_tr]:max-sm:block"
-                        >
-                            <thead class="max-sm:hidden">
+                        <template v-if="attempts.rows.length">
+                        <table class="hidden w-full text-sm sm:table">
+                            <thead>
                                 <tr class="bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                     <th class="px-4 py-3">#</th>
                                     <th class="px-4 py-3">Started</th>
@@ -430,26 +482,55 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                                 <tr
                                     v-for="row in attempts.rows"
                                     :key="`${row.source ?? 'row'}-${row.sequence}`"
-                                    class="border-t border-border max-sm:m-3 max-sm:flex max-sm:flex-col max-sm:gap-1 max-sm:rounded-lg max-sm:border max-sm:p-3"
+                                    class="border-t border-border"
                                 >
-                                    <td class="px-4 py-3.5 align-top tabular-nums max-sm:p-0">{{ row.sequence }}</td>
-                                    <td class="whitespace-nowrap px-4 py-3.5 align-top tabular-nums max-sm:p-0">{{ formatDateTime(row.started_at) }}</td>
-                                    <td class="px-4 py-3.5 align-top font-mono text-xs max-sm:p-0">{{ row.reference ?? '—' }}</td>
-                                    <td class="px-4 py-3.5 align-top max-sm:p-0">
+                                    <td class="px-4 py-3.5 align-top tabular-nums">{{ row.sequence }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3.5 align-top tabular-nums">{{ formatDateTime(row.started_at) }}</td>
+                                    <td class="px-4 py-3.5 align-top font-mono text-xs">{{ row.reference ?? '—' }}</td>
+                                    <td class="px-4 py-3.5 align-top">
                                         <PaymentStatusBadge
                                             :status="attemptTone[row.status] ?? 'cancelled'"
                                             :label="row.status.replace('_', ' ')"
                                         />
                                         <div v-if="row.status_detail" class="mt-1 text-xs text-muted-foreground">{{ row.status_detail }}</div>
                                     </td>
-                                    <td class="px-4 py-3.5 align-top sm:max-w-[34ch] max-sm:p-0">
+                                    <td class="px-4 py-3.5 align-top sm:max-w-[34ch]">
                                         {{ row.reason ?? '—' }}
                                         <div v-if="row.client_info" class="mt-1 text-xs text-muted-foreground">{{ row.client_info }}</div>
                                     </td>
-                                    <td v-if="attempts.provider === 'kurv' || attempts.provider === 'worldpay'" class="px-4 py-3.5 align-top capitalize max-sm:p-0">{{ row.source ?? '—' }}</td>
+                                    <td v-if="attempts.provider === 'kurv' || attempts.provider === 'worldpay'" class="px-4 py-3.5 align-top capitalize">{{ row.source ?? '—' }}</td>
                                 </tr>
                             </tbody>
                         </table>
+
+                        <!-- Phone: one labelled card per attempt -->
+                        <ul class="divide-y divide-border sm:hidden">
+                            <li v-for="row in attempts.rows" :key="`m-${row.source ?? 'row'}-${row.sequence}`" class="space-y-2 px-4 py-3.5">
+                                <div class="flex items-center justify-between gap-3">
+                                    <span class="text-sm font-semibold">Attempt {{ row.sequence }}</span>
+                                    <PaymentStatusBadge
+                                        :status="attemptTone[row.status] ?? 'cancelled'"
+                                        :label="row.status.replace('_', ' ')"
+                                    />
+                                </div>
+                                <p class="text-xs tabular-nums text-muted-foreground">{{ formatDateTime(row.started_at) }}</p>
+                                <dl class="grid grid-cols-[76px_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5 text-[13px]">
+                                    <dt :class="labelClass">{{ attempts.provider === 'mpgs' ? 'Order ID' : attempts.provider === 'kurv' ? 'Request' : attempts.provider === 'worldpay' ? 'Reference' : 'Txn ID' }}</dt>
+                                    <dd class="break-all font-mono text-xs">{{ row.reference ?? '—' }}</dd>
+                                    <dt :class="labelClass">Reason</dt>
+                                    <dd class="break-words">
+                                        {{ row.reason ?? '—' }}
+                                        <span v-if="row.status_detail" class="mt-0.5 block text-xs text-muted-foreground">{{ row.status_detail }}</span>
+                                        <span v-if="row.client_info" class="mt-0.5 block text-xs text-muted-foreground">{{ row.client_info }}</span>
+                                    </dd>
+                                    <template v-if="attempts.provider === 'kurv' || attempts.provider === 'worldpay'">
+                                        <dt :class="labelClass">Source</dt>
+                                        <dd class="capitalize">{{ row.source ?? '—' }}</dd>
+                                    </template>
+                                </dl>
+                            </li>
+                        </ul>
+                        </template>
                         <p v-else-if="attempts.provider === 'worldpay'" class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No charges or lookups yet. The client has not paid and PayHub has not asked Worldpay about this payment.</p>
                         <p v-else-if="attempts.provider === 'kurv'" class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No lookups yet. PayHub has not asked Kurv about this payment.</p>
                         <p v-else class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No attempts yet. The client has not opened the payment link.</p>
@@ -530,7 +611,7 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
 
             <!-- Side rail -->
             <aside class="min-w-0 space-y-6">
-                <Card class="gap-0 px-5 py-5">
+                <Card class="hidden gap-0 px-5 py-5 lg:block">
                     <div :class="[labelClass, 'flex items-center gap-1.5']">
                         <Link2 class="size-3.5" />
                         Payment link
@@ -544,7 +625,7 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                     <p class="mt-3 text-xs text-muted-foreground">Share with your client to collect payment.</p>
                 </Card>
 
-                <Card v-if="canViewStripeAccount || payment.provider_reference" class="gap-0 px-5 py-5">
+                <Card v-if="canViewStripeAccount || payment.provider_reference" class="hidden gap-0 px-5 py-5 lg:block">
                     <h2 class="text-lg font-semibold">Processed through</h2>
                     <div v-if="canViewStripeAccount" class="mt-4 flex items-center gap-3">
                         <span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">

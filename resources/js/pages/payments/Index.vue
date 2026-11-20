@@ -1,22 +1,22 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { computed, reactive, ref, watch } from 'vue';
-import { useLocalStorage } from '@vueuse/core';
+import { computed, provide, reactive, ref, watch } from 'vue';
+import { useLocalStorage, useMediaQuery } from '@vueuse/core';
 import { Check, Columns, Copy, Download, Eye, Filter, LockKeyhole, LockOpen, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import PaymentProviderBadge from '@/components/PaymentProviderBadge.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
-import SearchableSelect from '@/components/SearchableSelect.vue';
+import PaymentFilters from '@/components/payments/PaymentFilters.vue';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -161,6 +161,14 @@ defineOptions({
 });
 
 const UNSET = '__all';
+
+// Phones get cards and a filters sheet; tablets and up get the table.
+const isPhone = useMediaQuery('(max-width: 767px)');
+const filtersOpen = ref(false);
+// Searchable selects inside the filters sheet render their list inside the
+// sheet; the modal sheet blocks input to anything portaled to <body>.
+const sheetPortalEl = ref<HTMLElement | null>(null);
+provide('popover-portal-target', sheetPortalEl);
 
 const filters = reactive<FilterState>({
     brand_id: props.filters.brand_id || UNSET,
@@ -308,41 +316,96 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
 <template>
     <Head title="Payments" />
 
-    <div class="p-6 space-y-4">
-        <div class="flex items-center justify-between">
-            <h1 class="text-2xl font-semibold tracking-tight">Payments</h1>
+    <div class="space-y-4 p-4 md:p-6">
+        <!-- Phone: title, export, New payment and search stay pinned while the list scrolls -->
+        <div class="space-y-3 max-md:sticky max-md:top-0 max-md:z-30 max-md:-mx-4 max-md:-mt-4 max-md:border-b max-md:bg-background max-md:px-4 max-md:pb-3 max-md:pt-[max(1rem,env(safe-area-inset-top))] max-md:shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-xl font-semibold tracking-tight md:text-2xl">Payments</h1>
             <div class="flex items-center gap-2">
-                <Button v-if="canExport" as-child variant="outline">
+                <Button v-if="canExport" as-child variant="outline" class="max-sm:size-9 max-sm:px-0" aria-label="Export payments">
                     <a :href="exportUrl">
-                        <Download class="size-4 mr-1" />
-                        Export
+                        <Download class="size-4 sm:mr-1" />
+                        <span class="max-sm:sr-only">Export</span>
                     </a>
                 </Button>
                 <Button v-if="!readOnly" as-child>
                     <Link href="/payments/create">
-                        <Plus class="size-4 mr-1" />
+                        <Plus class="mr-1 size-4" />
                         New payment
                     </Link>
                 </Button>
             </div>
         </div>
 
-        <!-- Filter bar -->
-        <div class="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
-            <div class="flex items-center justify-between px-5 py-3 border-b border-border/60 bg-[#F7F5F2]">
+        <!-- Phone: search plus a Filters button that opens a sheet -->
+        <div v-if="isPhone" class="flex items-center gap-2">
+            <div class="relative min-w-0 flex-1">
+                <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                    v-model="filters.search"
+                    type="search"
+                    placeholder="Name, email, reference or amount…"
+                    class="h-10 pl-8"
+                    aria-label="Search payments"
+                />
+            </div>
+            <Button
+                variant="outline"
+                class="relative size-10 shrink-0 px-0"
+                aria-label="Open filters"
+                @click="filtersOpen = true"
+            >
+                <Filter class="size-4" />
+                <span
+                    v-if="hasActiveFilters"
+                    class="absolute -right-1.5 -top-1.5 inline-flex size-4 items-center justify-center rounded-full bg-foreground text-[10px] font-bold leading-none text-background"
+                >{{ activeFilterCount }}</span>
+            </Button>
+        </div>
+        </div>
+
+        <Sheet v-if="isPhone" v-model:open="filtersOpen">
+            <SheetContent side="bottom" class="max-h-[85dvh] overflow-y-auto rounded-t-2xl">
+                <SheetHeader>
+                    <SheetTitle>Filters</SheetTitle>
+                    <SheetDescription class="sr-only">Filter the payments list</SheetDescription>
+                </SheetHeader>
+                <div ref="sheetPortalEl" class="grid grid-cols-2 gap-3 px-4">
+                    <PaymentFilters
+                        v-model:filters="filters"
+                        :brands="brands"
+                        :countries="countries"
+                        :relationship-managers="relationshipManagers"
+                        :can-view-stripe-account="canViewStripeAccount"
+                    />
+                </div>
+                <SheetFooter class="flex-row gap-2">
+                    <Button variant="outline" class="h-11 flex-1" :disabled="!hasActiveFilters" @click="clearFilters">
+                        Clear all
+                    </Button>
+                    <Button class="h-11 flex-[2]" @click="filtersOpen = false">
+                        Show {{ payments.total }} payments
+                    </Button>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
+
+        <!-- Tablet and up: filter panel -->
+        <div v-else class="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
+            <div class="flex items-center justify-between border-b border-border/60 bg-[#F7F5F2] px-5 py-3">
                 <div class="flex items-center gap-2">
                     <Filter class="size-3.5 text-muted-foreground" />
                     <span class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Filters</span>
                     <span
                         v-if="hasActiveFilters"
-                        class="inline-flex items-center justify-center size-4 rounded-full bg-foreground text-background text-[10px] font-bold leading-none"
+                        class="inline-flex size-4 items-center justify-center rounded-full bg-foreground text-[10px] font-bold leading-none text-background"
                     >{{ activeFilterCount }}</span>
                 </div>
                 <Button
                     v-if="hasActiveFilters"
                     variant="ghost"
                     size="sm"
-                    class="h-7 px-2 text-xs gap-1"
+                    class="h-7 gap-1 px-2 text-xs"
                     aria-label="Clear all filters"
                     @click="clearFilters"
                 >
@@ -351,114 +414,25 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                 </Button>
             </div>
 
-            <div class="flex gap-4 p-4">
-                <div class="flex flex-col gap-1.5 flex-[2] min-w-0">
-                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Search</Label>
-                    <div class="relative">
-                        <Search class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            v-model="filters.search"
-                            type="search"
-                            placeholder="Name, email, reference or amount…"
-                            class="pl-8"
-                        />
-                    </div>
-                </div>
-
-                <div v-if="brands.length" class="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</Label>
-                    <SearchableSelect
-                        v-model="filters.brand_id"
-                        :options="brands"
-                        :all-value="UNSET"
-                        all-label="All Brands"
-                        placeholder="All brands"
-                        search-placeholder="Search brands…"
-                    />
-                </div>
-
-                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Country</Label>
-                    <SearchableSelect
-                        v-model="filters.country"
-                        :options="countries"
-                        :all-value="UNSET"
-                        all-label="All Countries"
-                        placeholder="All countries"
-                        search-placeholder="Search countries…"
-                    />
-                </div>
-
-                <div v-if="canViewStripeAccount" class="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Provider</Label>
-                    <Select v-model="filters.provider">
-                        <SelectTrigger class="w-full">
-                            <SelectValue placeholder="All providers" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All Providers</SelectItem>
-                            <SelectItem value="stripe">Stripe</SelectItem>
-                            <SelectItem value="revolut">Revolut</SelectItem>
-                            <SelectItem value="square">Square</SelectItem>
-                            <SelectItem value="viva">Viva</SelectItem>
-                            <SelectItem value="clover">Clover</SelectItem>
-                            <SelectItem value="mpgs">MPGS</SelectItem>
-                            <SelectItem value="authorizenet">Authorize.net</SelectItem>
-                            <SelectItem value="whop">Whop</SelectItem>
-                            <SelectItem value="kurv">Kurv</SelectItem>
-                            <SelectItem value="nmi">NMI</SelectItem>
-                            <SelectItem value="worldpay">Worldpay</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</Label>
-                    <SearchableSelect
-                        v-model="filters.relationship_manager_id"
-                        :options="relationshipManagers"
-                        :all-value="UNSET"
-                        all-label="All RMs"
-                        placeholder="All RMs"
-                        search-placeholder="Search RMs…"
-                    />
-                </div>
-
-                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</Label>
-                    <Select v-model="filters.status">
-                        <SelectTrigger class="w-full">
-                            <SelectValue placeholder="All statuses" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All Statuses</SelectItem>
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="completed">Completed</SelectItem>
-                            <SelectItem value="failed">Failed</SelectItem>
-                            <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">From</Label>
-                    <Input v-model="filters.from" type="date" class="w-full" />
-                </div>
-
-                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <Label class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">To</Label>
-                    <Input v-model="filters.to" type="date" class="w-full" />
-                </div>
+            <div class="grid grid-cols-2 gap-4 p-4 lg:grid-cols-4 2xl:grid-cols-8">
+                <PaymentFilters
+                    show-search
+                    v-model:filters="filters"
+                    :brands="brands"
+                    :countries="countries"
+                    :relationship-managers="relationshipManagers"
+                    :can-view-stripe-account="canViewStripeAccount"
+                />
             </div>
         </div>
 
-        <div class="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
-            <div class="flex items-center justify-between px-5 py-3 border-b border-border/60 bg-[#F7F5F2]">
+        <div class="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
+            <div class="flex items-center justify-between border-b border-border/60 bg-[#F7F5F2] px-4 py-3 md:px-5">
                 <span class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{{ payments.total }} payments</span>
                 <div class="flex items-center gap-1">
-                    <DropdownMenu v-if="isAdmin">
+                    <DropdownMenu v-if="isAdmin && !isPhone">
                         <DropdownMenuTrigger as-child>
-                            <Button variant="outline" size="sm" class="h-7 px-2 text-xs gap-1">
+                            <Button variant="outline" size="sm" class="h-7 gap-1 px-2 text-xs">
                                 <Columns class="size-3.5" />
                                 Columns
                             </Button>
@@ -490,131 +464,250 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                     </Button>
                 </div>
             </div>
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="bg-[#F7F5F2] border-b border-border">
-                        <th class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">#</th>
-                        <th v-if="visibleColumns.reference_code" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Reference</th>
-                        <th v-if="visibleColumns.client" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Client</th>
-                        <th v-if="visibleColumns.amount" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Amount</th>
-                        <th v-if="visibleColumns.brand" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Brand</th>
-                        <th v-if="canViewStripeAccount && visibleColumns.provider" class="text-center px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Provider</th>
-                        <th v-if="visibleColumns.country_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Country</th>
-                        <th v-if="visibleColumns.relationship_manager_name" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">RM</th>
-                        <th v-if="visibleColumns.status" class="text-center px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
-                        <th v-if="visibleColumns.created" class="text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Created</th>
-                        <th v-if="!readOnly" class="text-center px-5 py-3.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Actions</th>
-                    </tr>
-                </thead>
-                <tbody v-if="refreshing">
-                    <tr
-                        v-for="n in skeletonRowCount"
-                        :key="`skeleton-${n}`"
-                        class="border-b border-border/50 last:border-0"
-                    >
-                        <td v-for="c in visibleColumnCount" :key="c" class="px-5 py-3.5">
-                            <div class="h-4 rounded bg-muted animate-pulse" :style="{ width: `${40 + ((c * 13) % 45)}%` }"></div>
-                        </td>
-                    </tr>
-                </tbody>
-                <tbody v-else>
-                    <tr
-                        v-for="(payment, index) in payments.data"
-                        :key="payment.id"
-                        class="border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors duration-150"
-                        :class="{ 'bg-red-50/70 hover:bg-red-50 dark:bg-red-950/20 dark:hover:bg-red-950/30': isAdmin && payment.card_locked_until }"
-                    >
-                        <td class="px-5 py-3.5 text-muted-foreground tabular-nums">{{ (payments.from ?? 1) + index }}</td>
-                        <td v-if="visibleColumns.reference_code" class="px-5 py-3.5 font-mono text-muted-foreground">{{ payment.reference_code ?? '—' }}</td>
-                        <td v-if="visibleColumns.client" class="px-5 py-3.5 font-medium">
-                            {{ payment.client_name }}
-                            <p v-if="isAdmin && payment.card_locked_until" class="mt-0.5 flex items-center gap-1 text-[11px] font-normal text-red-600 dark:text-red-400">
-                                <LockKeyhole class="size-3 shrink-0" />
-                                Card payments paused until {{ lockedUntilLabel(payment.card_locked_until) }}. Customer should contact their representative.
-                            </p>
-                        </td>
-                        <td v-if="visibleColumns.amount" class="px-5 py-3.5 font-mono">{{ formatMoney(payment.amount, payment.currency, { grouping: false }) }}</td>
-                        <td v-if="visibleColumns.brand" class="px-5 py-3.5">{{ payment.brand_name }}</td>
-                        <td v-if="canViewStripeAccount && visibleColumns.provider" class="px-5 py-3.5">
-                            <div class="flex justify-center">
-                                <PaymentProviderBadge :provider="payment.provider" />
-                            </div>
-                        </td>
-                        <td v-if="visibleColumns.country_name" class="px-5 py-3.5">{{ payment.country_name ?? '—' }}</td>
-                        <td v-if="visibleColumns.relationship_manager_name" class="px-5 py-3.5">{{ payment.relationship_manager_name ?? '—' }}</td>
-                        <td v-if="visibleColumns.status" class="px-5 py-3.5">
-                            <div class="flex justify-center">
-                                <PaymentStatusBadge :status="payment.status" icon-only />
-                            </div>
-                        </td>
-                        <td v-if="visibleColumns.created" class="px-5 py-3.5 text-muted-foreground">
-                            {{ formatDate(payment.created_at) }}
-                        </td>
-                        <td v-if="!readOnly" class="px-5 py-3.5 text-right">
-                            <div class="flex items-center justify-end gap-0.5">
-                                <Button v-if="!readOnly" variant="ghost" size="icon-sm" as-child title="View payment details">
-                                    <Link :href="`/payments/${payment.uuid}`">
-                                        <Eye class="size-3.5" />
-                                    </Link>
-                                </Button>
-                                <Button v-if="!readOnly" variant="ghost" size="icon-sm" title="Copy payment link" @click="copyLink(payment.uuid, payment.reference_slug)">
-                                    <Check v-if="copiedUuid === payment.uuid" class="size-3.5 text-green-600" />
-                                    <Copy v-else class="size-3.5" />
-                                </Button>
-                                <Button
-                                    v-if="!readOnly && payment.status === 'pending'"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    as-child
-                                    title="Edit payment"
-                                >
-                                    <Link :href="`/payments/${payment.uuid}/edit`">
-                                        <Pencil class="size-3.5" />
-                                    </Link>
-                                </Button>
-                                <Button
-                                    v-if="isAdmin && payment.card_locked_until"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    class="cursor-pointer"
-                                    title="Release card lock"
-                                    :disabled="resetting === payment.uuid"
-                                    @click="resetLock(payment)"
-                                >
-                                    <LockOpen class="size-3.5 text-red-600" />
-                                </Button>
-                                <Button
-                                    v-if="isAdmin"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    class="cursor-pointer"
-                                    title="Delete payment"
-                                    :disabled="deleteForm.processing && deleteTarget?.uuid === payment.uuid"
-                                    @click="confirmDelete(payment)"
-                                >
-                                    <Trash2 class="size-3.5 text-destructive" />
-                                </Button>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="payments.data.length === 0">
-                        <td :colspan="visibleColumnCount" class="px-5 py-16 text-center text-muted-foreground text-sm">
-                            <template v-if="hasActiveFilters">
-                                No payments match your filters.
-                                <button class="underline" @click="clearFilters">Clear filters to see all.</button>
-                            </template>
-                            <template v-else>
-                                No payments yet. <Link href="/payments/create" class="underline">Create one.</Link>
-                            </template>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
 
-            <div v-if="payments.last_page > 1" class="flex items-center justify-center border-t border-border/50 px-5 py-3.5">
-                <!-- Centered page navigation -->
-                <nav class="flex items-center gap-0.5" aria-label="Pagination">
-                    <!-- First & Prev -->
+            <!-- Phone: one card per payment -->
+            <div v-if="isPhone">
+                <div v-if="refreshing" class="space-y-3 bg-muted/40 p-3">
+                    <div v-for="n in skeletonRowCount" :key="`card-skeleton-${n}`" class="space-y-3 rounded-xl border bg-card p-3.5">
+                        <div class="flex justify-between gap-4">
+                            <div class="h-4 w-1/2 animate-pulse rounded bg-muted"></div>
+                            <div class="h-4 w-1/4 animate-pulse rounded bg-muted"></div>
+                        </div>
+                        <div class="flex justify-between gap-4">
+                            <div class="h-3 w-1/4 animate-pulse rounded bg-muted"></div>
+                            <div class="h-4 w-1/5 animate-pulse rounded-full bg-muted"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-dashed pt-2.5">
+                            <div v-for="m in 4" :key="m" class="h-7 animate-pulse rounded bg-muted"></div>
+                        </div>
+                    </div>
+                </div>
+                <div v-else-if="payments.data.length" class="space-y-3 bg-muted/40 p-3">
+                    <div
+                        v-for="payment in payments.data"
+                        :key="payment.id"
+                        class="overflow-hidden rounded-xl border bg-card"
+                    >
+                        <div class="space-y-2.5 p-3.5">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="line-clamp-2 min-w-0 break-words text-[15px] font-semibold leading-snug">{{ payment.client_name }}</span>
+                                <span class="shrink-0 font-mono text-[17px] font-semibold tabular-nums">{{ formatMoney(payment.amount, payment.currency, { grouping: false }) }}</span>
+                            </div>
+                            <div class="flex items-center justify-between gap-3">
+                                <span class="min-w-0 truncate font-mono text-xs text-muted-foreground">{{ payment.reference_code ?? '—' }}</span>
+                                <PaymentStatusBadge :status="payment.status" />
+                            </div>
+                            <dl class="grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-dashed pt-2.5">
+                                <div class="min-w-0">
+                                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Brand</dt>
+                                    <dd class="truncate text-[13px]">{{ payment.brand_name || '—' }}</dd>
+                                </div>
+                                <div v-if="canViewStripeAccount" class="min-w-0">
+                                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Provider</dt>
+                                    <dd class="text-[13px]"><PaymentProviderBadge :provider="payment.provider" show-name /></dd>
+                                </div>
+                                <div v-else aria-hidden="true"></div>
+                                <div class="min-w-0">
+                                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Country</dt>
+                                    <dd class="truncate text-[13px]" :class="{ 'text-muted-foreground': !payment.country_name }">{{ payment.country_name ?? '—' }}</dd>
+                                </div>
+                                <div class="min-w-0">
+                                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">RM</dt>
+                                    <dd class="truncate text-[13px]" :class="{ 'text-muted-foreground': !payment.relationship_manager_name }">{{ payment.relationship_manager_name ?? '—' }}</dd>
+                                </div>
+                                <div class="min-w-0">
+                                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Created</dt>
+                                    <dd class="truncate text-[13px]">{{ formatDate(payment.created_at) }}</dd>
+                                </div>
+                            </dl>
+                        </div>
+                        <p v-if="isAdmin && payment.card_locked_until" class="flex items-start gap-1.5 border-t border-red-200 bg-red-50 px-3.5 py-2 text-xs text-red-600">
+                            <LockKeyhole class="mt-0.5 size-3 shrink-0" />
+                            Card payments paused until {{ lockedUntilLabel(payment.card_locked_until) }}. Customer should contact their representative.
+                        </p>
+                        <div v-if="!readOnly" class="flex items-center gap-2 border-t px-3.5 py-2">
+                            <Button variant="outline" class="size-10" as-child aria-label="View payment details">
+                                <Link :href="`/payments/${payment.uuid}`"><Eye class="size-[18px]" /></Link>
+                            </Button>
+                            <Button variant="outline" class="size-10" aria-label="Copy payment link" @click="copyLink(payment.uuid, payment.reference_slug)">
+                                <Check v-if="copiedUuid === payment.uuid" class="size-[18px] text-green-600" />
+                                <Copy v-else class="size-[18px]" />
+                            </Button>
+                            <Button v-if="payment.status === 'pending'" variant="outline" class="size-10" as-child aria-label="Edit payment">
+                                <Link :href="`/payments/${payment.uuid}/edit`"><Pencil class="size-[18px]" /></Link>
+                            </Button>
+                            <Button
+                                v-if="isAdmin && payment.card_locked_until"
+                                variant="outline"
+                                class="size-10"
+                                aria-label="Release card lock"
+                                :disabled="resetting === payment.uuid"
+                                @click="resetLock(payment)"
+                            >
+                                <LockOpen class="size-[18px] text-red-600" />
+                            </Button>
+                            <Button
+                                v-if="isAdmin"
+                                variant="outline"
+                                class="ml-auto size-10 border-destructive/30"
+                                aria-label="Delete payment"
+                                :disabled="deleteForm.processing && deleteTarget?.uuid === payment.uuid"
+                                @click="confirmDelete(payment)"
+                            >
+                                <Trash2 class="size-[18px] text-destructive" />
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="px-5 py-14 text-center text-sm text-muted-foreground">
+                    <template v-if="hasActiveFilters">
+                        No payments match your filters.
+                        <button class="underline" @click="clearFilters">Clear filters to see all.</button>
+                    </template>
+                    <template v-else>
+                        No payments yet. <Link href="/payments/create" class="underline">Create one.</Link>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Tablet and up: table. Lower priority columns drop out on narrower screens. -->
+            <div v-else class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-border bg-[#F7F5F2]">
+                            <th class="px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-widest text-muted-foreground lg:px-5">#</th>
+                            <th v-if="visibleColumns.reference_code" class="px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-widest text-muted-foreground lg:px-5">Reference</th>
+                            <th v-if="visibleColumns.client" class="px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-widest text-muted-foreground lg:px-5">Client</th>
+                            <th v-if="visibleColumns.amount" class="px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-widest text-muted-foreground lg:px-5">Amount</th>
+                            <th v-if="visibleColumns.brand" class="hidden px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-widest text-muted-foreground lg:table-cell">Brand</th>
+                            <th v-if="canViewStripeAccount && visibleColumns.provider" class="hidden px-5 py-3.5 text-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground lg:table-cell">Provider</th>
+                            <th v-if="visibleColumns.country_name" class="hidden px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-widest text-muted-foreground xl:table-cell">Country</th>
+                            <th v-if="visibleColumns.relationship_manager_name" class="hidden px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-widest text-muted-foreground xl:table-cell">RM</th>
+                            <th v-if="visibleColumns.status" class="px-4 py-3.5 text-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground lg:px-5">Status</th>
+                            <th v-if="visibleColumns.created" class="hidden px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-widest text-muted-foreground xl:table-cell">Created</th>
+                            <th v-if="!readOnly" class="px-4 py-3.5 text-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground lg:px-5">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody v-if="refreshing">
+                        <tr
+                            v-for="n in skeletonRowCount"
+                            :key="`skeleton-${n}`"
+                            class="border-b border-border/50 last:border-0"
+                        >
+                            <td colspan="99" class="px-5 py-3.5">
+                                <div class="h-4 animate-pulse rounded bg-muted" :style="{ width: `${55 + ((n * 13) % 40)}%` }"></div>
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tbody v-else>
+                        <tr
+                            v-for="(payment, index) in payments.data"
+                            :key="payment.id"
+                            class="border-b border-border/50 transition-colors duration-150 last:border-0 hover:bg-muted/40"
+                            :class="{ 'bg-red-50/70 hover:bg-red-50 dark:bg-red-950/20 dark:hover:bg-red-950/30': isAdmin && payment.card_locked_until }"
+                        >
+                            <td class="px-4 py-3.5 tabular-nums text-muted-foreground lg:px-5">{{ (payments.from ?? 1) + index }}</td>
+                            <td v-if="visibleColumns.reference_code" class="px-4 py-3.5 font-mono text-muted-foreground lg:px-5">{{ payment.reference_code ?? '—' }}</td>
+                            <td v-if="visibleColumns.client" class="px-4 py-3.5 font-medium lg:px-5">
+                                {{ payment.client_name }}
+                                <p v-if="isAdmin && payment.card_locked_until" class="mt-0.5 flex items-center gap-1 text-[11px] font-normal text-red-600 dark:text-red-400">
+                                    <LockKeyhole class="size-3 shrink-0" />
+                                    Card payments paused until {{ lockedUntilLabel(payment.card_locked_until) }}. Customer should contact their representative.
+                                </p>
+                            </td>
+                            <td v-if="visibleColumns.amount" class="px-4 py-3.5 font-mono lg:px-5">{{ formatMoney(payment.amount, payment.currency, { grouping: false }) }}</td>
+                            <td v-if="visibleColumns.brand" class="hidden px-5 py-3.5 lg:table-cell">{{ payment.brand_name }}</td>
+                            <td v-if="canViewStripeAccount && visibleColumns.provider" class="hidden px-5 py-3.5 lg:table-cell">
+                                <div class="flex justify-center">
+                                    <PaymentProviderBadge :provider="payment.provider" />
+                                </div>
+                            </td>
+                            <td v-if="visibleColumns.country_name" class="hidden px-5 py-3.5 xl:table-cell">{{ payment.country_name ?? '—' }}</td>
+                            <td v-if="visibleColumns.relationship_manager_name" class="hidden px-5 py-3.5 xl:table-cell">{{ payment.relationship_manager_name ?? '—' }}</td>
+                            <td v-if="visibleColumns.status" class="px-4 py-3.5 lg:px-5">
+                                <div class="flex justify-center">
+                                    <PaymentStatusBadge :status="payment.status" icon-only />
+                                </div>
+                            </td>
+                            <td v-if="visibleColumns.created" class="hidden px-5 py-3.5 text-muted-foreground xl:table-cell">
+                                {{ formatDate(payment.created_at) }}
+                            </td>
+                            <td v-if="!readOnly" class="px-4 py-3.5 text-right lg:px-5">
+                                <div class="flex items-center justify-end gap-0.5">
+                                    <Button variant="ghost" size="icon-sm" as-child title="View payment details">
+                                        <Link :href="`/payments/${payment.uuid}`">
+                                            <Eye class="size-3.5" />
+                                        </Link>
+                                    </Button>
+                                    <Button variant="ghost" size="icon-sm" title="Copy payment link" @click="copyLink(payment.uuid, payment.reference_slug)">
+                                        <Check v-if="copiedUuid === payment.uuid" class="size-3.5 text-green-600" />
+                                        <Copy v-else class="size-3.5" />
+                                    </Button>
+                                    <Button
+                                        v-if="payment.status === 'pending'"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        as-child
+                                        title="Edit payment"
+                                    >
+                                        <Link :href="`/payments/${payment.uuid}/edit`">
+                                            <Pencil class="size-3.5" />
+                                        </Link>
+                                    </Button>
+                                    <Button
+                                        v-if="isAdmin && payment.card_locked_until"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        class="cursor-pointer"
+                                        title="Release card lock"
+                                        :disabled="resetting === payment.uuid"
+                                        @click="resetLock(payment)"
+                                    >
+                                        <LockOpen class="size-3.5 text-red-600" />
+                                    </Button>
+                                    <Button
+                                        v-if="isAdmin"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        class="cursor-pointer"
+                                        title="Delete payment"
+                                        :disabled="deleteForm.processing && deleteTarget?.uuid === payment.uuid"
+                                        @click="confirmDelete(payment)"
+                                    >
+                                        <Trash2 class="size-3.5 text-destructive" />
+                                    </Button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="payments.data.length === 0">
+                            <td colspan="99" class="px-5 py-16 text-center text-sm text-muted-foreground">
+                                <template v-if="hasActiveFilters">
+                                    No payments match your filters.
+                                    <button class="underline" @click="clearFilters">Clear filters to see all.</button>
+                                </template>
+                                <template v-else>
+                                    No payments yet. <Link href="/payments/create" class="underline">Create one.</Link>
+                                </template>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div v-if="payments.last_page > 1" class="border-t border-border/50 px-4 py-3 md:px-5 md:py-3.5">
+                <!-- Phone: previous / next -->
+                <nav v-if="isPhone" class="flex items-center justify-between gap-2" aria-label="Pagination">
+                    <Button variant="outline" class="h-11 min-w-24" :disabled="payments.current_page === 1" @click="goToPage(payments.current_page - 1)">
+                        Previous
+                    </Button>
+                    <span class="text-xs tabular-nums text-muted-foreground">Page {{ payments.current_page }} of {{ payments.last_page }}</span>
+                    <Button variant="outline" class="h-11 min-w-24" :disabled="payments.current_page === payments.last_page" @click="goToPage(payments.current_page + 1)">
+                        Next
+                    </Button>
+                </nav>
+
+                <!-- Tablet and up: numbered pages -->
+                <nav v-else class="flex items-center justify-center gap-0.5" aria-label="Pagination">
                     <button
                         :disabled="payments.current_page === 1"
                         class="flex h-8 w-7 items-center justify-center rounded text-base leading-none text-muted-foreground transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
@@ -628,7 +721,6 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                         @click="goToPage(payments.current_page - 1)"
                     >‹</button>
 
-                    <!-- Numbered pages + ellipsis -->
                     <div class="mx-1 flex items-center gap-0.5">
                         <template v-for="(item, i) in pageItems" :key="i">
                             <span
@@ -640,7 +732,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                                 :class="[
                                     'relative flex h-8 w-8 items-center justify-center rounded text-xs font-medium tabular-nums transition-all duration-150',
                                     item === payments.current_page
-                                        ? 'bg-primary text-primary-foreground shadow-sm scale-105'
+                                        ? 'scale-105 bg-primary text-primary-foreground shadow-sm'
                                         : 'text-foreground/60 hover:bg-muted hover:text-foreground',
                                 ]"
                                 @click="goToPage(item as number)"
@@ -648,7 +740,6 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                         </template>
                     </div>
 
-                    <!-- Next & Last -->
                     <button
                         :disabled="payments.current_page === payments.last_page"
                         class="flex h-8 w-7 items-center justify-center rounded text-base leading-none text-muted-foreground transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-25"

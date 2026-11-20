@@ -43,6 +43,9 @@ const props = withDefaults(
     },
 );
 
+// Extra attributes (such as a taller height class) go on the trigger button; the Popover root renders no element.
+defineOptions({ inheritAttrs: false });
+
 const model = defineModel<string>({ default: '' });
 
 const open = ref(false);
@@ -71,6 +74,7 @@ function select(value: string): void {
     <Popover v-model:open="open">
         <PopoverTrigger as-child>
             <Button
+                v-bind="$attrs"
                 :id="id"
                 type="button"
                 variant="outline"
