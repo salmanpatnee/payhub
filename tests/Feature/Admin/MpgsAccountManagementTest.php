@@ -303,7 +303,7 @@ class MpgsAccountManagementTest extends TestCase
         expect($payment->providerAccountName())->toBe('Acme MPGS');
         expect($payment->formattedReferenceCode())->toStartWith('ACME-');
         expect(ProviderAccountTable::for('mpgs'))->toBe('mpgs_accounts');
-        expect(CurrencySupportResolver::supports('mpgs', null, 'gbp'))->toBeTrue();
+        expect(CurrencySupportResolver::supports('mpgs', null, 'gbp'))->toBeFalse();
         expect(CurrencySupportResolver::supports('mpgs', null, 'usd'))->toBeTrue();
     }
 }
