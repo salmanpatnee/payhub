@@ -124,10 +124,11 @@ watch(accountValue, (val) => {
         form.currency = '';
     }
 
-    // When the account takes more than one currency, always start on USD (or the first enabled one).
+    // Always start on USD (or the first enabled one). With a single choice (MPGS without PKR) the
+    // page shows it as plain text, so the form value must be set here too or the amount keeps no symbol.
     const enabled = allowedCurrencies.value.filter(c => c.enabled);
 
-    if (enabled.length > 1) {
+    if (enabled.length >= 1) {
         form.currency = enabled.some(c => c.value === 'usd') ? 'usd' : enabled[0].value;
     }
 });
