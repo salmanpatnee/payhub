@@ -122,13 +122,11 @@ watch(accountValue, (val) => {
         form.currency = '';
     }
 
-    // When the account takes more than one currency, start on USD (or the first enabled one).
-    if (!form.currency) {
-        const enabled = allowedCurrencies.value.filter(c => c.enabled);
+    // When the account takes more than one currency, always start on USD (or the first enabled one).
+    const enabled = allowedCurrencies.value.filter(c => c.enabled);
 
-        if (enabled.length > 1) {
-            form.currency = enabled.some(c => c.value === 'usd') ? 'usd' : enabled[0].value;
-        }
+    if (enabled.length > 1) {
+        form.currency = enabled.some(c => c.value === 'usd') ? 'usd' : enabled[0].value;
     }
 });
 
