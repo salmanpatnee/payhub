@@ -246,3 +246,5 @@ Build approach: none recorded in `AGENTS.md`, so end to end Tracer Bullet slices
 - [ ] Later spec: Worldpay Checkout card fields (Checkout ID, 3D Secure, CSP hosts, PCI scope).
 - [ ] `phpunit.xml` hardcodes `APP_BASE_PATH` for another machine; override it locally before running tests.
 - [ ] Untracked files on this branch that are not part of this spec (`docs/research/zen-payments.md`, `docs/integrations/central-dashboard-brief.md`, a sandbox screenshot) were left alone.
+
+**Update 2026-11-21**: `createPage` also sends the client's email, name and country (`riskData`, `billingAddress.countryCode`) so Worldpay's 3DS and fraud checks have more to work with; each part is left out when missing or invalid. `passBackErrorReasons` is sent as the string `"true"`.

@@ -54,6 +54,9 @@ class WorldpayClient
         string $currency,
         int $expirySeconds,
         array $resultUrls,
+        ?string $email = null,
+        ?string $name = null,
+        ?string $countryCode = null,
     ): WorldpayPageReply {
         $body = [
             'transactionReference' => $transactionReference,
@@ -71,10 +74,33 @@ class WorldpayClient
         // passBackErrorReasons asks Worldpay to add errorRefNumber and messages to the failure and error return
         // addresses (docs: HPP configuration, "Return error reasons in URL"). Sent explicitly so it does not
         // depend on the merchant dashboard setting.
-        $body['hostedProperties'] = ['passBackErrorReasons' => true];
+        // Worldpay's examples send these flags as the strings "true" and "false".
+        $body['hostedProperties'] = ['passBackErrorReasons' => 'true'];
 
         if (in_array($billing, ['SHOW', 'HIDE', 'EDIT'], true)) {
             $body['hostedProperties']['showBillingAddress'] = $billing;
+        }
+
+        // Customer details give Worldpay's 3DS and fraud checks more to work with (docs: HPP "setup a payment").
+        // Each part is left out when it is missing or not valid, and an empty object is never sent.
+        $risk = [];
+
+        if ($email !== null && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
+            $risk['account'] = ['email' => $email];
+        }
+
+        $names = $this->splitName($name);
+
+        if ($names !== []) {
+            $risk['transaction'] = $names;
+        }
+
+        if ($risk !== []) {
+            $body['riskData'] = $risk;
+        }
+
+        if ($countryCode !== null && preg_match('/^[A-Z]{2}$/', strtoupper($countryCode)) === 1) {
+            $body['billingAddress'] = ['countryCode' => strtoupper($countryCode)];
         }
 
         $response = $this->pagesRequest()->post('/payment_pages', $body);
@@ -100,6 +126,35 @@ class WorldpayClient
             ->throw();
 
         return WorldpayLookupReply::rowsFromBody($response->json());
+    }
+
+    /**
+     * Plain ASCII first and last name, each cut to 50 characters. The last word is the last name;
+     * a single word is sent as the first name only. Empty array when nothing usable is left.
+     *
+     * @return array<string, string>
+     */
+    private function splitName(?string $name): array
+    {
+        $clean = trim((string) preg_replace('/[^A-Za-z\-\' ]/', '', Str::ascii(strip_tags((string) $name))));
+        $clean = (string) preg_replace('/\s+/', ' ', $clean);
+
+        if ($clean === '') {
+            return [];
+        }
+
+        $words = explode(' ', $clean);
+
+        if (count($words) === 1) {
+            return ['firstName' => mb_substr($words[0], 0, 50)];
+        }
+
+        $last = array_pop($words);
+
+        return [
+            'firstName' => mb_substr(implode(' ', $words), 0, 50),
+            'lastName' => mb_substr($last, 0, 50),
+        ];
     }
 
     private function pagesRequest(): PendingRequest

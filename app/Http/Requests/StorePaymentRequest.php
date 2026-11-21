@@ -95,7 +95,7 @@ class StorePaymentRequest extends FormRequest
             ],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
             'client_name' => ['required', 'string', 'max:255'],
-            'client_email' => [Rule::requiredIf(fn () => $this->resolvesToWhop() || $this->resolvesToKurv()), 'nullable', 'email', 'max:255'],
+            'client_email' => [Rule::requiredIf(fn () => $this->resolvesToWhop() || $this->resolvesToKurv()), 'nullable', 'email', 'regex:/@[^@\s]+\.[^@\s]{2,}$/', 'max:255'],
             'country' => ['nullable', 'string', Rule::in(array_keys(Countries::all()))],
             'service' => ['nullable', 'string', 'max:255'],
             'package' => ['nullable', 'string',
@@ -107,6 +107,8 @@ class StorePaymentRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'client_email.email' => 'Enter a full email address, for example name@gmail.com.',
+            'client_email.regex' => 'Enter a full email address, for example name@gmail.com.',
             'client_email.required' => $this->resolvesToKurv()
                 ? 'Client email is required for Kurv payments.'
                 : 'Client email is required for Whop payments.',
