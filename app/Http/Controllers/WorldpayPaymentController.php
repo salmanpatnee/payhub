@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\WorldpayLookupAttempt;
 use App\Models\WorldpayPage;
 use App\Services\Worldpay\WorldpayChargeResolver;
+use App\Support\Countries;
 use App\Services\Worldpay\WorldpayClient;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Client\RequestException;
@@ -186,6 +187,9 @@ class WorldpayPaymentController extends Controller
                 currency: 'GBP',
                 expirySeconds: $expirySeconds,
                 resultUrls: $results,
+                email: $payment->client_email,
+                name: $payment->client_name,
+                countryCode: array_key_exists((string) $payment->country, Countries::all()) ? (string) $payment->country : null,
             );
 
             if (! $reply->hasAllowedHost($account->environment)) {
