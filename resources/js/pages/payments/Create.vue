@@ -160,7 +160,7 @@ watch(() => [form.errors.package, form.errors.note], (errors) => {
 
 const brandName = computed(() => props.brands.find(b => String(b.id) === form.brand_id)?.name ?? null);
 
-// Remember the last brand, account and manager on this device.
+// Remember the last brand and account on this device.
 const DEFAULTS_KEY = 'payments.create.defaults';
 
 function loadDefaults(): void {
@@ -170,10 +170,6 @@ function loadDefaults(): void {
         // A configured default wins; the last used value only fills what is still empty.
         if (!form.brand_id && stored.brand_id && props.brands.some(b => String(b.id) === stored.brand_id)) {
             form.brand_id = stored.brand_id;
-        }
-
-        if (stored.relationship_manager_id && props.relationshipManagers.some(r => String(r.id) === stored.relationship_manager_id)) {
-            form.relationship_manager_id = stored.relationship_manager_id;
         }
 
         if (!props.isAccountLocked && !accountValue.value && stored.account && props.accounts.some(a => `${a.provider}:${a.id}` === stored.account)) {
@@ -188,7 +184,6 @@ function saveDefaults(): void {
     try {
         localStorage.setItem(DEFAULTS_KEY, JSON.stringify({
             brand_id: form.brand_id,
-            relationship_manager_id: form.relationship_manager_id,
             account: accountValue.value,
         }));
     } catch {
