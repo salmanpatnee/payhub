@@ -117,3 +117,39 @@ it('lets an agent create a payment through their assigned Worldpay account', fun
     $payment = Payment::firstOrFail();
     expect($payment->provider->value)->toBe('worldpay')->and($payment->worldpay_account_id)->toBe($account->id);
 });
+
+it('rejects a client email with no dot in the domain or a one letter ending, and accepts a full one', function (string $email, bool $ok) {
+    $account = WorldpayAccount::factory()->create();
+
+    $response = $this->actingAs(wpAdmin())->post('/payments', wpPayload($account, ['client_email' => $email]));
+
+    if ($ok) {
+        $response->assertSessionHasNoErrors();
+        expect(Payment::count())->toBe(1);
+    } else {
+        $response->assertSessionHasErrors(['client_email' => 'Enter a full email address, for example name@gmail.com.']);
+        expect(Payment::count())->toBe(0);
+    }
+})->with([
+    ['Ashrafmustafa167@gmail', false],
+    ['jane@localhost', false],
+    ['jane@example.c', false],
+    ['not-an-email', false],
+    ['jane@example.com', true],
+    ['Jane.Doe+tag@mail.example.co.uk', true],
+]);
+
+it('also checks the client email when a payment is updated', function () {
+    $account = WorldpayAccount::factory()->create();
+    $admin = wpAdmin();
+    $this->actingAs($admin)->post('/payments', wpPayload($account))->assertSessionHasNoErrors();
+    $payment = Payment::firstOrFail();
+
+    $this->actingAs($admin)->patch("/payments/{$payment->uuid}", wpPayload($account, [
+        'brand_id' => $payment->brand_id,
+        'relationship_manager_id' => $payment->relationship_manager_id,
+        'client_email' => 'Ashrafmustafa167@gmail',
+    ]))->assertSessionHasErrors(['client_email']);
+
+    expect($payment->fresh()->client_email)->toBeNull();
+});

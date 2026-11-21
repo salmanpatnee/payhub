@@ -78,3 +78,7 @@ are not confirmed to work on the hosted page.
   `hpp.worldpay.com`, `payments.worldpay.com` (live). Any https subdomain of `worldpay.com` is
   allowed (`config/services.php`, `worldpay.hpp_domains`), because Worldpay says not to list hosts.
 - The 10 minute sweep needs the host cron to run `php artisan schedule:run` every minute.
+
+## Customer details on the page request
+
+The create page call sends the client's email, name (first and last) and country code when the payment has them (`riskData.account.email`, `riskData.transaction.firstName/lastName`, `billingAddress.countryCode`), and `passBackErrorReasons` as the string `"true"`. If Try ever answers 400 to a page request, check `Worldpay page creation failed` in the log and drop `billingAddress` first (country alone may not be accepted).

@@ -65,7 +65,7 @@ it('creates one page from the saved amount and returns only the url', function (
 
         return $request->hasHeader('Content-Type', 'application/vnd.worldpay.payment_pages-v1.hal+json')
             && $request->hasHeader('Accept', 'application/vnd.worldpay.payment_pages-v1.hal+json')
-            && $body['hostedProperties']['passBackErrorReasons'] === true
+            && $body['hostedProperties']['passBackErrorReasons'] === 'true'
             && $body['transactionReference'] === $payment->uuid.'-1'
             && $body['merchant']['entity'] === $payment->worldpayAccount->entity_ref
             && $body['value'] === ['amount' => 1234, 'currency' => 'GBP']
@@ -370,8 +370,8 @@ it('asks Worldpay to hide the billing address by default and leaves it out when 
 
         // passBackErrorReasons is always sent; showBillingAddress only when the config value is valid.
         return $expected === null
-            ? ($body['hostedProperties'] ?? null) === ['passBackErrorReasons' => true]
-            : ($body['hostedProperties'] ?? null) === ['passBackErrorReasons' => true, 'showBillingAddress' => $expected];
+            ? ($body['hostedProperties'] ?? null) === ['passBackErrorReasons' => 'true']
+            : ($body['hostedProperties'] ?? null) === ['passBackErrorReasons' => 'true', 'showBillingAddress' => $expected];
     });
 })->with([['HIDE', 'HIDE'], ['edit', 'EDIT'], ['SHOW', 'SHOW'], ['', null], ['nonsense', null]]);
 
@@ -434,4 +434,64 @@ it('does not make a new page after a failure return when Worldpay shows a sale i
 
     $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertStatus(409);
     expect(WorldpayPage::count())->toBe(1);
+});
+
+function wpSentBody(): array
+{
+    return Http::recorded(fn ($request) => str_ends_with($request->url(), '/payment_pages'))->first()[0]->data();
+}
+
+it('sends the client email, name and country to Worldpay when the payment has them', function () {
+    wpFakeCreate();
+    $payment = wpCheckoutPayment(['client_email' => 'jane@example.com', 'client_name' => 'Jane Mary Doe', 'country' => 'US']);
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertOk();
+
+    $body = wpSentBody();
+    expect($body['riskData'])->toBe([
+        'account' => ['email' => 'jane@example.com'],
+        'transaction' => ['firstName' => 'Jane Mary', 'lastName' => 'Doe'],
+    ])->and($body['billingAddress'])->toBe(['countryCode' => 'US']);
+});
+
+it('sends a one word name as the first name only', function () {
+    wpFakeCreate();
+    $payment = wpCheckoutPayment(['client_name' => 'Salih']);
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertOk();
+
+    expect(wpSentBody()['riskData']['transaction'])->toBe(['firstName' => 'Salih']);
+});
+
+it('leaves out customer parts that are missing or not valid and never sends empty objects', function () {
+    wpFakeCreate();
+    $payment = wpCheckoutPayment(['client_email' => 'not-an-email', 'client_name' => '12345 !!!', 'country' => 'Narnia']);
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertOk();
+
+    expect(wpSentBody())->not->toHaveKey('riskData')->not->toHaveKey('billingAddress');
+});
+
+it('cleans and cuts a long or accented client name', function () {
+    wpFakeCreate();
+    $payment = wpCheckoutPayment(['client_name' => str_repeat('Aé', 40).' <b>Müller</b>']);
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertOk();
+
+    $names = wpSentBody()['riskData']['transaction'];
+    expect(strlen($names['firstName']))->toBeLessThanOrEqual(50)
+        ->and($names['lastName'])->toBe('Muller')
+        ->and(json_encode($names))->not->toContain('<');
+});
+
+it('does not log the client details when page creation fails', function () {
+    Log::spy();
+    Http::fake(['*payment_pages' => Http::response(['errorName' => 'bodyDoesNotMatchSchema'], 400)]);
+    $payment = wpCheckoutPayment(['client_email' => 'secret.person@example.com', 'client_name' => 'Secret Person', 'country' => 'US']);
+
+    $this->postJson("/pay/{$payment->uuid}/worldpay/checkout")->assertStatus(502);
+
+    Log::shouldHaveReceived('error')->withArgs(fn ($message, $context = []) => $message === 'Worldpay page creation failed'
+        && ! str_contains(json_encode($context), 'secret.person@example.com')
+        && ! str_contains(json_encode($context), 'Secret Person'));
 });
