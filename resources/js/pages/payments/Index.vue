@@ -619,7 +619,7 @@ async function copyLink(uuid: string, referenceSlug: string | null): Promise<voi
                             <td v-if="visibleColumns.brand" class="hidden px-5 py-3.5 lg:table-cell">{{ payment.brand_name }}</td>
                             <td v-if="canViewStripeAccount && visibleColumns.provider" class="hidden px-5 py-3.5 lg:table-cell">
                                 <div class="flex justify-center">
-                                    <PaymentProviderBadge :provider="payment.provider" />
+                                    <PaymentProviderBadge :provider="payment.provider" show-name />
                                 </div>
                             </td>
                             <td v-if="visibleColumns.country_name" class="hidden px-5 py-3.5 xl:table-cell">{{ payment.country_name ?? '—' }}</td>
