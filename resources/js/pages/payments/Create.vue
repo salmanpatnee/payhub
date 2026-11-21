@@ -92,10 +92,12 @@ const allowedCurrencies = computed<CurrencyChoice[]>(() => {
         return [{ value: account.currency, enabled: true, reason: null }];
     }
 
-    const list: CurrencyChoice[] = [
-        { value: 'usd', enabled: true, reason: null },
-        { value: 'gbp', enabled: true, reason: null },
-    ];
+    const list: CurrencyChoice[] = [{ value: 'usd', enabled: true, reason: null }];
+
+    // MPGS takes USD only (plus PKR below); the server refuses GBP there.
+    if (account.provider !== 'mpgs') {
+        list.push({ value: 'gbp', enabled: true, reason: null });
+    }
 
     if (canUsePkr.value) {
         list.push({ value: 'pkr', enabled: true, reason: null });
