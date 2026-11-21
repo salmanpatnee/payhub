@@ -131,14 +131,13 @@ function submit() {
                         <Label>Currency</Label>
                         <div class="flex gap-1">
                             <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400">USD</span>
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400">GBP</span>
                             <span
                                 v-if="form.supports_pkr"
                                 class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
                             >PKR</span>
                         </div>
                         <p class="text-xs text-muted-foreground">
-                            MPGS accounts accept USD and GBP. A currency your bank has not enabled fails at pay time.
+                            MPGS accounts accept USD. PKR can be turned on per account. A currency your bank has not enabled fails at pay time.
                         </p>
                         <label for="supports_pkr" class="flex items-center gap-2 text-sm">
                             <input id="supports_pkr" v-model="form.supports_pkr" type="checkbox" class="size-4 rounded border-input" />

@@ -32,9 +32,9 @@ it('resolves currency support per provider and account currency', function (stri
     ['clover', null, 'gbp', false],
     ['clover', 'gbp', 'usd', true],
 
-    // MPGS: USD and GBP always; PKR only when the account is flagged.
+    // MPGS: USD only; PKR only when the account is flagged; never GBP.
     ['mpgs', null, 'usd', true],
-    ['mpgs', null, 'gbp', true],
+    ['mpgs', null, 'gbp', false],
     ['mpgs', null, 'pkr', false],
     ['mpgs', 'pkr', 'pkr', false],
 
@@ -64,6 +64,6 @@ it('lists currencies for a provider/account combination', function () {
     expect(CurrencySupportResolver::currenciesFor('square', null))->toBe(['usd', 'gbp']);
     expect(CurrencySupportResolver::currenciesFor('square', 'usd'))->toBe(['usd']);
     expect(CurrencySupportResolver::currenciesFor('square', 'gbp'))->toBe(['gbp']);
-    expect(CurrencySupportResolver::currenciesFor('mpgs', null))->toBe(['usd', 'gbp']);
-    expect(CurrencySupportResolver::currenciesFor('mpgs', null, true))->toBe(['usd', 'gbp', 'pkr']);
+    expect(CurrencySupportResolver::currenciesFor('mpgs', null))->toBe(['usd']);
+    expect(CurrencySupportResolver::currenciesFor('mpgs', null, true))->toBe(['usd', 'pkr']);
 });

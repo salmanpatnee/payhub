@@ -11,8 +11,8 @@ use App\Enums\SupportedCurrency;
  * account is provisioned with that single currency — see CloverAccount). Square
  * is locked to whatever currency the individual account was provisioned with
  * (nullable — a Square account with no currency set accepts either). Stripe
- * and Revolut are multi-currency for every account, and so is MPGS for USD and
- * GBP (a currency the bank has not enabled fails at pay time, spec 0005 AC-2).
+ * and Revolut are multi-currency for every account. MPGS is USD only (a currency
+ * the bank has not enabled fails at pay time, spec 0005 AC-2).
  *
  * PKR is the exception: only an MPGS account flagged supports_pkr accepts it, and
  * no other provider ever does.
@@ -29,6 +29,7 @@ class CurrencySupportResolver
             'viva' => $currency === SupportedCurrency::GBP->value,
             'clover', 'kurv' => $currency === SupportedCurrency::USD->value,
             'worldpay' => $currency === SupportedCurrency::GBP->value,
+            'mpgs' => $currency === SupportedCurrency::USD->value,
             'authorizenet', 'square', 'nmi' => $accountCurrency === null || $accountCurrency === $currency,
             default => true,
         };

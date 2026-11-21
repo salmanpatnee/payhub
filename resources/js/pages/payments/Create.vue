@@ -92,10 +92,12 @@ const allowedCurrencies = computed<CurrencyChoice[]>(() => {
         return [{ value: account.currency, enabled: true, reason: null }];
     }
 
-    const list: CurrencyChoice[] = [
-        { value: 'usd', enabled: true, reason: null },
-        { value: 'gbp', enabled: true, reason: null },
-    ];
+    const list: CurrencyChoice[] = [{ value: 'usd', enabled: true, reason: null }];
+
+    // MPGS takes USD only (plus PKR below); the server refuses GBP there.
+    if (account.provider !== 'mpgs') {
+        list.push({ value: 'gbp', enabled: true, reason: null });
+    }
 
     if (canUsePkr.value) {
         list.push({ value: 'pkr', enabled: true, reason: null });
@@ -122,13 +124,12 @@ watch(accountValue, (val) => {
         form.currency = '';
     }
 
-    // When the account takes more than one currency, start on USD (or the first enabled one).
-    if (!form.currency) {
-        const enabled = allowedCurrencies.value.filter(c => c.enabled);
+    // Always start on USD (or the first enabled one). With a single choice (MPGS without PKR) the
+    // page shows it as plain text, so the form value must be set here too or the amount keeps no symbol.
+    const enabled = allowedCurrencies.value.filter(c => c.enabled);
 
-        if (enabled.length > 1) {
-            form.currency = enabled.some(c => c.value === 'usd') ? 'usd' : enabled[0].value;
-        }
+    if (enabled.length >= 1) {
+        form.currency = enabled.some(c => c.value === 'usd') ? 'usd' : enabled[0].value;
     }
 });
 
