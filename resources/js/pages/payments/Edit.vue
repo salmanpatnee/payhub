@@ -100,6 +100,9 @@ const canUsePkr = computed(() => {
     return account?.provider === 'mpgs' && account.supports_pkr === true;
 });
 
+// MPGS takes USD only (plus PKR above); the server refuses GBP there.
+const canUseGbp = computed(() => props.accounts.find(a => `${a.provider}:${a.id}` === accountValue.value)?.provider !== 'mpgs');
+
 // No onMounted account/currency default here (unlike Create.vue) — accountValue
 // and form.currency are already seeded above from the payment's existing data.
 
@@ -223,7 +226,7 @@ function submit() {
                                 </template>
                                 <template v-else>
                                     <SelectItem value="usd">USD ($)</SelectItem>
-                                    <SelectItem value="gbp">GBP (£)</SelectItem>
+                                    <SelectItem v-if="canUseGbp" value="gbp">GBP (£)</SelectItem>
                                     <SelectItem v-if="canUsePkr" value="pkr">PKR (Rs)</SelectItem>
                                 </template>
                             </SelectContent>
