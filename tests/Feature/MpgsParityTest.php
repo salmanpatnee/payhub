@@ -38,12 +38,12 @@ function mpgsPaymentPayload(Brand $brand, MpgsAccount $account, string $currency
     ];
 }
 
-it('lets an admin create an MPGS payment in USD or GBP (no currency lock)', function (string $currency) {
+it('lets an admin create an MPGS payment in USD', function () {
     $admin = User::factory()->create()->assignRole('admin');
     $account = MpgsAccount::factory()->create(['is_active' => true]);
 
     $this->actingAs($admin)
-        ->post('/payments', mpgsPaymentPayload(Brand::factory()->create(), $account, $currency))
+        ->post('/payments', mpgsPaymentPayload(Brand::factory()->create(), $account, 'usd'))
         ->assertSessionHasNoErrors()
         ->assertRedirect();
 
@@ -51,9 +51,20 @@ it('lets an admin create an MPGS payment in USD or GBP (no currency lock)', func
     expect($payment->provider->value)->toBe('mpgs');
     expect($payment->mpgs_account_id)->toBe($account->id);
     expect($payment->stripe_account_id)->toBeNull();
-    expect($payment->currency)->toBe($currency);
+    expect($payment->currency)->toBe('usd');
     expect($payment->amount)->toBe(2500);
-})->with(['usd', 'gbp']);
+});
+
+it('rejects a GBP payment on an MPGS account', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $account = MpgsAccount::factory()->create(['is_active' => true]);
+
+    $this->actingAs($admin)
+        ->post('/payments', mpgsPaymentPayload(Brand::factory()->create(), $account, 'gbp'))
+        ->assertSessionHasErrors(['currency']);
+
+    expect(Payment::count())->toBe(0);
+});
 
 it('lets an admin create a PKR payment on an MPGS account that accepts PKR', function () {
     $admin = User::factory()->create()->assignRole('admin');
@@ -135,13 +146,13 @@ it('routes an agent to their assigned MPGS account by currency', function () {
     $agent = User::factory()->create()->assignRole('agent');
     $agent->brands()->attach($brand);
     $agent->relationshipManagers()->attach($rm);
-    $agent->paymentAccounts()->create(['currency' => 'gbp', 'provider' => 'mpgs', 'account_id' => $account->id]);
+    $agent->paymentAccounts()->create(['currency' => 'usd', 'provider' => 'mpgs', 'account_id' => $account->id]);
 
     $this->actingAs($agent)
         ->post('/payments', [
             'brand_id' => $brand->id,
             'relationship_manager_id' => $rm->id,
-            'currency' => 'gbp',
+            'currency' => 'usd',
             'amount' => '10.00',
             'client_name' => 'Bob',
         ])
