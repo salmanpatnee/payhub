@@ -57,24 +57,7 @@ class PaymentAttemptLogger
 
         for ($try = 0; $try < 2; $try++) {
             try {
-                return DB::transaction(function () use ($attributes, $provider, $payment): PaymentAttempt {
-                    // Serialises writers per payment on MySQL (SQLite ignores the lock; the unique index covers it).
-                    Payment::withTrashed()->whereKey($payment->id)->lockForUpdate()->first();
-
-                    if ($attributes['event_key'] !== null) {
-                        $existing = PaymentAttempt::where('provider', $provider->value)
-                            ->where('event_key', $attributes['event_key'])
-                            ->first();
-
-                        if ($existing !== null) {
-                            return $existing;
-                        }
-                    }
-
-                    $sequence = ((int) PaymentAttempt::where('payment_id', $payment->id)->max('sequence')) + 1;
-
-                    return PaymentAttempt::create($attributes + ['sequence' => $sequence]);
-                });
+                return $this->insertInTransaction($attributes, $provider, $payment);
             } catch (UniqueConstraintViolationException $e) {
                 // The failed transaction is rolled back; look outside it.
                 if ($attributes['event_key'] !== null) {
@@ -95,6 +78,34 @@ class PaymentAttemptLogger
         }
 
         throw new \LogicException('Unreachable');
+    }
+
+    /**
+     * One locked transaction: reuse the row for a repeated event key, else take the next sequence.
+     * Protected so a test can simulate a parallel writer winning the race (a unique key violation).
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function insertInTransaction(array $attributes, PaymentProvider $provider, Payment $payment): PaymentAttempt
+    {
+        return DB::transaction(function () use ($attributes, $provider, $payment): PaymentAttempt {
+            // Serialises writers per payment on MySQL (SQLite ignores the lock; the unique index covers it).
+            Payment::withTrashed()->whereKey($payment->id)->lockForUpdate()->first();
+
+            if ($attributes['event_key'] !== null) {
+                $existing = PaymentAttempt::where('provider', $provider->value)
+                    ->where('event_key', $attributes['event_key'])
+                    ->first();
+
+                if ($existing !== null) {
+                    return $existing;
+                }
+            }
+
+            $sequence = ((int) PaymentAttempt::where('payment_id', $payment->id)->max('sequence')) + 1;
+
+            return PaymentAttempt::create($attributes + ['sequence' => $sequence]);
+        });
     }
 
     /** @return array<string, mixed> */

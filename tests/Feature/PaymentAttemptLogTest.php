@@ -427,6 +427,80 @@ it('returns the existing row for a repeated event key and retries a sequence cla
     expect($again->id)->toBe($first->id)->and($next->sequence)->toBe(2)->and(PaymentAttempt::count())->toBe(2);
 });
 
+/**
+ * A logger whose transaction loses a race: the first $failures calls throw a unique key violation,
+ * after running $beforeThrow (the "other writer" committing its row). Later calls run the real code.
+ */
+function palRacingLogger(int $failures, ?Closure $beforeThrow = null): PaymentAttemptLogger
+{
+    return new class(app(AttemptPayloadSanitizer::class), $failures, $beforeThrow) extends PaymentAttemptLogger
+    {
+        public int $calls = 0;
+
+        public function __construct(AttemptPayloadSanitizer $sanitizer, private int $failures, private ?Closure $beforeThrow)
+        {
+            parent::__construct($sanitizer);
+        }
+
+        protected function insertInTransaction(array $attributes, PaymentProvider $provider, Payment $payment): PaymentAttempt
+        {
+            $this->calls++;
+
+            if ($this->calls <= $this->failures) {
+                if ($this->beforeThrow !== null) {
+                    ($this->beforeThrow)($attributes);
+                }
+
+                throw new UniqueConstraintViolationException('mysql', 'insert into payment_attempts', [], new Exception('Duplicate entry'));
+            }
+
+            return parent::insertInTransaction($attributes, $provider, $payment);
+        }
+    };
+}
+
+it('returns the existing row when a parallel writer wins the same event key', function () {
+    $payment = Payment::factory()->create();
+    $winner = null;
+    $logger = palRacingLogger(1, function (array $attributes) use (&$winner) {
+        $winner = PaymentAttempt::create($attributes + ['sequence' => 1]);
+    });
+
+    $row = $logger->record(PaymentProvider::Stripe, $payment, ['id' => 'pi_1', 'amount' => 100, 'currency' => 'usd'], ['type' => 'payment_intent.succeeded', 'event_id' => 'evt_race', 'created' => 1790000000]);
+
+    expect($row)->not->toBeNull()
+        ->and($row->id)->toBe($winner->id)
+        ->and($logger->calls)->toBe(1)
+        ->and(PaymentAttempt::count())->toBe(1);
+});
+
+it('retries once with a fresh sequence when a different event took the same number', function () {
+    $payment = Payment::factory()->create();
+    $logger = palRacingLogger(1, function (array $attributes) {
+        // A different event (other key) grabs sequence 1 first.
+        PaymentAttempt::create(array_merge($attributes, ['event_key' => 'evt_other', 'sequence' => 1]));
+    });
+
+    $row = $logger->record(PaymentProvider::Stripe, $payment, ['id' => 'pi_1', 'amount' => 100, 'currency' => 'usd'], ['type' => 'payment_intent.payment_failed', 'event_id' => 'evt_mine', 'created' => 1790000000]);
+
+    expect($row)->not->toBeNull()
+        ->and($row->event_key)->toBe('evt_mine')
+        ->and($row->sequence)->toBe(2)
+        ->and($logger->calls)->toBe(2)
+        ->and(PaymentAttempt::count())->toBe(2);
+});
+
+it('gives up after one retry and never throws when the clash keeps happening', function () {
+    $payment = Payment::factory()->create();
+    $logger = palRacingLogger(5);
+
+    $row = $logger->record(PaymentProvider::Stripe, $payment, ['id' => 'pi_1', 'amount' => 100, 'currency' => 'usd'], ['type' => 'payment_intent.succeeded', 'event_id' => 'evt_stuck', 'created' => 1790000000]);
+
+    expect($row)->toBeNull()
+        ->and($logger->calls)->toBe(2)
+        ->and(PaymentAttempt::count())->toBe(0);
+});
+
 it('does not log for a soft deleted payment', function () {
     $payment = Payment::factory()->create(['stripe_payment_intent_id' => 'pi_del']);
     $payment->delete();
