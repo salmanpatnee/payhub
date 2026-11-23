@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentProvider;
 use App\Jobs\HandleStripeWebhookJob;
 use App\Models\Payment;
 use App\Models\ProcessedStripeEvent;
 use App\Models\StripeAccount;
+use App\Services\PaymentAttempts\PaymentAttemptLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Stripe\Exception\SignatureVerificationException;
@@ -18,7 +20,7 @@ class StripeWebhookController extends Controller
         'payment_intent.payment_failed',
     ];
 
-    public function handle(Request $request, StripeAccount $stripeAccount): Response
+    public function handle(Request $request, StripeAccount $stripeAccount, PaymentAttemptLogger $logger): Response
     {
         if (! $stripeAccount->is_active) {
             return response('', 200); // Acknowledge to Stripe; skip processing
@@ -49,6 +51,16 @@ class StripeWebhookController extends Controller
 
         $piId = $event->data->object->id ?? null;
         $payment = $piId ? Payment::where('stripe_payment_intent_id', $piId)->first() : null;
+
+        // Diagnostic log (spec 0016): runs before the completed guard so late events are kept. Never throws.
+        $loggedPayment = $piId
+            ? Payment::where('stripe_payment_intent_id', $piId)->where('stripe_account_id', $stripeAccount->id)->first()
+            : null;
+        $logger->record(PaymentProvider::Stripe, $loggedPayment, $event->data->object->toArray(), [
+            'event_id' => $event->id,
+            'created' => $event->created,
+            'type' => $event->type,
+        ]);
 
         // Status guard: skip only if already completed — failed can still transition
         // to completed on a successful retry, so it must be allowed through.

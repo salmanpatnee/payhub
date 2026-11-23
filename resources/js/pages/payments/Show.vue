@@ -7,6 +7,7 @@ import {
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
+import PaymentAttemptLog, { type PaymentAttemptLogData } from '@/components/payments/PaymentAttemptLog.vue';
 import PaymentProviderBadge from '@/components/PaymentProviderBadge.vue';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge.vue';
 import { withBase } from '@/lib/basePath';
@@ -84,6 +85,7 @@ const props = defineProps<{
     isAdmin: boolean;
     canViewStripeAccount: boolean;
     attempts: AttemptHistory | null;
+    attemptLog: PaymentAttemptLogData | null;
 }>();
 
 // Attempt statuses reuse the payment badge tones.
@@ -457,6 +459,9 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                         <p class="mt-1 break-all font-mono text-xs">{{ payment.provider_reference }}</p>
                     </div>
                 </Card>
+
+                <!-- Shared attempt log (admins only; null for everyone else and for providers with no extractor) -->
+                <PaymentAttemptLog v-if="attemptLog" :log="attemptLog" />
 
                 <!-- Attempt history (admins only; the server sends null for everyone else) -->
                 <Card v-if="attempts" class="gap-0 overflow-hidden py-0">

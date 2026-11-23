@@ -176,6 +176,11 @@ class Payment extends Model
         return $this->hasMany(WorldpayPageReturn::class);
     }
 
+    public function paymentAttempts(): HasMany
+    {
+        return $this->hasMany(PaymentAttempt::class);
+    }
+
     public function nmiChargeAttempts(): HasMany
     {
         return $this->hasMany(NmiChargeAttempt::class);

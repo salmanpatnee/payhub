@@ -15,6 +15,7 @@ use App\Models\MpgsAccount;
 use App\Models\NmiAccount;
 use App\Models\WorldpayAccount;
 use App\Models\Payment;
+use App\Models\PaymentAttempt;
 use App\Models\WorldpayChargeAttempt;
 use App\Models\RelationshipManager;
 use App\Models\RevolutAccount;
@@ -632,6 +633,7 @@ class PaymentController extends Controller
             'isAdmin' => $user->hasRole('admin'),
             'canViewStripeAccount' => $canViewStripeAccount,
             'attempts' => $user->hasRole('admin') ? $this->attemptHistory($payment) : null,
+            'attemptLog' => $this->attemptLog($payment, $user),
             'payment' => [
                 'uuid' => $payment->uuid,
                 'reference_code' => $payment->formattedReferenceCode(),
@@ -669,6 +671,44 @@ class PaymentController extends Controller
                 'expires_at' => $payment->expires_at?->toISOString(),
             ],
         ]);
+    }
+
+    /**
+     * Shared attempt log (spec 0016), admin only. Null for everyone else and for any provider
+     * with no extractor (the legacy providers keep their own card).
+     *
+     * @return array{provider: string, rows: list<array<string, mixed>>}|null
+     */
+    private function attemptLog(Payment $payment, $user): ?array
+    {
+        if (! $user->hasRole('admin') || ! array_key_exists($payment->provider->value, config('payment_attempts.extractors', []))) {
+            return null;
+        }
+
+        return [
+            'provider' => $payment->provider->value,
+            'rows' => $payment->paymentAttempts()
+                ->orderByDesc('sequence')
+                ->limit((int) config('payment_attempts.limits.page_rows', 100))
+                ->get()
+                ->map(fn (PaymentAttempt $a) => [
+                    'id' => $a->id,
+                    'sequence' => $a->sequence,
+                    'event' => $a->event,
+                    'status' => $a->status,
+                    'amount' => $a->amount,
+                    'currency' => $a->currency,
+                    'amount_reported' => $a->amount_reported,
+                    'reference' => $a->reference,
+                    'error_code' => $a->error_code,
+                    'reason' => $a->reason,
+                    'source' => $a->source,
+                    'request' => $a->request,
+                    'response' => $a->response,
+                    'occurred_at' => $a->occurred_at->toISOString(),
+                ])
+                ->all(),
+        ];
     }
 
     /**

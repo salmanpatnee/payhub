@@ -2,8 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Enums\PaymentProvider;
 use App\Models\Payment;
 use App\Models\ProcessedWhopEvent;
+use App\Services\PaymentAttempts\PaymentAttemptLogger;
 use App\Services\Whop\WhopWebhookPayload;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -29,8 +31,10 @@ class HandleWhopWebhookJob implements ShouldQueue
         public readonly string $rawBody,
     ) {}
 
-    public function handle(): void
+    public function handle(?PaymentAttemptLogger $logger = null): void
     {
+        $logger ??= app(PaymentAttemptLogger::class);
+
         $payload = WhopWebhookPayload::fromRawBody($this->rawBody);
 
         if ($payload === null) {
@@ -65,8 +69,44 @@ class HandleWhopWebhookJob implements ShouldQueue
             return $this->completePayment($payload);
         });
 
+        $this->logAttempt($payload, $eventType, $logger);
+
         if ($completed !== null) {
             SendPaymentNotification::dispatch($completed);
+        }
+    }
+
+    /**
+     * Diagnostic log (spec 0016), after the dedupe transaction has committed. The unique index on
+     * (provider, event_key) blocks a repeat. A success that fails the amount check is still logged.
+     * Never throws and never changes a status.
+     */
+    private function logAttempt(WhopWebhookPayload $payload, string $eventType, PaymentAttemptLogger $logger): void
+    {
+        if (! in_array($eventType, ['payment.succeeded', 'payment.failed'], true)) {
+            return;
+        }
+
+        try {
+            $uuid = $payload->paymentUuid();
+            $payment = $uuid !== null
+                ? Payment::where('uuid', $uuid)
+                    ->where('provider', PaymentProvider::Whop->value)
+                    ->where('whop_account_id', $this->whopAccountId)
+                    ->first()
+                : null;
+
+            if ($payment === null) {
+                Log::info('Whop attempt not logged: no matching PayHub payment', ['webhook_id' => $this->webhookId]);
+
+                return;
+            }
+
+            $body = json_decode($this->rawBody, true);
+
+            $logger->record(PaymentProvider::Whop, $payment, is_array($body) ? $body : [], ['webhook_id' => $this->webhookId]);
+        } catch (\Throwable $e) {
+            Log::warning('Whop attempt log failed', ['webhook_id' => $this->webhookId, 'error' => $e->getMessage()]);
         }
     }
 

@@ -1,7 +1,7 @@
 # 0016. One shared payment attempt log for Stripe, Revolut, Square, Viva, Whop and future providers
 
 **Date**: 2026-11-23
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

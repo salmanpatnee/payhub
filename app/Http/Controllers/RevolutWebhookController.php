@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentProvider;
 use App\Jobs\HandleRevolutWebhookJob;
 use App\Models\Payment;
 use App\Models\ProcessedRevolutEvent;
 use App\Models\RevolutAccount;
+use App\Services\PaymentAttempts\PaymentAttemptLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -19,7 +21,7 @@ class RevolutWebhookController extends Controller
     /** Reject webhooks whose timestamp is older than this, to limit replay. */
     private const TOLERANCE_SECONDS = 300;
 
-    public function handle(Request $request, RevolutAccount $revolutAccount): Response
+    public function handle(Request $request, RevolutAccount $revolutAccount, PaymentAttemptLogger $logger): Response
     {
         if (! $revolutAccount->is_active) {
             return response('', 200); // Acknowledge; skip processing
@@ -61,6 +63,14 @@ class RevolutWebhookController extends Controller
         // Status guard: skip only if already completed — failed can still transition
         // to completed on a successful retry, so it must be allowed through.
         $payment = Payment::where('revolut_order_id', $orderId)->first();
+
+        // Diagnostic log (spec 0016): runs before the completed guard so late events are kept. Never throws.
+        $logger->record(
+            PaymentProvider::Revolut,
+            Payment::where('revolut_order_id', $orderId)->where('revolut_account_id', $revolutAccount->id)->first(),
+            $data,
+            ['event' => $eventType, 'timestamp_ms' => $timestamp],
+        );
 
         if ($payment && $payment->status === 'completed') {
             return response('', 200);

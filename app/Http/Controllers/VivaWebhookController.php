@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\HandleVivaWebhookJob;
-use App\Models\Payment;
 use App\Models\ProcessedVivaEvent;
 use App\Models\VivaAccount;
 use Illuminate\Http\JsonResponse;
@@ -15,12 +14,11 @@ class VivaWebhookController extends Controller
 {
     /**
      * Viva event type ids we act on. 1796 = TransactionPaymentCreated (payment
-     * succeeded). TransactionFailed's numeric EventTypeId is not confirmed
-     * against public docs — see .planning/research/VIVA_PAYMENTS.md — so a
-     * failed Viva payment simply stays pending until the customer retries or
-     * an admin intervenes, until that id is confirmed and added here.
+     * succeeded). 1798 (TransactionFailed) is UNCONFIRMED against a live sandbox
+     * (spec 0016): it is handled for the attempt log only and never changes a
+     * payment status, which still only completes on a confirmed 'F' transaction.
      */
-    private const HANDLED_EVENT_TYPE_IDS = [1796];
+    private const HANDLED_EVENT_TYPE_IDS = [1796, 1798];
 
     /**
      * Handshake endpoint Viva GETs once when a webhook URL is registered,
@@ -82,25 +80,16 @@ class VivaWebhookController extends Controller
             return response('', 200);
         }
 
-        // Status guard: skip only if already completed — failed can still transition
-        // to completed on a successful retry, so it must be allowed through.
-        $payment = Payment::where('viva_order_code', $orderCode)
-            ->where('viva_account_id', $vivaAccount->id)
-            ->first();
-
-        if ($payment && $payment->status === 'completed') {
-            ProcessedVivaEvent::firstOrCreate(['event_key' => $eventKey], ['processed_at' => now()]);
-
-            return response('', 200);
-        }
-
         // A webhook must ALWAYS return 2xx to Viva — otherwise Viva marks the
         // delivery failed and retries hourly. On a sync queue, dispatch() runs
         // the job inline, so a Viva API error inside it would otherwise 500 the
         // response. Guard it: on failure, don't record the event as processed so
         // Viva's retry can re-attempt, and never propagate the exception.
         try {
-            HandleVivaWebhookJob::dispatch($vivaAccount->id, $orderCode, $transactionId);
+            // The completed guard that used to sit above is gone: the job re-fetches the
+            // transaction, logs it (spec 0016, so late events are kept) and is itself status
+            // safe: it only completes a pending or failed payment.
+            HandleVivaWebhookJob::dispatch($vivaAccount->id, $orderCode, $transactionId, (string) $eventKey, $eventTypeId);
             ProcessedVivaEvent::firstOrCreate(['event_key' => $eventKey], ['processed_at' => now()]);
         } catch (\Throwable $e) {
             Log::error('viva.webhook.processing_failed', [
