@@ -139,7 +139,9 @@ class PaymentAttemptLogger
             'source' => 'webhook',
             'request' => $this->sanitizer->sanitize($data->request),
             'response' => $this->sanitizer->sanitize($data->response),
-            'occurred_at' => $data->occurredAt ?? now(),
+            // Extractors build UTC times; Laravel stores the clock time as it is and reads it back
+            // in the app timezone, so convert first or the page shows the wrong hour.
+            'occurred_at' => $data->occurredAt?->setTimezone(config('app.timezone')) ?? now(),
         ];
     }
 

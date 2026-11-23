@@ -631,6 +631,7 @@ class PaymentController extends Controller
 
         return Inertia::render('payments/Show', [
             'isAdmin' => $user->hasRole('admin'),
+            'canCreate' => $user->can('create', Payment::class),
             'canViewStripeAccount' => $canViewStripeAccount,
             'attempts' => $user->hasRole('admin') ? $this->attemptHistory($payment) : null,
             'attemptLog' => $this->attemptLog($payment, $user),

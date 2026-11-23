@@ -83,6 +83,7 @@ type AttemptHistory =
 const props = defineProps<{
     payment: PaymentDetail;
     isAdmin: boolean;
+    canCreate: boolean;
     canViewStripeAccount: boolean;
     attempts: AttemptHistory | null;
     attemptLog: PaymentAttemptLogData | null;
@@ -287,6 +288,12 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                 </div>
             </div>
             <div class="hidden items-center gap-2 sm:flex">
+                <Button v-if="canCreate" as-child>
+                    <Link href="/payments/create">
+                        <Plus class="mr-1 size-4" />
+                        New payment
+                    </Link>
+                </Button>
                 <Button v-if="payment.status === 'pending'" variant="outline" as-child>
                     <Link :href="`/payments/${payment.uuid}/edit`">
                         <Pencil class="mr-1 size-4" />
@@ -320,7 +327,13 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                 </Button>
                 <p class="mt-2.5 text-xs text-muted-foreground">Share with your client to collect payment.</p>
             </Card>
-            <div v-if="payment.status === 'pending' || isAdmin" class="grid grid-cols-2 gap-2 sm:hidden [&>*:only-child]:col-span-2">
+            <div v-if="canCreate || payment.status === 'pending' || isAdmin" class="grid grid-cols-2 gap-2 sm:hidden [&>*:only-child]:col-span-2">
+                <Button v-if="canCreate" as-child class="col-span-2 h-10">
+                    <Link href="/payments/create">
+                        <Plus class="mr-1 size-4" />
+                        New payment
+                    </Link>
+                </Button>
                 <Button v-if="payment.status === 'pending'" variant="outline" as-child class="h-10">
                     <Link :href="`/payments/${payment.uuid}/edit`">
                         <Pencil class="mr-1 size-4" />

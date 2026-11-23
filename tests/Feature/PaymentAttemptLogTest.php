@@ -15,8 +15,10 @@ use App\Services\PaymentAttempts\AttemptData;
 use App\Services\PaymentAttempts\AttemptExtractor;
 use App\Services\PaymentAttempts\AttemptPayloadSanitizer;
 use App\Services\PaymentAttempts\PaymentAttemptLogger;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
@@ -501,6 +503,20 @@ it('gives up after one retry and never throws when the clash keeps happening', f
         ->and(PaymentAttempt::count())->toBe(0);
 });
 
+it('stores the event time as the same moment when the app timezone is not UTC', function () {
+    config(['app.timezone' => 'Asia/Karachi']);
+    date_default_timezone_set('Asia/Karachi');
+    $payment = Payment::factory()->create();
+
+    $row = app(PaymentAttemptLogger::class)->record(PaymentProvider::Stripe, $payment, ['id' => 'pi_tz', 'amount' => 100, 'currency' => 'usd'], ['type' => 'payment_intent.succeeded', 'event_id' => 'evt_tz', 'created' => 1790000000]);
+
+    expect($row->fresh()->occurred_at->getTimestamp())->toBe(1790000000)
+        ->and(DB::table('payment_attempts')->where('id', $row->id)->value('occurred_at'))
+        ->toBe(CarbonImmutable::createFromTimestamp(1790000000, 'Asia/Karachi')->format('Y-m-d H:i:s'));
+
+    date_default_timezone_set('UTC');
+});
+
 it('does not log for a soft deleted payment', function () {
     $payment = Payment::factory()->create(['stripe_payment_intent_id' => 'pi_del']);
     $payment->delete();
@@ -581,6 +597,18 @@ it('sends attemptLog to admins only, newest first, and null for agents, accounts
 
     $mpgs = Payment::factory()->mpgs()->create();
     expect(palShowProps($admin, $mpgs)['attemptLog'])->toBeNull();
+});
+
+it('tells the payment page who may start a new payment', function () {
+    $admin = User::factory()->create()->assignRole('admin');
+    $agent = User::factory()->create()->assignRole('agent');
+    $accountUser = User::factory()->create()->assignRole('account');
+    $payment = Payment::factory()->create(['user_id' => $agent->id]);
+    $accountPayment = Payment::factory()->create(['user_id' => $accountUser->id]);
+
+    expect(palShowProps($admin, $payment)['canCreate'])->toBeTrue()
+        ->and(palShowProps($agent, $payment)['canCreate'])->toBeTrue()
+        ->and(palShowProps($accountUser, $accountPayment)['canCreate'])->toBeFalse();
 });
 
 it('gives an empty log for a supported provider with no rows', function () {
