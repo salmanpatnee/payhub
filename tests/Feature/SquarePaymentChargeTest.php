@@ -1,10 +1,14 @@
 <?php
 
 use App\Models\Payment;
+use App\Models\PaymentAttempt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Testing\TestResponse;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Square\Exceptions\SquareApiException;
+use Square\Exceptions\SquareException;
 use Square\Payments\PaymentsClient;
 use Square\SquareClient;
 use Square\Types\CreatePaymentResponse;
@@ -182,4 +186,89 @@ it('does not expose the square access_token on the pay page', function () {
             ->missing('squareAccount.access_token')
             ->missing('clientSecret')
         );
+});
+
+// ---- Spec 0016: a declined charge is logged from the call (no webhook follows a refused payment) ----
+
+function mockSquareThrowing(Throwable $exception): void
+{
+    $mockPayments = Mockery::mock(PaymentsClient::class);
+    $mockPayments->shouldReceive('create')->andThrow($exception);
+
+    $mockSquare = Mockery::mock(SquareClient::class);
+    $mockSquare->payments = $mockPayments;
+
+    app()->bind(SquareClient::class, fn () => $mockSquare);
+}
+
+function squareDecline(int $status = 402, string $detail = 'Card declined.'): SquareApiException
+{
+    return new SquareApiException('Declined', $status, ['errors' => [
+        ['category' => 'PAYMENT_METHOD_ERROR', 'code' => 'CARD_DECLINED', 'detail' => $detail],
+    ]]);
+}
+
+it('logs a declined square charge as a failed call row and keeps the same customer message', function () {
+    $payment = Payment::factory()->square()->create(['status' => 'pending', 'amount' => 7500, 'currency' => 'usd']);
+    mockSquareThrowing(squareDecline());
+
+    chargeSquare($payment->uuid, ['source_id' => 'cnon:card-nonce-ok'])
+        ->assertStatus(422)
+        ->assertJson(['ok' => false, 'error' => 'Your payment could not be processed. Please check your card details and try again.']);
+
+    $row = PaymentAttempt::where('payment_id', $payment->id)->sole();
+    expect($row->provider)->toBe('square')
+        ->and($row->status)->toBe('failed')
+        ->and($row->source)->toBe('call')
+        ->and($row->event)->toBe('CREATE_PAYMENT_DECLINED')
+        ->and($row->error_code)->toBe('CARD_DECLINED')
+        ->and($row->reason)->toBe('Card declined.')
+        ->and($row->amount)->toBe(7500)
+        ->and($row->amount_reported)->toBeFalse()
+        ->and($row->response['errors'][0]['category'])->toBe('PAYMENT_METHOD_ERROR')
+        ->and($payment->fresh()->status)->toBe('pending');
+});
+
+it('gives each declined square attempt its own row in order', function () {
+    $payment = Payment::factory()->square()->create(['status' => 'pending']);
+    mockSquareThrowing(squareDecline());
+
+    chargeSquare($payment->uuid, ['source_id' => 'cnon:one'])->assertStatus(422);
+    chargeSquare($payment->uuid, ['source_id' => 'cnon:two'], withConsent: false)->assertStatus(422);
+
+    expect(PaymentAttempt::where('payment_id', $payment->id)->orderBy('sequence')->pluck('sequence')->all())->toBe([1, 2]);
+});
+
+it('does not log a square 5xx or a network failure, since the outcome is unclear', function () {
+    $payment = Payment::factory()->square()->create(['status' => 'pending']);
+
+    mockSquareThrowing(squareDecline(500));
+    chargeSquare($payment->uuid, ['source_id' => 'cnon:a'])->assertStatus(422);
+
+    mockSquareThrowing(new SquareException('network down'));
+    chargeSquare($payment->uuid, ['source_id' => 'cnon:b'], withConsent: false)->assertStatus(502);
+
+    expect(PaymentAttempt::count())->toBe(0);
+});
+
+it('still returns the same decline message when the attempt log is broken', function () {
+    $payment = Payment::factory()->square()->create(['status' => 'pending']);
+    mockSquareThrowing(squareDecline());
+    Schema::drop('payment_attempts');
+
+    chargeSquare($payment->uuid, ['source_id' => 'cnon:x'])
+        ->assertStatus(422)
+        ->assertJson(['ok' => false, 'error' => 'Your payment could not be processed. Please check your card details and try again.']);
+
+    expect($payment->fresh()->status)->toBe('pending');
+});
+
+it('masks card like digits in a square decline detail', function () {
+    $payment = Payment::factory()->square()->create(['status' => 'pending']);
+    mockSquareThrowing(squareDecline(402, 'Card 4111111111111111 was declined'));
+
+    chargeSquare($payment->uuid, ['source_id' => 'cnon:x'])->assertStatus(422);
+
+    $row = PaymentAttempt::where('payment_id', $payment->id)->sole();
+    expect($row->reason)->not->toContain('4111111111111111')->and($row->reason)->toContain('[masked]');
 });

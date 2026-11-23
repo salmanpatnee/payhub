@@ -27,5 +27,6 @@ final readonly class AttemptData
         public ?array $request = null,
         public ?array $response = null,
         public ?CarbonInterface $occurredAt = null,
+        public string $source = 'webhook',
     ) {}
 }

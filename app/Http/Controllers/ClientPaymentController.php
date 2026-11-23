@@ -15,6 +15,7 @@ use App\Services\Clover\CloverChargeClassifier;
 use App\Services\Clover\CloverChargeResolver;
 use App\Services\Clover\CloverClient;
 use App\Services\Nmi\NmiChargeResolver;
+use App\Services\PaymentAttempts\PaymentAttemptLogger;
 use App\Services\Revolut\RevolutClient;
 use App\Services\Viva\VivaClient;
 use App\Services\Worldpay\WorldpayChargeResolver;
@@ -737,7 +738,7 @@ class ClientPaymentController extends Controller
      * The response only correlates the Square payment id — the authoritative status write
      * still comes from the payment.updated webhook (CLAUDE.md rule: never trust client charge).
      */
-    public function chargeSquare(Request $request, Payment $payment): JsonResponse
+    public function chargeSquare(Request $request, Payment $payment, PaymentAttemptLogger $attemptLogger): JsonResponse
     {
         $payment->loadMissing('squareAccount');
 
@@ -778,7 +779,20 @@ class ClientPaymentController extends Controller
                 'referenceId' => (string) $payment->formattedReferenceCode(),
                 'note' => $this->buildDescription($payment),
             ]));
-        } catch (SquareApiException) {
+        } catch (SquareApiException $e) {
+            // A 4xx is Square refusing the charge (a decline) and no webhook follows, so log it here (spec 0016).
+            // A 5xx is an unclear outcome, not a decline, so it is not logged. Never throws.
+            if ($e->getStatusCode() >= 400 && $e->getStatusCode() < 500) {
+                $attemptLogger->record(PaymentProvider::Square, $payment, [
+                    'http_status' => $e->getStatusCode(),
+                    'errors' => array_map(fn ($error) => [
+                        'code' => $error->getCode(),
+                        'category' => $error->getCategory(),
+                        'detail' => $error->getDetail(),
+                    ], $e->getErrors()),
+                ], ['source' => 'call', 'event' => 'CREATE_PAYMENT_DECLINED']);
+            }
+
             // Sanitized — never surface card data, tokens, or raw processor errors.
             return response()->json(['ok' => false, 'error' => 'Your payment could not be processed. Please check your card details and try again.'], 422);
         } catch (SquareException) {

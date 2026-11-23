@@ -136,7 +136,7 @@ class PaymentAttemptLogger
             'reference' => $this->sanitizer->text($data->reference, 191),
             'error_code' => $this->sanitizer->text($data->errorCode, 100),
             'reason' => $this->sanitizer->text($data->reason, 500),
-            'source' => 'webhook',
+            'source' => mb_substr($data->source, 0, 20),
             'request' => $this->sanitizer->sanitize($data->request),
             'response' => $this->sanitizer->sanitize($data->response),
             // Extractors build UTC times; Laravel stores the clock time as it is and reads it back

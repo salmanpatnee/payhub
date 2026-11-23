@@ -9,11 +9,18 @@ use App\Services\PaymentAttempts\AttemptExtractor;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 
-/** Payload: the Square `payment` object. Context: event_id, created_at. */
+/**
+ * Payload: the Square `payment` object. Context: event_id, created_at.
+ * Or, with context `source = call`, a declined CreatePayment call: payload `errors` and `http_status`.
+ */
 class SquareAttemptExtractor implements AttemptExtractor
 {
     public function extract(array $payload, array $context, Payment $payment): ?AttemptData
     {
+        if (($context['source'] ?? null) === 'call') {
+            return $this->declinedCall($payload);
+        }
+
         $squareStatus = (string) ($payload['status'] ?? '');
         $status = match ($squareStatus) {
             'COMPLETED' => 'succeeded',
@@ -77,6 +84,33 @@ class SquareAttemptExtractor implements AttemptExtractor
                 ),
             ], fn ($v) => $v !== null && $v !== []),
             occurredAt: $occurred,
+        );
+    }
+
+    /**
+     * A card Square refused outright answers with an error and creates no payment, so no webhook follows.
+     * No event key: every customer attempt is its own row. Amount and currency come from the payment.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function declinedCall(array $payload): AttemptData
+    {
+        $errors = is_array($payload['errors'] ?? null) ? $payload['errors'] : [];
+        $first = is_array($errors[0] ?? null) ? $errors[0] : [];
+
+        return new AttemptData(
+            event: 'CREATE_PAYMENT_DECLINED',
+            status: 'failed',
+            errorCode: isset($first['code']) ? (string) $first['code'] : null,
+            reason: isset($first['detail']) ? (string) $first['detail'] : null,
+            response: array_filter([
+                'http_status' => $payload['http_status'] ?? null,
+                'errors' => array_map(
+                    fn ($e) => is_array($e) ? Arr::only($e, ['code', 'category', 'detail']) : [],
+                    $errors,
+                ),
+            ], fn ($v) => $v !== null && $v !== []),
+            source: 'call',
         );
     }
 }
