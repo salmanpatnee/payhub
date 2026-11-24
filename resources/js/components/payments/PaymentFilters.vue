@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Search } from 'lucide-vue-next';
+import { nextTick, ref } from 'vue';
 import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +38,27 @@ defineProps<{
 }>();
 
 const UNSET = '__all';
+
+const toInput = ref<{ $el: HTMLInputElement } | null>(null);
+
+// After From is picked, jump to To so the user finishes the range (the page waits for both dates).
+function onFromChange(): void {
+    const year = Number(model.value.from.slice(0, 4));
+
+    // Ignore half typed years (0002, 0020, ...) so focus does not jump while typing.
+    if (!model.value.from || year < 1900 || model.value.to) return;
+
+    nextTick(() => {
+        const el = toInput.value?.$el;
+        el?.focus();
+
+        try {
+            el?.showPicker();
+        } catch {
+            // Not every browser lets a script open the picker; focus alone is fine.
+        }
+    });
+}
 const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-muted-foreground';
 </script>
 
@@ -131,11 +153,11 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
 
     <div class="flex min-w-0 flex-col gap-1.5">
         <Label :class="labelClass">From</Label>
-        <Input v-model="model.from" type="date" class="w-full" />
+        <Input v-model="model.from" type="date" class="w-full" @change="onFromChange" />
     </div>
 
     <div class="flex min-w-0 flex-col gap-1.5">
         <Label :class="labelClass">To</Label>
-        <Input v-model="model.to" type="date" class="w-full" />
+        <Input ref="toInput" v-model="model.to" type="date" class="w-full" />
     </div>
 </template>

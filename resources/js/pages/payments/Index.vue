@@ -219,9 +219,17 @@ const pageItems = computed((): (number | '...')[] => {
     return items;
 });
 
+// A new date range is being built: one date picked, the other not, and no date filter applied yet.
+// Wait for the second date instead of filtering on half a range.
+const datePending = computed(
+    () => !!filters.from !== !!filters.to && !props.filters.from && !props.filters.to,
+);
+
 watch(
     filters,
     (newFilters) => {
+        if (datePending.value) return;
+
         const activeFilters = Object.fromEntries(
             Object.entries(newFilters).filter(([, v]) => v !== '' && v !== UNSET)
         );
