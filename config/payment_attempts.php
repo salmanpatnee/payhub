@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\PaymentAttempts\Extractors\CloverAttemptExtractor;
 use App\Services\PaymentAttempts\Extractors\RevolutAttemptExtractor;
 use App\Services\PaymentAttempts\Extractors\SquareAttemptExtractor;
 use App\Services\PaymentAttempts\Extractors\StripeAttemptExtractor;
@@ -18,6 +19,7 @@ return [
         'square' => SquareAttemptExtractor::class,
         'viva' => VivaAttemptExtractor::class,
         'whop' => WhopAttemptExtractor::class,
+        'clover' => CloverAttemptExtractor::class,
     ],
 
     'limits' => [

@@ -2,9 +2,11 @@
 
 namespace App\Services\Clover;
 
+use App\Enums\PaymentProvider;
 use App\Jobs\SendPaymentNotification;
 use App\Models\CloverChargeAttempt;
 use App\Models\Payment;
+use App\Services\PaymentAttempts\PaymentAttemptLogger;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -33,6 +35,15 @@ class CloverChargeResolver
         // the charge id. Only present on a GET read, never on the original
         // POST /v1/charges response.
         $orderId = isset($body['order']) ? (string) $body['order'] : null;
+
+        // Diagnostic log (spec 0016): both the charge call and the resolver job end here. Never throws
+        // and never changes a status; an unknown outcome is skipped and logged when it is resolved.
+        app(PaymentAttemptLogger::class)->record(
+            PaymentProvider::Clover,
+            Payment::find($attempt->payment_id),
+            $body,
+            ['classification' => $classification, 'attempt_id' => $attempt->id, 'source' => 'call'],
+        );
 
         match ($classification) {
             'approved' => $this->approve($attempt, $chargeId, $orderId),
