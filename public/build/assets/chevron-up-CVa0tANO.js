@@ -1,0 +1,1 @@
+import{P as e}from"./app-CkpgFjG9.js";var t=e(`ChevronUpIcon`,[[`path`,{d:`m18 15-6-6-6 6`,key:`153udz`}]]);export{t};
