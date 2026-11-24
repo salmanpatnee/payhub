@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
 import { CalendarCheck, X } from 'lucide-vue-next';
-import { computed, reactive, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -46,11 +46,40 @@ function buildQuery(): Record<string, string> {
     return query;
 }
 
+// A new range is being built: one date picked, the other not, and no date filter applied yet.
+// Wait for the second date instead of filtering on half a range.
+const datePending = computed(
+    () => !!state.from !== !!state.to && !props.filters.from && !props.filters.to,
+);
+
+const toInput = ref<{ $el: HTMLInputElement } | null>(null);
+
+function onFromChange(): void {
+    const year = Number(state.from.slice(0, 4));
+
+    // Ignore half typed years (0002, 0020, ...) so focus does not jump while typing.
+    if (!state.from || year < 1900 || state.to) return;
+
+    nextTick(() => {
+        const el = toInput.value?.$el;
+        el?.focus();
+
+        try {
+            el?.showPicker();
+        } catch {
+            // Not every browser lets a script open the picker; focus alone is fine.
+        }
+    });
+}
+
 let debounce: ReturnType<typeof setTimeout> | undefined;
 watch(
     state,
     () => {
         clearTimeout(debounce);
+
+        if (datePending.value) return;
+
         debounce = setTimeout(() => {
             router.get(dashboard.url({ query: buildQuery() }), {}, {
                 preserveState: true,
@@ -93,11 +122,11 @@ watch(
         <div class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
             <div class="space-y-1">
                 <Label class="text-[11px] uppercase tracking-wider text-muted-foreground">From</Label>
-                <Input v-model="state.from" type="date" class="h-9" />
+                <Input v-model="state.from" type="date" class="h-9" @change="onFromChange" />
             </div>
             <div class="space-y-1">
                 <Label class="text-[11px] uppercase tracking-wider text-muted-foreground">To</Label>
-                <Input v-model="state.to" type="date" class="h-9" />
+                <Input ref="toInput" v-model="state.to" type="date" class="h-9" />
             </div>
             <div class="space-y-1">
                 <Label class="text-[11px] uppercase tracking-wider text-muted-foreground">Brand</Label>
@@ -158,6 +187,7 @@ watch(
                 </Button>
             </div>
         </div>
+        <p v-if="datePending" class="mt-2 text-xs text-muted-foreground">Pick a To date to apply the range.</p>
         <label
             for="dashboard-received"
             class="mt-3 flex w-fit max-w-full cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors"
