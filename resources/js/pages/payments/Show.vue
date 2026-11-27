@@ -472,159 +472,6 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                         <p class="mt-1 break-all font-mono text-xs">{{ payment.provider_reference }}</p>
                     </div>
                 </Card>
-
-                <!-- Shared attempt log (admins only; null for everyone else and for providers with no extractor) -->
-                <PaymentAttemptLog v-if="attemptLog" :log="attemptLog" />
-
-                <!-- Attempt history (admins only; the server sends null for everyone else) -->
-                <Card v-if="attempts" class="gap-0 overflow-hidden py-0">
-                    <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
-                        <h2 class="text-lg font-semibold">Payment attempts</h2>
-                        <span class="rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">Admins only</span>
-                    </div>
-
-                    <div v-if="attempts.rows.length || attempts.provider === 'mpgs' || attempts.provider === 'kurv' || attempts.provider === 'nmi' || attempts.provider === 'worldpay'" class="overflow-x-auto">
-                        <template v-if="attempts.rows.length">
-                        <table class="hidden w-full text-sm sm:table">
-                            <thead>
-                                <tr class="bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                    <th class="px-4 py-3">#</th>
-                                    <th class="px-4 py-3">Started</th>
-                                    <th class="px-4 py-3">{{ attempts.provider === 'mpgs' ? 'Order ID' : attempts.provider === 'kurv' ? 'Request ID' : attempts.provider === 'worldpay' ? 'Reference' : 'Transaction ID' }}</th>
-                                    <th class="px-4 py-3">Status</th>
-                                    <th class="px-4 py-3">Reason</th>
-                                    <th v-if="attempts.provider === 'kurv' || attempts.provider === 'worldpay'" class="px-4 py-3">Source</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr
-                                    v-for="row in attempts.rows"
-                                    :key="`${row.source ?? 'row'}-${row.sequence}`"
-                                    class="border-t border-border"
-                                >
-                                    <td class="px-4 py-3.5 align-top tabular-nums">{{ row.sequence }}</td>
-                                    <td class="whitespace-nowrap px-4 py-3.5 align-top tabular-nums">{{ formatDateTime(row.started_at) }}</td>
-                                    <td class="px-4 py-3.5 align-top font-mono text-xs">{{ row.reference ?? '—' }}</td>
-                                    <td class="px-4 py-3.5 align-top">
-                                        <PaymentStatusBadge
-                                            :status="attemptTone[row.status] ?? 'cancelled'"
-                                            :label="row.status.replace('_', ' ')"
-                                        />
-                                        <div v-if="row.status_detail" class="mt-1 text-xs text-muted-foreground">{{ row.status_detail }}</div>
-                                    </td>
-                                    <td class="px-4 py-3.5 align-top sm:max-w-[34ch]">
-                                        {{ row.reason ?? '—' }}
-                                        <div v-if="row.client_info" class="mt-1 text-xs text-muted-foreground">{{ row.client_info }}</div>
-                                    </td>
-                                    <td v-if="attempts.provider === 'kurv' || attempts.provider === 'worldpay'" class="px-4 py-3.5 align-top capitalize">{{ row.source ?? '—' }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-
-                        <!-- Phone: one labelled card per attempt -->
-                        <ul class="divide-y divide-border sm:hidden">
-                            <li v-for="row in attempts.rows" :key="`m-${row.source ?? 'row'}-${row.sequence}`" class="space-y-2 px-4 py-3.5">
-                                <div class="flex items-center justify-between gap-3">
-                                    <span class="text-sm font-semibold">Attempt {{ row.sequence }}</span>
-                                    <PaymentStatusBadge
-                                        :status="attemptTone[row.status] ?? 'cancelled'"
-                                        :label="row.status.replace('_', ' ')"
-                                    />
-                                </div>
-                                <p class="text-xs tabular-nums text-muted-foreground">{{ formatDateTime(row.started_at) }}</p>
-                                <dl class="grid grid-cols-[76px_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5 text-[13px]">
-                                    <dt :class="labelClass">{{ attempts.provider === 'mpgs' ? 'Order ID' : attempts.provider === 'kurv' ? 'Request' : attempts.provider === 'worldpay' ? 'Reference' : 'Txn ID' }}</dt>
-                                    <dd class="break-all font-mono text-xs">{{ row.reference ?? '—' }}</dd>
-                                    <dt :class="labelClass">Reason</dt>
-                                    <dd class="break-words">
-                                        {{ row.reason ?? '—' }}
-                                        <span v-if="row.status_detail" class="mt-0.5 block text-xs text-muted-foreground">{{ row.status_detail }}</span>
-                                        <span v-if="row.client_info" class="mt-0.5 block text-xs text-muted-foreground">{{ row.client_info }}</span>
-                                    </dd>
-                                    <template v-if="attempts.provider === 'kurv' || attempts.provider === 'worldpay'">
-                                        <dt :class="labelClass">Source</dt>
-                                        <dd class="capitalize">{{ row.source ?? '—' }}</dd>
-                                    </template>
-                                </dl>
-                            </li>
-                        </ul>
-                        </template>
-                        <p v-else-if="attempts.provider === 'worldpay'" class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No charges or lookups yet. The client has not paid and PayHub has not asked Worldpay about this payment.</p>
-                        <p v-else-if="attempts.provider === 'kurv'" class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No lookups yet. PayHub has not asked Kurv about this payment.</p>
-                        <p v-else class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No attempts yet. The client has not opened the payment link.</p>
-
-                        <dl v-if="attempts.provider === 'kurv'" class="grid grid-cols-1 gap-x-4 gap-y-4 border-t border-border px-5 py-5 text-sm sm:grid-cols-3 sm:px-6">
-                            <div class="min-w-0">
-                                <dt :class="labelClass">Kurv request ID</dt>
-                                <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.kurv_request_id ?? '—' }}</dd>
-                            </div>
-                            <div class="min-w-0">
-                                <dt :class="labelClass">Kurv payment ID</dt>
-                                <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.kurv_payment_id ?? '—' }}</dd>
-                            </div>
-                            <div>
-                                <dt :class="labelClass">Link created</dt>
-                                <dd class="mt-1 tabular-nums">{{ attempts.summary.charge_started_at ? formatDateTime(attempts.summary.charge_started_at) : '—' }}</dd>
-                            </div>
-                        </dl>
-                    </div>
-
-                    <div
-                        v-if="attempts.provider === 'worldpay' && attempts.summary.has_duplicate"
-                        class="border-t border-border bg-destructive/10 px-5 py-3 text-sm font-medium text-destructive sm:px-6"
-                    >
-                        Two charges were found for this payment. Refund one in Worldpay.
-                    </div>
-                    <div
-                        v-if="attempts.provider === 'worldpay' && attempts.summary.has_unsettled_charge"
-                        class="border-t border-border bg-destructive/10 px-5 py-3 text-sm font-medium text-destructive sm:px-6"
-                    >
-                        This payment has a charge that Worldpay has not settled. New charges stay blocked until you resolve it in Worldpay.
-                    </div>
-
-                    <dl v-if="attempts.provider === 'worldpay'" class="grid grid-cols-1 gap-x-4 gap-y-4 border-t border-border px-5 py-5 text-sm sm:grid-cols-4 sm:px-6">
-                        <div class="min-w-0">
-                            <dt :class="labelClass">Worldpay payment ID</dt>
-                            <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.worldpay_payment_id ?? '—' }}</dd>
-                        </div>
-                        <div>
-                            <dt :class="labelClass">Pages created</dt>
-                            <dd class="mt-1 tabular-nums">{{ attempts.summary.page_count }}</dd>
-                        </div>
-                        <div>
-                            <dt :class="labelClass">Card attempts</dt>
-                            <dd class="mt-1 tabular-nums">{{ attempts.summary.charge_attempt_count }}</dd>
-                        </div>
-                        <div>
-                            <dt :class="labelClass">First page created</dt>
-                            <dd class="mt-1 tabular-nums">{{ attempts.summary.charge_started_at ? formatDateTime(attempts.summary.charge_started_at) : '—' }}</dd>
-                        </div>
-                    </dl>
-
-                    <div v-else-if="attempts.provider === 'authorizenet'" class="space-y-3 px-5 py-5 sm:px-6">
-                        <dl class="grid grid-cols-2 gap-x-4 gap-y-4 text-sm sm:grid-cols-4">
-                            <div>
-                                <dt :class="labelClass">First attempt</dt>
-                                <dd class="mt-1 tabular-nums">{{ attempts.summary.first_attempt_at ? formatDateTime(attempts.summary.first_attempt_at) : '—' }}</dd>
-                            </div>
-                            <div>
-                                <dt :class="labelClass">Latest attempt</dt>
-                                <dd class="mt-1 tabular-nums">{{ attempts.summary.last_attempt_at ? formatDateTime(attempts.summary.last_attempt_at) : '—' }}</dd>
-                            </div>
-                            <div class="min-w-0">
-                                <dt :class="labelClass">Transaction ID</dt>
-                                <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.transaction_id ?? '—' }}</dd>
-                            </div>
-                            <div>
-                                <dt :class="labelClass">Status</dt>
-                                <dd class="mt-1"><PaymentStatusBadge :status="attempts.summary.status" /></dd>
-                            </div>
-                        </dl>
-                        <p class="text-xs text-muted-foreground">
-                            No attempts were recorded for this payment. Only the first and latest attempt times were kept before attempts were stored.
-                        </p>
-                    </div>
-                </Card>
             </div>
 
             <!-- Side rail -->
@@ -664,6 +511,159 @@ const labelClass = 'text-[11px] font-semibold uppercase tracking-widest text-mut
                 </Card>
             </aside>
         </div>
+
+        <!-- Shared attempt log (admins only; null for everyone else and for providers with no extractor) -->
+        <PaymentAttemptLog v-if="attemptLog" :log="attemptLog" />
+
+        <!-- Attempt history (admins only; the server sends null for everyone else) -->
+        <Card v-if="attempts" class="gap-0 overflow-hidden py-0">
+            <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
+                <h2 class="text-lg font-semibold">Payment attempts</h2>
+                <span class="rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">Admins only</span>
+            </div>
+
+            <div v-if="attempts.rows.length || attempts.provider === 'mpgs' || attempts.provider === 'kurv' || attempts.provider === 'nmi' || attempts.provider === 'worldpay'" class="overflow-x-auto">
+                <template v-if="attempts.rows.length">
+                <table class="hidden w-full text-sm sm:table">
+                    <thead>
+                        <tr class="bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            <th class="px-4 py-3">#</th>
+                            <th class="px-4 py-3">Started</th>
+                            <th class="px-4 py-3">{{ attempts.provider === 'mpgs' ? 'Order ID' : attempts.provider === 'kurv' ? 'Request ID' : attempts.provider === 'worldpay' ? 'Reference' : 'Transaction ID' }}</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Reason</th>
+                            <th v-if="attempts.provider === 'kurv' || attempts.provider === 'worldpay'" class="px-4 py-3">Source</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                            v-for="row in attempts.rows"
+                            :key="`${row.source ?? 'row'}-${row.sequence}`"
+                            class="border-t border-border"
+                        >
+                            <td class="px-4 py-3.5 align-top tabular-nums">{{ row.sequence }}</td>
+                            <td class="whitespace-nowrap px-4 py-3.5 align-top tabular-nums">{{ formatDateTime(row.started_at) }}</td>
+                            <td class="px-4 py-3.5 align-top font-mono text-xs">{{ row.reference ?? '—' }}</td>
+                            <td class="px-4 py-3.5 align-top">
+                                <PaymentStatusBadge
+                                    :status="attemptTone[row.status] ?? 'cancelled'"
+                                    :label="row.status.replace('_', ' ')"
+                                />
+                                <div v-if="row.status_detail" class="mt-1 text-xs text-muted-foreground">{{ row.status_detail }}</div>
+                            </td>
+                            <td class="px-4 py-3.5 align-top sm:max-w-[34ch]">
+                                {{ row.reason ?? '—' }}
+                                <div v-if="row.client_info" class="mt-1 text-xs text-muted-foreground">{{ row.client_info }}</div>
+                            </td>
+                            <td v-if="attempts.provider === 'kurv' || attempts.provider === 'worldpay'" class="px-4 py-3.5 align-top capitalize">{{ row.source ?? '—' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- Phone: one labelled card per attempt -->
+                <ul class="divide-y divide-border sm:hidden">
+                    <li v-for="row in attempts.rows" :key="`m-${row.source ?? 'row'}-${row.sequence}`" class="space-y-2 px-4 py-3.5">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-sm font-semibold">Attempt {{ row.sequence }}</span>
+                            <PaymentStatusBadge
+                                :status="attemptTone[row.status] ?? 'cancelled'"
+                                :label="row.status.replace('_', ' ')"
+                            />
+                        </div>
+                        <p class="text-xs tabular-nums text-muted-foreground">{{ formatDateTime(row.started_at) }}</p>
+                        <dl class="grid grid-cols-[76px_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5 text-[13px]">
+                            <dt :class="labelClass">{{ attempts.provider === 'mpgs' ? 'Order ID' : attempts.provider === 'kurv' ? 'Request' : attempts.provider === 'worldpay' ? 'Reference' : 'Txn ID' }}</dt>
+                            <dd class="break-all font-mono text-xs">{{ row.reference ?? '—' }}</dd>
+                            <dt :class="labelClass">Reason</dt>
+                            <dd class="break-words">
+                                {{ row.reason ?? '—' }}
+                                <span v-if="row.status_detail" class="mt-0.5 block text-xs text-muted-foreground">{{ row.status_detail }}</span>
+                                <span v-if="row.client_info" class="mt-0.5 block text-xs text-muted-foreground">{{ row.client_info }}</span>
+                            </dd>
+                            <template v-if="attempts.provider === 'kurv' || attempts.provider === 'worldpay'">
+                                <dt :class="labelClass">Source</dt>
+                                <dd class="capitalize">{{ row.source ?? '—' }}</dd>
+                            </template>
+                        </dl>
+                    </li>
+                </ul>
+                </template>
+                <p v-else-if="attempts.provider === 'worldpay'" class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No charges or lookups yet. The client has not paid and PayHub has not asked Worldpay about this payment.</p>
+                <p v-else-if="attempts.provider === 'kurv'" class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No lookups yet. PayHub has not asked Kurv about this payment.</p>
+                <p v-else class="px-5 py-5 text-sm text-muted-foreground sm:px-6">No attempts yet. The client has not opened the payment link.</p>
+
+                <dl v-if="attempts.provider === 'kurv'" class="grid grid-cols-1 gap-x-4 gap-y-4 border-t border-border px-5 py-5 text-sm sm:grid-cols-3 sm:px-6">
+                    <div class="min-w-0">
+                        <dt :class="labelClass">Kurv request ID</dt>
+                        <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.kurv_request_id ?? '—' }}</dd>
+                    </div>
+                    <div class="min-w-0">
+                        <dt :class="labelClass">Kurv payment ID</dt>
+                        <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.kurv_payment_id ?? '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt :class="labelClass">Link created</dt>
+                        <dd class="mt-1 tabular-nums">{{ attempts.summary.charge_started_at ? formatDateTime(attempts.summary.charge_started_at) : '—' }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div
+                v-if="attempts.provider === 'worldpay' && attempts.summary.has_duplicate"
+                class="border-t border-border bg-destructive/10 px-5 py-3 text-sm font-medium text-destructive sm:px-6"
+            >
+                Two charges were found for this payment. Refund one in Worldpay.
+            </div>
+            <div
+                v-if="attempts.provider === 'worldpay' && attempts.summary.has_unsettled_charge"
+                class="border-t border-border bg-destructive/10 px-5 py-3 text-sm font-medium text-destructive sm:px-6"
+            >
+                This payment has a charge that Worldpay has not settled. New charges stay blocked until you resolve it in Worldpay.
+            </div>
+
+            <dl v-if="attempts.provider === 'worldpay'" class="grid grid-cols-1 gap-x-4 gap-y-4 border-t border-border px-5 py-5 text-sm sm:grid-cols-4 sm:px-6">
+                <div class="min-w-0">
+                    <dt :class="labelClass">Worldpay payment ID</dt>
+                    <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.worldpay_payment_id ?? '—' }}</dd>
+                </div>
+                <div>
+                    <dt :class="labelClass">Pages created</dt>
+                    <dd class="mt-1 tabular-nums">{{ attempts.summary.page_count }}</dd>
+                </div>
+                <div>
+                    <dt :class="labelClass">Card attempts</dt>
+                    <dd class="mt-1 tabular-nums">{{ attempts.summary.charge_attempt_count }}</dd>
+                </div>
+                <div>
+                    <dt :class="labelClass">First page created</dt>
+                    <dd class="mt-1 tabular-nums">{{ attempts.summary.charge_started_at ? formatDateTime(attempts.summary.charge_started_at) : '—' }}</dd>
+                </div>
+            </dl>
+
+            <div v-else-if="attempts.provider === 'authorizenet'" class="space-y-3 px-5 py-5 sm:px-6">
+                <dl class="grid grid-cols-2 gap-x-4 gap-y-4 text-sm sm:grid-cols-4">
+                    <div>
+                        <dt :class="labelClass">First attempt</dt>
+                        <dd class="mt-1 tabular-nums">{{ attempts.summary.first_attempt_at ? formatDateTime(attempts.summary.first_attempt_at) : '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt :class="labelClass">Latest attempt</dt>
+                        <dd class="mt-1 tabular-nums">{{ attempts.summary.last_attempt_at ? formatDateTime(attempts.summary.last_attempt_at) : '—' }}</dd>
+                    </div>
+                    <div class="min-w-0">
+                        <dt :class="labelClass">Transaction ID</dt>
+                        <dd class="mt-1 truncate font-mono text-xs">{{ attempts.summary.transaction_id ?? '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt :class="labelClass">Status</dt>
+                        <dd class="mt-1"><PaymentStatusBadge :status="attempts.summary.status" /></dd>
+                    </div>
+                </dl>
+                <p class="text-xs text-muted-foreground">
+                    No attempts were recorded for this payment. Only the first and latest attempt times were kept before attempts were stored.
+                </p>
+            </div>
+        </Card>
     </div>
 
     <ConfirmDeleteDialog
